@@ -64,14 +64,16 @@ flowchart LR
     P4 --> END["13/11 (Thứ 6)<br/>Nộp bài"]
 ```
 
-| Phase | Tên | Deadline | Ngày review và lập kế hoạch phase sau |
-|---|---|---|---|
-| 0 | Khởi động | 15/10 (Thứ 5) | Gộp trong phase, gồm cả thời gian đọc kế hoạch và feedback |
-| 1 | Dựng nền và kiểm chứng giả thuyết (Go/No-Go) | 21/10 (Thứ 4) | 22/10 (Thứ 5) |
-| 2 | Runtime và Pareto | 28/10 (Thứ 4) | 29/10 (Thứ 5) |
-| 3 | Thí nghiệm | 04/11 (Thứ 4) | 05/11 (Thứ 5) |
-| 4 | Viết và hoàn thiện | 11/11 (Thứ 4) | 12/11 (Thứ 5) |
-| | **Nộp bài** | **13/11 (Thứ 6)** | |
+| Phase | Tên | Deadline |
+|---|---|---|
+| 0 | Khởi động | 15/10 (Thứ 5) |
+| 1 | Dựng nền và kiểm chứng giả thuyết (Go/No-Go) | |
+| 2 | Runtime và Pareto | |
+| 3 | Thí nghiệm | |
+| 4 | Viết và hoàn thiện | |
+| | **Nộp bài** | **13/11 (Thứ 6)** |
+
+Deadline và task của từng phase sau Phase 0 sẽ được giao khi phase trước hoàn tất.
 
 ## 6. Phase 0: Khởi động
 
@@ -79,14 +81,10 @@ Deadline chung: 15/10 (Thứ 5).
 
 | Thành viên | Task |
 |---|---|
-| Tuấn | Chốt quy ước chung, chỉ gồm những gì mọi người cùng dùng: cấu trúc repo, môi trường build và thư viện dùng chung trên Colab T4, định dạng dữ liệu truyền giữa các stage, các cột của file kết quả CSV (thời gian và chất lượng), quy tắc Git, mẫu ghi quyết định kỹ thuật |
-| | Tạo mock data: một phần nhỏ HPatches kèm output tham chiếu của từng stage sinh bằng OpenCV, và bản giả bằng OpenCV cho từng stage |
-| | Khảo sát và chốt phương pháp chủ chốt cho S1 |
+| Tuấn | 1. Chốt quy ước chung, chỉ gồm những gì mọi người cùng dùng: cấu trúc repo, môi trường build và thư viện dùng chung trên Colab T4, định dạng dữ liệu truyền giữa các stage, các cột của file kết quả CSV (thời gian và chất lượng), quy tắc Git, mẫu ghi quyết định kỹ thuật<br>2. Tạo mock data: một phần nhỏ HPatches kèm output tham chiếu của từng stage sinh bằng OpenCV, và bản giả bằng OpenCV cho từng stage<br>3. Khảo sát và chốt phương pháp chủ chốt cho S1 |
 | Thành | Khảo sát và chốt phương pháp chủ chốt cho S2, S3 |
-| Đế | Khảo sát và chốt benchmark (mục 9); định nghĩa QoR và `Qmin` |
-| | Khảo sát và chốt phương pháp chủ chốt cho S4, S5 |
-| Chương | Dựng khung LaTeX theo template OASIcs trong `paper/` |
-| | Khảo sát và chốt phương pháp chủ chốt cho S6 |
+| Đế | 1. Khảo sát và chốt benchmark (mục 9); định nghĩa QoR và `Qmin`<br>2. Khảo sát và chốt phương pháp chủ chốt cho S4, S5 |
+| Chương | 1. Dựng khung LaTeX theo template OASIcs trong `paper/`<br>2. Khảo sát và chốt phương pháp chủ chốt cho S6 |
 | Cả Nhóm | Đọc kế hoạch và gửi feedback; thống nhất ngưỡng cho hai điều kiện Go/No-Go (mục 7) |
 
 Định hướng đã thống nhất cho quy ước chung: tự viết kernel CUDA cho pipeline; OpenCV chỉ dùng làm baseline và bản giả. Lý do: các núm chỉnh, việc tái sử dụng kết quả khi leo thang và CUDA stream cần kiểm soát được code; bản `opencv-python` cài bằng pip trên Colab không có module CUDA.

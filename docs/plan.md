@@ -1,0 +1,161 @@
+# Kế hoạch thực hiện workshop paper PARMA-DITAM 2027
+
+Tài liệu đi kèm: [Các stage của pipeline](stages.md), gồm mục tiêu, đầu vào, đầu ra và người phụ trách từng stage.
+
+Quy ước ngày: mọi mốc ghi theo dạng `dd/mm (Thứ n)` của năm 2026.
+
+## 1. Mục tiêu
+
+Nhóm viết và nộp một full paper cho workshop [PARMA-DITAM 2027](https://parma-ditam-workshop.github.io/). **Mốc nộp bài của Nhóm là 13/11 (Thứ 6).**
+
+Thông tin workshop, để tham khảo:
+
+| Mục | Nội dung |
+|---|---|
+| Hạn nộp chính thức của workshop | 16/11/2026, 23:59 UTC |
+| Nơi nộp | [EasyChair](https://easychair.org/conferences/?conf=parmaditam2027), nộp file PDF |
+| Định dạng | Template OASIcs, tối đa 10 trang single-column, không tính trang tiêu đề và tài liệu tham khảo; chỉ nhận full paper |
+| Hình thức review | Double-blind |
+| Các mốc sau khi nộp | Thông báo kết quả 14/12/2026, camera-ready 07/01/2027, workshop 18/01/2027 tại Glasgow |
+
+## 2. Câu hỏi nghiên cứu và hướng tiếp cận
+
+**Research question:** *Can a scene-aware cross-stage runtime reduce GPU panorama-stitching latency by dynamically allocating computational budgets while maintaining a predefined Quality-of-Result constraint?*
+
+Hướng tiếp cận ở mức ý chính:
+
+- Pipeline ghép hai ảnh theo hướng feature-based gồm 6 stage, chạy trên GPU (xem [stages.md](stages.md)).
+- Một số stage có núm chỉnh lượng tính toán: S (tỉ lệ thu nhỏ ảnh), K (số keypoint), R (số vòng RANSAC), B (kiểu blend).
+- Một runtime (controller) chọn mức tính toán cho từng cặp ảnh dựa trên độ khó của cảnh và các tín hiệu chất lượng trung gian, sao cho latency thấp nhất mà chất lượng vẫn đạt ngưỡng `Qmin`.
+- Kết quả được so với các cấu hình cố định và với Oracle (biết trước cấu hình rẻ nhất đạt `Qmin` cho từng cặp ảnh).
+
+Chi tiết thiết kế do người phụ trách từng phần quyết định trong quá trình làm (mục 4).
+
+## 3. Phân vai
+
+| Thành viên | Stage phụ trách | Vai trò chung |
+|---|---|---|
+| Tuấn | S1 Preprocessing | Điều phối; review pull request theo task/stage và merge |
+| Thành | S2 Keypoint detection, S3 Description | |
+| Đế | S4 Matching, S5 Homography | Controller; ghép code và chạy end-to-end để tìm module lỗi, điểm nghẽn |
+| Chương | S6 Warping and blending | |
+
+Cách chia stage giữ giống đồ án môn học để mỗi người làm tiếp stage mình đã quen. Lý do chi tiết nằm ở [stages.md](stages.md).
+
+## 4. Nguyên tắc làm việc
+
+1. **Lập kế hoạch cuốn chiếu theo phase.** Mỗi phase tối đa 7 ngày: 6 ngày làm và 1 ngày review kết quả, lập kế hoạch chi tiết cho phase sau. Chỉ phase hiện tại có task chi tiết.
+2. **Một deadline chung cho mọi task trong phase**, không có deadline riêng cho từng task.
+3. **Làm song song, không chờ nhau.** Trong một phase, các task không phụ thuộc lẫn nhau. Ai cần đầu vào chưa có thì dùng mock data và bản giả (cài bằng OpenCV) của stage tương ứng.
+4. **Quy ước chung** chỉ đặt cho những gì mọi thành viên cùng dùng, và do một người quyết định (Tuấn).
+5. **Quyết định kỹ thuật** của từng stage, module hay task do người phụ trách tự quyết định. Phương án chọn phải tối ưu trong điều kiện của phần mình phụ trách, hoặc có fallback nếu không tối ưu hay không khả thi. Phase 0 chỉ chốt các quyết định chủ chốt; các quyết định khác làm tới đâu quyết định tới đó và được ghi lại trong `docs/` gồm: bối cảnh, phương án chọn, trade-off hoặc phương án phụ, fallback, người quyết định, ngày.
+6. **Ghép code chỉ khi các module liên quan đã xong:** dự kiến cuối Phase 1 (lần đầu đủ 6 stage) và cuối Phase 2 (đưa controller vào pipeline). Đế phụ trách. Trước đó mỗi người tự chạy toàn pipeline bằng các bản giả để phát hiện lỗi sớm.
+7. **Review:** Tuấn review pull request của từng task/stage và merge. Ở Phase 4, cả Nhóm cùng review toàn bộ paper.
+8. **Viết paper:** ai cài đặt phần nào thì viết phần đó, nhưng viết ở phase sau phase cài đặt, khi cách cài đặt đã được kiểm chứng.
+
+## 5. Lịch các phase
+
+```mermaid
+flowchart LR
+    P0["Phase 0<br/>Khởi động"] --> P1["Phase 1<br/>Dựng nền và kiểm chứng giả thuyết"]
+    P1 --> P2["Phase 2<br/>Runtime và Pareto"]
+    P2 --> P3["Phase 3<br/>Thí nghiệm"]
+    P3 --> P4["Phase 4<br/>Viết và hoàn thiện"]
+    P4 --> END["13/11 (Thứ 6)<br/>Nộp bài"]
+```
+
+| Phase | Tên | Deadline | Ngày review và lập kế hoạch phase sau |
+|---|---|---|---|
+| 0 | Khởi động | 15/10 (Thứ 5) | Gộp trong phase, gồm cả thời gian đọc kế hoạch và feedback |
+| 1 | Dựng nền và kiểm chứng giả thuyết (Go/No-Go) | 21/10 (Thứ 4) | 22/10 (Thứ 5) |
+| 2 | Runtime và Pareto | 28/10 (Thứ 4) | 29/10 (Thứ 5) |
+| 3 | Thí nghiệm | 04/11 (Thứ 4) | 05/11 (Thứ 5) |
+| 4 | Viết và hoàn thiện | 11/11 (Thứ 4) | 12/11 (Thứ 5) |
+| | **Nộp bài** | **13/11 (Thứ 6)** | |
+
+## 6. Phase 0: Khởi động
+
+Deadline chung: 15/10 (Thứ 5).
+
+| Thành viên | Task |
+|---|---|
+| Tuấn | Chốt quy ước chung, chỉ gồm những gì mọi người cùng dùng: cấu trúc repo, môi trường build và thư viện dùng chung trên Colab T4, định dạng dữ liệu truyền giữa các stage, các cột của file kết quả CSV (thời gian và chất lượng), quy tắc Git, mẫu ghi quyết định kỹ thuật |
+| | Tạo mock data: một phần nhỏ HPatches kèm output tham chiếu của từng stage sinh bằng OpenCV, và bản giả bằng OpenCV cho từng stage |
+| | Khảo sát và chốt phương pháp chủ chốt cho S1 |
+| Thành | Khảo sát và chốt phương pháp chủ chốt cho S2, S3 |
+| Đế | Khảo sát và chốt benchmark (mục 9); định nghĩa QoR và `Qmin` |
+| | Khảo sát và chốt phương pháp chủ chốt cho S4, S5 |
+| Chương | Dựng khung LaTeX theo template OASIcs trong `paper/` |
+| | Khảo sát và chốt phương pháp chủ chốt cho S6 |
+| Cả Nhóm | Đọc kế hoạch và gửi feedback; thống nhất ngưỡng cho hai điều kiện Go/No-Go (mục 7) |
+
+Định hướng đã thống nhất cho quy ước chung: tự viết kernel CUDA cho pipeline; OpenCV chỉ dùng làm baseline và bản giả. Lý do: các núm chỉnh, việc tái sử dụng kết quả khi leo thang và CUDA stream cần kiểm soát được code; bản `opencv-python` cài bằng pip trên Colab không có module CUDA.
+
+## 7. Go/No-Go
+
+Go/No-Go là điểm quyết định "đi tiếp hay đổi hướng", làm trong ngày review của Phase 1, 22/10 (Thứ 5). Mục đích là kiểm tra bằng số liệu thật xem ý tưởng chính có đứng vững không, trước khi cả Nhóm đầu tư vào runtime.
+
+| # | Điều kiện | Ý nghĩa | Ngưỡng gợi ý |
+|---|---|---|---|
+| 1 | Các stage chịu tác động của núm S, K, R chiếm phần đáng kể trong tổng thời gian end-to-end | Nếu phần này quá nhỏ thì chỉnh núm cũng không giảm được bao nhiêu latency | khoảng 30% |
+| 2 | Oracle nhanh hơn rõ rệt so với cấu hình cố định tốt nhất (Fixed-Best) ở cùng `Qmin` | Đây là mức lợi tối đa runtime có thể đạt; nếu Oracle còn không nhanh hơn bao nhiêu thì runtime không có giá trị | khoảng 20-25% |
+
+Ngưỡng chính thức do cả Nhóm thống nhất trong Phase 0.
+
+Cách làm: không có task prototype riêng. Đây là một buổi phân tích khoảng nửa ngày, dùng dữ liệu Nhóm đằng nào cũng tạo ra:
+
+- điều kiện 1 lấy từ thời gian từng stage sau lần ghép code cuối Phase 1;
+- điều kiện 2 lấy từ một lượt chạy nhanh vài tổ hợp S, K, R trên 20-30 cặp ảnh bằng chính pipeline GPU của Nhóm. Script này cũng được dùng lại để dựng Pareto ở Phase 2.
+
+Nếu ghép code bị trễ, quyết định được dời sang 1-2 ngày đầu Phase 2.
+
+| Kết quả | Khi nào | Hướng đi |
+|---|---|---|
+| Go | Đạt cả hai điều kiện | Giữ nguyên hướng runtime |
+| Go có điều chỉnh | Đạt điều kiện 2, không đạt điều kiện 1 | Báo cáo riêng latency của phần tính toán, hoặc đưa núm B lên làm núm chính |
+| No-Go | Không đạt điều kiện 2 | Chuyển paper thành khảo sát Pareto giữa chất lượng và latency của pipeline ghép ảnh trên GPU (vẫn hợp topic case studies của workshop); giữ nguyên lịch |
+
+Kể cả khi No-Go, pipeline GPU, benchmark, script đo QoR và harness vẫn dùng được; chỉ phần controller bị bỏ.
+
+## 8. Các phase sau (ý chính)
+
+Task chi tiết của mỗi phase được lập trong ngày review của phase trước.
+
+- **Phase 1, dựng nền và kiểm chứng giả thuyết:** pipeline GPU đủ 6 stage, có sẵn các núm chỉnh; chuẩn bị benchmark và script đo QoR; harness để ghép code. Cuối phase ghép code lần đầu; ngày review làm Go/No-Go.
+- **Phase 2, runtime và Pareto:** chạy các tổ hợp cấu hình trên pipeline thật, dựng Pareto front và thang cấu hình; làm controller; tối ưu chỗ nghẽn trên GPU và việc tái sử dụng kết quả khi leo thang. Cuối phase ghép controller vào pipeline. Bắt đầu viết các mục không cần số liệu: Introduction, Related Work.
+- **Phase 3, thí nghiệm:** chạy thí nghiệm với các baseline, Oracle, ablation; đo overhead của controller và năng lượng nếu kịp. Viết các mục về phương pháp và hệ thống đã cài đặt ở Phase 1-2.
+- **Phase 4, viết và hoàn thiện:** viết Results, Abstract, Conclusion; cả Nhóm review toàn bộ paper và sửa; kiểm tra ẩn danh, định dạng OASIcs và số trang trước khi nộp.
+
+## 9. Dataset và benchmark
+
+Paper dùng dataset công khai để người khác tái lập được kết quả; không bắt buộc ảnh tự chụp. Chưa có benchmark dành riêng cho bài toán ghép ảnh trên GPU thích nghi theo ràng buộc chất lượng, nên Nhóm kết hợp các bộ phổ biến. Các ứng viên để Đế khảo sát và chốt ở Phase 0:
+
+| Dataset | Nội dung | Phù hợp ở điểm nào |
+|---|---|---|
+| [CA-UDHN](https://github.com/JirongZhang/DeepHomography) (ECCV 2020) | Khoảng 80k cặp chia 5 loại cảnh: thường, ít texture, thiếu sáng, tiền cảnh nhỏ, tiền cảnh lớn. Tập test khoảng 4.2k cặp có 6-8 điểm tương ứng gán nhãn tay | Mỗi loại cảnh ứng với một mức độ khó, khớp với ý tưởng scene-aware |
+| [HPatches](https://arxiv.org/abs/1704.05939) | 116 chuỗi ảnh (59 chuỗi đổi góc nhìn), có homography đúng | Tính sai số hình học chính xác |
+| UDIS-D | 10.440 cặp train và 1.106 cặp test ảnh thật, có parallax, cảnh đêm, tối, tuyết; không có homography đúng | Kiểm tra trên ảnh thật, đo chất lượng vùng chồng lấn |
+
+Lưu ý: các bộ trên có độ phân giải thấp so với 1080p/4K. Để đo latency trên GPU ở độ phân giải cao, cần bổ sung cặp ảnh tổng hợp từ ảnh độ phân giải cao, biến đổi bằng homography đã biết. Ảnh tự chụp chỉ là tùy chọn bổ sung.
+
+## 10. Môi trường chạy
+
+- Mọi build, test và đo đạc chạy trên Google Colab với GPU Tesla T4; build CUDA bằng `-arch=sm_75`.
+- `nvidia-smi` trên Colab đọc được công suất, nên có thể đo năng lượng.
+- Thí nghiệm cuối chạy trong cùng một phiên Colab; ghi tên GPU và xung nhịp cùng kết quả.
+
+## 11. Paper
+
+- Viết bằng LaTeX, tiếng Anh, trong thư mục `paper/` của repo; không dùng Overleaf.
+- Template OASIcs lấy từ Dagstuhl theo hướng dẫn trên trang workshop; phiên bản template hiện hành cần kiểm tra khi dựng khung. Bản dùng để nộp phải bật chế độ ẩn danh cho double-blind.
+- Không đưa tên thành viên, tên trường, link GitHub cá nhân hay thông tin nhận diện Nhóm vào paper và metadata của PDF.
+- Pipeline được trình bày là pipeline feature-based kinh điển (Brown & Lowe, IJCV 2007; Szeliski, *Computer Vision: Algorithms and Applications*), không trích dẫn đề đồ án môn học.
+
+## 12. Rủi ro
+
+| Rủi ro | Cách xử lý |
+|---|---|
+| Hạn giữa kỳ đồ án môn học 23/10 (Thứ 6) trùng Phase 1 | Lưu ý khi lập task Phase 1; báo lại cho cả Nhóm nếu bị kẹt việc |
+| Ghép code cuối Phase 1 bị trễ | Dời Go/No-Go sang 1-2 ngày đầu Phase 2 |
+| No-Go | Chuyển sang paper khảo sát Pareto, giữ nguyên lịch (mục 7) |
+| Colab hết hạn mức GPU hoặc đổi GPU | Thành viên khác chạy hộ; chỉ dùng kết quả trên T4, thí nghiệm cuối chạy trong một phiên |

@@ -50,30 +50,28 @@ Cách chia stage giữ giống đồ án môn học để mỗi người làm ti
 4. **Quy ước chung** chỉ đặt cho những gì mọi thành viên cùng dùng, và do một người quyết định (Tuấn).
 5. **Quyết định kỹ thuật** của từng stage, module hay task do người phụ trách tự quyết định. Phương án chọn phải tối ưu trong điều kiện của phần mình phụ trách, hoặc có fallback nếu không tối ưu hay không khả thi. Phase 0 chỉ chốt các quyết định chủ chốt; các quyết định khác làm tới đâu quyết định tới đó và được ghi lại trong `docs/` gồm: bối cảnh, phương án chọn, trade-off hoặc phương án phụ, fallback, người quyết định, ngày.
 6. **Ghép code chỉ khi các module liên quan đã xong:** dự kiến cuối Phase 1 (lần đầu đủ 6 stage) và cuối Phase 2 (đưa controller vào pipeline). Đế phụ trách. Trước đó mỗi người tự chạy toàn pipeline bằng các bản giả để phát hiện lỗi sớm.
-7. **Review:** Tuấn review pull request của từng task/stage và merge. Ở Phase 4, cả Nhóm cùng review toàn bộ paper.
+7. **Review:** Tuấn review pull request của từng task/stage và merge. Ở Phase 3, cả Nhóm cùng review toàn bộ paper.
 8. **Viết paper:** ai cài đặt phần nào thì viết phần đó, nhưng viết ở phase sau phase cài đặt, khi cách cài đặt đã được kiểm chứng.
 
 ## 5. Lịch các phase
 
 ```mermaid
 flowchart LR
-    P0["Phase 0<br/>Khởi động"] --> P1["Phase 1<br/>Dựng nền và kiểm chứng giả thuyết"]
-    P1 --> P2["Phase 2<br/>Runtime và Pareto"]
-    P2 --> P3["Phase 3<br/>Thí nghiệm"]
-    P3 --> P4["Phase 4<br/>Viết và hoàn thiện"]
-    P4 --> END["13/11 (Thứ 6)<br/>Nộp bài"]
+    P0["Phase 0<br/>Khởi động"] --> P1["Phase 1<br/>Pipeline và Pareto"]
+    P1 --> P2["Phase 2<br/>Controller, thí nghiệm, viết phương pháp"]
+    P2 --> P3["Phase 3<br/>Viết kết quả và hoàn thiện"]
+    P3 --> END["13/11 (Thứ 6)<br/>Nộp bài"]
 ```
 
 | Phase | Tên | Deadline |
 |---|---|---|
-| 0 | Khởi động | 15/10 (Thứ 5) |
-| 1 | Dựng nền và kiểm chứng giả thuyết (Go/No-Go) | |
-| 2 | Runtime và Pareto | |
-| 3 | Thí nghiệm | |
-| 4 | Viết và hoàn thiện | |
+| 0 | Khởi động | 15/10 (Thứ 5); task chưa xong gia hạn tới 19/10 (Thứ 2) |
+| 1 | Pipeline và Pareto (Go/No-Go) | 25/10 (Chủ nhật); review 26/10 (Thứ 2) |
+| 2 | Controller, thí nghiệm, viết phương pháp | |
+| 3 | Viết kết quả và hoàn thiện | |
 | | **Nộp bài** | **13/11 (Thứ 6)** |
 
-Deadline và task của từng phase sau Phase 0 sẽ được giao khi phase trước hoàn tất.
+Ngày 18/10, các phase còn lại được gộp từ 4 xuống 3 để kịp mốc nộp; mỗi phase vẫn tối đa 7 ngày (mục 4). Deadline và task của Phase 2, Phase 3 sẽ được giao khi phase trước hoàn tất.
 
 ## 6. Phase 0: Khởi động
 
@@ -87,11 +85,21 @@ Deadline chung: 15/10 (Thứ 5).
 | Chương | 1. Dựng khung LaTeX theo template OASIcs trong `paper/`<br>2. Khảo sát và chốt phương pháp chủ chốt cho S6 |
 | Cả Nhóm | Đọc kế hoạch và gửi feedback; thống nhất ngưỡng cho hai điều kiện Go/No-Go (mục 7) |
 
+Các task chưa xong tới 18/10 được gia hạn tới tối 19/10 (Thứ 2), vì đây là đầu vào của Phase 1:
+
+| Thành viên | Task gia hạn |
+|---|---|
+| Tuấn | Task 1 và 2 ở bảng trên: quy ước chung; mock data và bản giả bằng OpenCV cho cả 6 stage |
+| Thành | Chốt phương pháp S2, S3; ưu tiên chốt kiểu descriptor và cách tính khoảng cách vì S4 cần |
+| Đế | Tải và kiểm tra UDIS-D; chia tập development và final |
+| Chương | Dựng khung LaTeX theo template OASIcs trong `paper/` |
+| Cả Nhóm | Thống nhất ngưỡng cho hai điều kiện Go/No-Go (mục 7) |
+
 Định hướng đã thống nhất cho quy ước chung: tự viết kernel CUDA cho pipeline; OpenCV chỉ dùng làm baseline và bản giả. Lý do: các núm chỉnh, việc tái sử dụng kết quả khi leo thang và CUDA stream cần kiểm soát được code; bản `opencv-python` cài bằng pip trên Colab không có module CUDA.
 
 ## 7. Go/No-Go
 
-Go/No-Go là điểm quyết định "đi tiếp hay đổi hướng", làm trong ngày review của Phase 1, 22/10 (Thứ 5). Mục đích là kiểm tra bằng số liệu thật xem ý tưởng chính có đứng vững không, trước khi cả Nhóm đầu tư vào runtime.
+Go/No-Go là điểm quyết định "đi tiếp hay đổi hướng", làm trong ngày review của Phase 1, 26/10 (Thứ 2). Mục đích là kiểm tra bằng số liệu thật xem ý tưởng chính có đứng vững không, trước khi cả Nhóm đầu tư vào runtime.
 
 | # | Điều kiện | Ý nghĩa | Ngưỡng gợi ý |
 |---|---|---|---|
@@ -103,7 +111,7 @@ Ngưỡng chính thức do cả Nhóm thống nhất trong Phase 0.
 Cách làm: không có task prototype riêng. Đây là một buổi phân tích khoảng nửa ngày, dùng dữ liệu Nhóm đằng nào cũng tạo ra:
 
 - điều kiện 1 lấy từ thời gian từng stage sau lần ghép code cuối Phase 1;
-- điều kiện 2 lấy từ một lượt chạy nhanh vài tổ hợp S, K, R trên 20-30 cặp ảnh bằng chính pipeline GPU của Nhóm. Script này cũng được dùng lại để dựng Pareto ở Phase 2.
+- điều kiện 2 lấy từ một lượt chạy nhanh vài tổ hợp S, K, R trên 20-30 cặp ảnh bằng chính pipeline GPU của Nhóm. Script này cũng dùng để dựng Pareto.
 
 Nếu ghép code bị trễ, quyết định được dời sang 1-2 ngày đầu Phase 2.
 
@@ -115,14 +123,35 @@ Nếu ghép code bị trễ, quyết định được dời sang 1-2 ngày đầ
 
 Kể cả khi No-Go, pipeline GPU, benchmark, script đo QoR và harness vẫn dùng được; chỉ phần controller bị bỏ.
 
-## 8. Các phase sau (ý chính)
+## 8. Phase 1 và các phase sau
 
 Task chi tiết của mỗi phase được lập trong ngày review của phase trước.
 
-- **Phase 1, dựng nền và kiểm chứng giả thuyết:** pipeline GPU đủ 6 stage, có sẵn các núm chỉnh; chuẩn bị benchmark và script đo QoR; harness để ghép code. Cuối phase ghép code lần đầu; ngày review làm Go/No-Go.
-- **Phase 2, runtime và Pareto:** chạy các tổ hợp cấu hình trên pipeline thật, dựng Pareto front và thang cấu hình; làm controller; tối ưu chỗ nghẽn trên GPU và việc tái sử dụng kết quả khi leo thang. Cuối phase ghép controller vào pipeline. Bắt đầu viết các mục không cần số liệu: Introduction, Related Work.
-- **Phase 3, thí nghiệm:** chạy thí nghiệm với các baseline, Oracle, ablation; đo overhead của controller và năng lượng nếu kịp. Viết các mục về phương pháp và hệ thống đã cài đặt ở Phase 1-2.
-- **Phase 4, viết và hoàn thiện:** viết Results, Abstract, Conclusion; cả Nhóm review toàn bộ paper và sửa; kiểm tra ẩn danh, định dạng OASIcs và số trang trước khi nộp.
+### Phase 1: Pipeline và Pareto
+
+Thời gian: 20/10 (Thứ 3) đến 26/10 (Thứ 2). Deadline chung cho các task: 25/10 (Chủ nhật). Ngày review: 26/10 (Thứ 2).
+
+Điều kiện bắt đầu: các task gia hạn của Phase 0 (mục 6) xong trước tối 19/10 (Thứ 2).
+
+| Thành viên | Task |
+|---|---|
+| Tuấn | 1. Kernel CUDA cho S1, có núm S<br>2. Harness: chạy S1-S6, mỗi stage chọn được bản GPU hoặc bản giả; đo thời gian từng stage bằng CUDA event; ghi kết quả ra CSV<br>3. Script quét lưới S×K×R và script phân tích: Pareto front, Fixed-Best, Oracle, số liệu cho hai điều kiện Go/No-Go |
+| Thành | 1. Kernel CUDA cho S2 (có núm K) và S3<br>2. Test so với OpenCV<br>3. Tối ưu chỗ nghẽn trong S2-S3 |
+| Đế | 1. Kernel CUDA cho S4<br>2. Kernel CUDA cho S5, có núm R; xuất các tín hiệu tự kiểm tra; tái sử dụng kết quả khi chỉ tăng R |
+| Chương | 1. Kernel CUDA cho S6: warp, feather, multiband 3 và 5 mức (núm B)<br>2. Script đo QoR theo định nghĩa của Đế: PSNR/SSIM vùng chồng lấn, độ phủ; Đế review |
+
+Quy định riêng của Phase 1:
+
+- Mỗi người chạy toàn pipeline với bản giả của các stage còn lại, không chờ nhau.
+- Mỗi người chỉ sửa code trong thư mục mình phụ trách. Interface dùng chung chỉ Tuấn sửa và được khóa sau 19/10.
+- Pull request của một stage chỉ được merge khi output khớp với bản giả OpenCV trên mock data, trong sai số cho phép do người phụ trách stage ghi rõ trong pull request.
+
+Ngày review 26/10: Đế ghép 6 stage GPU và chạy script quét trên 20-30 cặp ảnh của tập development; cả Nhóm phân tích Go/No-Go (mục 7); lập task Phase 2.
+
+### Các phase sau (ý chính)
+
+- **Phase 2, controller, thí nghiệm và viết phương pháp:** làm controller và ghép vào pipeline; chạy thí nghiệm với các baseline, Oracle, ablation; đo overhead của controller và năng lượng nếu kịp. Viết Introduction, Related Work và các mục về phương pháp, hệ thống đã cài đặt ở Phase 1.
+- **Phase 3, viết kết quả và hoàn thiện:** viết Results, Abstract, Conclusion; cả Nhóm review toàn bộ paper và sửa; kiểm tra ẩn danh, định dạng OASIcs và số trang trước khi nộp. Thời gian còn lại tới 13/11 dùng làm dự phòng.
 
 ## 9. Dataset và benchmark
 
@@ -153,7 +182,7 @@ Lưu ý: các bộ trên có độ phân giải thấp so với 1080p/4K. Để 
 
 | Rủi ro | Cách xử lý |
 |---|---|
-| Hạn giữa kỳ đồ án môn học 23/10 (Thứ 6) trùng Phase 1 | Lưu ý khi lập task Phase 1; báo lại cho cả Nhóm nếu bị kẹt việc |
+| Hạn giữa kỳ đồ án môn học 23/10 (Thứ 6) trùng Phase 1, trong khi Phase 1 gánh khối lượng của hai phase cũ | Ai bị kẹt việc báo ngay cho cả Nhóm để điều chỉnh task trong phase, không đợi tới ngày review |
 | Ghép code cuối Phase 1 bị trễ | Dời Go/No-Go sang 1-2 ngày đầu Phase 2 |
 | No-Go | Chuyển sang paper khảo sát Pareto, giữ nguyên lịch (mục 7) |
 | Colab hết hạn mức GPU hoặc đổi GPU | Thành viên khác chạy hộ; chỉ dùng kết quả trên T4, thí nghiệm cuối chạy trong một phiên |

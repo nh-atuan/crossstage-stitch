@@ -66,7 +66,7 @@ flowchart LR
 | Phase | Tên | Deadline |
 |---|---|---|
 | 0 | Khởi động | 15/10 (Thứ 5); task chưa xong gia hạn tới 19/10 (Thứ 2) |
-| 1 | Pipeline và Pareto (Go/No-Go) | 25/10 (Chủ nhật); review 26/10 (Thứ 2) |
+| 1 | Pipeline và Pareto (Go/No-Go) | 25/10 (Chủ nhật) |
 | 2 | Controller, thí nghiệm, viết phương pháp | |
 | 3 | Viết kết quả và hoàn thiện | |
 | | **Nộp bài** | **13/11 (Thứ 6)** |
@@ -99,7 +99,7 @@ Các task chưa xong tới 18/10 được gia hạn tới tối 19/10 (Thứ 2),
 
 ## 7. Go/No-Go
 
-Go/No-Go là điểm quyết định "đi tiếp hay đổi hướng", làm trong ngày review của Phase 1, 26/10 (Thứ 2). Mục đích là kiểm tra bằng số liệu thật xem ý tưởng chính có đứng vững không, trước khi cả Nhóm đầu tư vào runtime.
+Go/No-Go là điểm quyết định "đi tiếp hay đổi hướng", làm trong ngày review của Phase 1. Mục đích là kiểm tra bằng số liệu thật xem ý tưởng chính có đứng vững không, trước khi cả Nhóm đầu tư vào runtime.
 
 | # | Điều kiện | Ý nghĩa | Ngưỡng gợi ý |
 |---|---|---|---|
@@ -129,7 +129,7 @@ Task chi tiết của mỗi phase được lập trong ngày review của phase 
 
 ### Phase 1: Pipeline và Pareto
 
-Thời gian: 20/10 (Thứ 3) đến 26/10 (Thứ 2). Deadline chung cho các task: 25/10 (Chủ nhật). Ngày review: 26/10 (Thứ 2).
+Deadline chung cho các task: 25/10 (Chủ nhật).
 
 Điều kiện bắt đầu: các task gia hạn của Phase 0 (mục 6) xong trước tối 19/10 (Thứ 2).
 
@@ -146,7 +146,7 @@ Quy định riêng của Phase 1:
 - Mỗi người chỉ sửa code trong thư mục mình phụ trách. Interface dùng chung chỉ Tuấn sửa và được khóa sau 19/10.
 - Pull request của một stage chỉ được merge khi output khớp với bản giả OpenCV trên mock data, trong sai số cho phép do người phụ trách stage ghi rõ trong pull request.
 
-Ngày review 26/10: Đế ghép 6 stage GPU và chạy script quét trên 20-30 cặp ảnh của tập development; cả Nhóm phân tích Go/No-Go (mục 7); lập task Phase 2.
+Ngày review: Đế ghép 6 stage GPU và chạy script quét trên 20-30 cặp ảnh của tập development; cả Nhóm phân tích Go/No-Go (mục 7); lập task Phase 2.
 
 ### Các phase sau (ý chính)
 

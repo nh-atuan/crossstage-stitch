@@ -21,7 +21,7 @@ S_VALUES = [1.0, 0.75, 0.5, 0.25]
 S_PIPELINE = 0.5          # stages after S1 are generated at this S
 PAIRS = [(1, 2), (1, 3)]  # (A index, B index) inside a sequence
 SEED = 0
-DEFAULT_SEQS = ["v_bark", "v_boat", "v_graf", "v_wall", "v_bip"]
+DEFAULT_SEQS = ["v_bark", "v_boat", "v_graffiti", "v_wall", "v_bip"]  # names as in HPatches splits.json
 
 
 def save_npy(path, arr):

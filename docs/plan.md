@@ -65,7 +65,7 @@ flowchart LR
 
 | Phase | Tên | Deadline |
 |---|---|---|
-| 0 | Khởi động | 15/10 (Thứ 5); task chưa xong gia hạn tới 19/10 (Thứ 2) |
+| 0 | Khởi động | 19/10 (Thứ 2) |
 | 1 | Pipeline và Pareto (Go/No-Go) | 25/10 (Chủ nhật) |
 | 2 | Controller, thí nghiệm, viết phương pháp | |
 | 3 | Viết kết quả và hoàn thiện | |
@@ -75,7 +75,7 @@ Ngày 18/10, các phase còn lại được gộp từ 4 xuống 3 để kịp m
 
 ## 6. Phase 0: Khởi động
 
-Deadline chung: 15/10 (Thứ 5).
+Deadline chung: 19/10 (Thứ 2).
 
 | Thành viên | Task |
 |---|---|
@@ -84,16 +84,6 @@ Deadline chung: 15/10 (Thứ 5).
 | Đế | 1. Khảo sát và chốt benchmark (mục 9); định nghĩa QoR và `Qmin`<br>2. Khảo sát và chốt phương pháp chủ chốt cho S4, S5 |
 | Chương | 1. Dựng khung LaTeX theo template OASIcs trong `paper/`<br>2. Khảo sát và chốt phương pháp chủ chốt cho S6 |
 | Cả Nhóm | Đọc kế hoạch và gửi feedback; thống nhất ngưỡng cho hai điều kiện Go/No-Go (mục 7) |
-
-Các task chưa xong tới 18/10 được gia hạn tới tối 19/10 (Thứ 2), vì đây là đầu vào của Phase 1:
-
-| Thành viên | Task gia hạn |
-|---|---|
-| Tuấn | Task 1 và 2 ở bảng trên: quy ước chung; mock data và bản giả bằng OpenCV cho cả 6 stage |
-| Thành | Chốt phương pháp S2, S3; ưu tiên chốt kiểu descriptor và cách tính khoảng cách vì S4 cần |
-| Đế | Tải và kiểm tra UDIS-D; chia tập development và final |
-| Chương | Dựng khung LaTeX theo template OASIcs trong `paper/` |
-| Cả Nhóm | Thống nhất ngưỡng cho hai điều kiện Go/No-Go (mục 7) |
 
 Định hướng đã thống nhất cho quy ước chung: tự viết kernel CUDA cho pipeline; OpenCV chỉ dùng làm baseline và bản giả. Lý do: các núm chỉnh, việc tái sử dụng kết quả khi leo thang và CUDA stream cần kiểm soát được code; bản `opencv-python` cài bằng pip trên Colab không có module CUDA.
 
@@ -131,7 +121,7 @@ Task chi tiết của mỗi phase được lập trong ngày review của phase 
 
 Deadline chung cho các task: 25/10 (Chủ nhật).
 
-Điều kiện bắt đầu: các task gia hạn của Phase 0 (mục 6) xong trước tối 19/10 (Thứ 2).
+Điều kiện bắt đầu: các task của Phase 0 (mục 6) xong trước tối 19/10 (Thứ 2).
 
 | Thành viên | Task |
 |---|---|

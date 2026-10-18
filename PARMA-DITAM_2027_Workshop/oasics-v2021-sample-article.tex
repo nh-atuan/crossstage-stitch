@@ -1,0 +1,224 @@
+\documentclass[a4paper,UKenglish,cleveref,autoref,anonymous]{oasics-v2021}
+% Anonymous working outline; not a submission-ready paper.
+% Keep the publisher class unchanged. Planning and evidence status: README.md.
+\hideOASIcs
+\bibliographystyle{plainurl}
+
+\title{CrossStage-Stitch: A Scene-Aware Runtime for Quality-Constrained GPU Panorama Stitching}
+\titlerunning{CrossStage-Stitch: Quality-Constrained GPU Panorama Stitching}
+\author{Anonymous Authors}{Anonymous affiliation}{}{}{}
+\authorrunning{Anonymous Authors}
+\Copyright{Anonymous Authors}
+\ccsdesc[500]{Computing methodologies~Parallel computing methodologies}
+\keywords{GPU panorama stitching, adaptive computation, runtime management, quality of result, cross-stage reuse}
+\category{}
+% Publication identifiers and proceedings editors are assigned by the publisher.
+% Do not copy the sample's fictitious event, volume, article number, or DOI.
+\AtBeginDocument{\hypersetup{pdfsubject={Anonymous working outline for PARMA-DITAM 2027}}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+% Role: scope and research question; empirical findings are not yet available.
+This working outline defines a study of scene-aware computational budgets in a
+GPU panorama-stitching pipeline. The research question is whether a runtime can
+reduce end-to-end latency by selecting image scale, keypoint count, robust-fitting
+budget, and, where supported by a composition-quality policy, blending mode,
+while satisfying a predefined quality-of-result constraint. The planned system
+combines an offline configuration search with online selection, intermediate
+self-checks, and reuse of unaffected stage outputs during escalation. The
+planned evaluation uses UDIS-D on an NVIDIA Tesla T4 and compares fixed
+configurations, the adaptive runtime, and an offline per-pair oracle under the
+same quality policy and timing boundary. No measured speedup, quality guarantee,
+or completed implementation is claimed in this outline.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:introduction}
+% Role: opening; establish the task without claiming a new stitching algorithm.
+Panorama stitching combines overlapping images into a wider field of view through
+alignment, warping, and composition~\cite{brown2007stitching}. This paper considers
+the computational budget of a feature-based GPU pipeline rather than a replacement
+for its underlying image-formation model.
+
+% Role: challenge; state a hypothesis whose motivation needs profiling evidence.
+A single fixed configuration assigns the same budgets to every image pair.
+The hypothesis motivating this study is that scene-dependent quality requirements
+leave opportunities to select cheaper configurations for some pairs. Whether
+these opportunities outweigh selection, checking, and escalation overhead must
+be established by workload characterization and held-out evaluation.
+
+% Role: method and intended contribution; do not report planned work as results.
+The proposed study asks: can a scene-aware cross-stage runtime reduce GPU
+panorama-stitching latency while maintaining a predefined quality-of-result
+constraint? The intended contributions are a dependency-aware budget-selection
+runtime, an explicit quality-constrained configuration protocol, and a reproducible
+analysis of when adaptation is beneficial. These contributions remain subject to
+implementation, comparison with related runtimes, and experimental verification.
+
+\section{Background and Problem Formulation}
+\label{sec:problem}
+\subsection{Pipeline and Computational Budgets}
+% Role: background and notation; classical stages are not novelty claims.
+The pipeline comprises preprocessing (S1), keypoint detection (S2), description
+(S3), matching (S4), homography estimation (S5), and warping and blending (S6).
+A configuration is $c=(s,k,r,b)$: image scale $s$ controls alignment resolution,
+$k$ limits retained keypoints, $r$ limits robust-fitting hypotheses, and $b$
+selects a blender. Rendering uses the original colour images. A homography
+estimated in resized coordinates must be transformed back to their coordinate
+systems before rendering.
+
+\subsection{Quality Policy and Feasibility}
+\label{sec:quality}
+% Role: design; distinguish a relative alignment proxy from visual correctness.
+The current benchmark design uses overlap SSIM and PSNR relative to a fixed
+high-budget reference, together with stitch validity and coverage checks.
+For pair $i$, let $\mathcal{P}_i(c)$ denote the offline feasibility predicate:
+\begin{align}
+\mathcal{P}_i(c) ={}& \mathrm{Valid}_i(c)\land\mathrm{CoverageOK}_i(c) \notag\\
+ &{}\land[\mathrm{SSIM}_i(c)\geq\mathrm{SSIM}_{\mathrm{ref},i}-\delta_S] \notag\\
+ &{}\land[\mathrm{PSNR}_i(c)\geq\mathrm{PSNR}_{\mathrm{ref},i}-\delta_P].
+\label{eq:quality}
+\end{align}
+Development-only calibration must determine and freeze the tolerances and the
+candidate-independent evaluation domain. The reference can itself fail and is
+not a ground-truth panorama. These alignment proxies do not certify perceptual
+composition quality or distinguish blending modes; the primary scale/keypoint/
+fitting-budget experiments therefore hold $b$ fixed until an appropriate
+composition policy is agreed and validated.
+
+\subsection{Latency Objective and Offline Oracle}
+% Role: objective; keep offline knowledge separate from the online decision.
+For a finite configuration set $\mathcal{C}$, the offline oracle is
+\begin{equation}
+c_i^\star\in\mathop{\mathrm{arg\,min}}_{c\in\mathcal{C}:\mathcal{P}_i(c)}T_i(c),
+\label{eq:oracle}
+\end{equation}
+where $T_i(c)$ uses a common end-to-end timing boundary. A pair with no feasible
+configuration is recorded as infeasible. Fixed-Best is one configuration selected
+on development data for all pairs; the oracle may select a different configuration
+for each pair using offline quality measurements. The online controller cannot
+access those measurements and must include its own overhead in reported latency.
+
+\section{Related Work}
+\label{sec:related-work}
+\subsection{Stitching, Alignment, and Composition}
+% Role: positioning; cite only the distinctions supported by these sources.
+Classical feature-based stitching provides the pipeline context~\cite{brown2007stitching}.
+UDIS++ combines global and local alignment with learned composition~\cite{nie2023udispp}.
+The final review will distinguish improvements to image formation and alignment
+from the runtime allocation problem studied here; it will not compare entire
+stitching systems as if they differed only in their blender.
+
+\subsection{GPU Blending and Cost--Quality Trade-offs}
+% Role: prior evidence and scope; earlier GPU results are not T4 predictions.
+Prior work compares panoramic blending algorithms in terms of quality, time,
+and memory~\cite{zhu2018blending}. This motivates measuring blender costs and
+failure modes explicitly, without transferring speedup numbers across hardware
+or camera setups. Feather and multi-band modes are candidate S6 policies;
+adding more pyramid levels is not assumed to improve quality monotonically.
+
+\subsection{Adaptive Runtimes and Approximate Computing}
+% Role: literature gap to complete; no unsupported first-of-its-kind claim.
+This subsection will compare quality-constrained configuration selection,
+feedback-based adaptation, and dependency-aware result reuse with the closest
+runtime and approximate-computing literature. The contribution claim must be
+narrowed after that comparison. A lack of citations in this working subsection
+is an evidence gap, not evidence that no related system exists.
+
+\section{Cross-Stage Runtime Design}
+\label{sec:runtime}
+\subsection{Workload Characterization and Configuration Ladder}
+% Role: motivation and design; measurements must precede optimization claims.
+The first experiment will measure stage costs and the per-pair feasible
+configuration sets on development workloads. An offline sweep will identify
+non-dominated latency--quality configurations and construct a compact ladder.
+This evidence will determine whether adaptive budgets have enough headroom;
+a fixed configuration or a Pareto characterization is the fallback if they do not.
+
+\subsection{Scene-Aware Selection, Checks, and Escalation}
+% Role: design; the policy is not yet an implemented or calibrated guarantee.
+The runtime is planned to select an initial configuration using scene and
+intermediate signals, then escalate when its calibrated checks reject the
+candidate. Available S4/S5 signals include match and inlier counts, inlier ratio,
+reprojection residuals, spatial coverage, and homography validity. The final
+method must specify the features, decision rule, thresholds, stopping condition,
+maximum retry budget, and terminal failure behaviour before test evaluation.
+These proxies can make false acceptance decisions; they do not guarantee
+\cref{eq:quality} on unseen pairs.
+
+\subsection{Dependency-Aware Reuse and GPU Execution}
+% Role: design and technical rationale; advantages require a reuse ablation.
+Reuse is restricted to results whose inputs and conventions remain unchanged.
+Increasing only the fitting budget may reuse matches and extend the hypothesis
+sequence; changing scale or keypoints can invalidate downstream work. Changing
+only the blender may reuse warps and validity masks if images and homography
+are identical. Streams must respect stage dependencies, and materialization,
+allocation, synchronization, and discarded attempts count towards policy cost.
+The final implementation description will include the dependency graph and
+buffer lifetimes, plus only kernel or memory optimizations supported by profiling.
+
+\subsection{S6 Policies and Composition Boundary}
+% Role: design and limitation; blend quality is a separate validation problem.
+S6 uses inverse homography warping with bilinear sampling and explicit validity.
+Its initial blend candidates are feather, multi-band with three reductions, and
+multi-band with five reductions. A content-aware seam finder, optical flow,
+and neural reconstruction are outside the planned rendering path. Blender
+selection remains a separate experiment until output-sensitive quality checks
+are validated. Increasing blend cost cannot be treated as a repair for an
+invalid homography or arbitrary parallax.
+
+\section{Experimental Evaluation Plan}
+\label{sec:evaluation}
+\subsection{Platform, Data, and Reproducibility}
+% Role: protocol; no benchmark has yet produced paper-ready measurements.
+The planned platform is Google Colab with an NVIDIA Tesla T4, compiling CUDA
+for \texttt{sm\_75}. The evaluation must record the actual toolkit, compiler flags,
+GPU state, code revision, and random seeds. UDIS-D is the primary benchmark;
+development/calibration and final evaluation are separated by scene. HPatches
+can support known-homography checks, and synthetic high-resolution pairs can
+provide a separate resolution stress test. Neither substitutes for the primary
+real-image evaluation.
+
+\subsection{Baselines and Main Latency--Quality Comparison}
+% Role: evidence plan; fixed and adaptive policies share the implementation.
+Compare Fixed-Low, Fixed-High, development-selected Fixed-Best, Adaptive, and
+the offline oracle using the same CUDA pipeline and timing boundary. Report
+latency distributions, speedup, pair-wise quality differences, quality violations,
+reference failures, and feasible-pair coverage. The main table must distinguish
+execution failure from a completed stitch that violates the quality policy;
+mean quality alone is insufficient.
+
+\subsection{Stage Profiling, Overhead, and Ablations}
+% Role: causal evidence plan; isolate controller and reuse effects.
+Break down S1--S6 latency, controller/proxy cost, escalation attempts, data
+movement, and cache materialization. Compare adaptive budgets with and without
+reuse, single-stage versus cross-stage decisions, and alternative initial or
+escalation policies. Hold blend mode fixed in the primary budget study.
+A separate same-homography sweep will test whether S6 policies produce useful
+cost--composition trade-offs before including adaptive blending in the main claim.
+
+\subsection{Sensitivity, Scaling, and Failure Analysis}
+% Role: external validity and limitations; avoid claiming multi-GPU scalability.
+Evaluate sensitivity to the frozen quality tolerances, image resolution, overlap,
+and available scene categories. Resolution scaling is a single-GPU workload
+study, not multi-GPU scaling. Report peak workspace, dominated configurations,
+small-workload overhead, parallax, motion, exposure mismatch, and cases where
+no configuration is feasible. Energy measurement is optional and must include
+its sampling methodology if reported.
+
+\section{Discussion and Conclusion}
+\label{sec:conclusion}
+% Role: limitation; delimit the central claim before evidence exists.
+This study is limited to a finite configuration set, a global-homography
+rendering model, a relative alignment-quality policy, and one GPU platform.
+It cannot yet claim general perceptual quality, real-time throughput, energy
+savings, or superiority to state-of-the-art stitching systems. The conclusion
+will answer the research question using measured end-to-end results and the
+observed overhead, coverage, and quality-violation rates. If the adaptive-runtime
+hypothesis is not supported, the paper will report the measured Pareto trade-off
+and its limits rather than an unsupported speedup claim.
+
+\bibliography{crossstage-stitch}
+\end{document}

@@ -8,6 +8,9 @@ GEMINI.md
 .cursorrules
 .github/copilot-instructions.md
 
+# Personal working notes and specs (never committed)
+/specs/
+
 # Datasets and run outputs (shared through Google Drive instead)
 data/
 dataset/

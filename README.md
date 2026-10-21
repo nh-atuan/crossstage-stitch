@@ -13,8 +13,14 @@ Mốc nộp bài của Nhóm: 13/11/2026.
 | `.gitignore` | Các file không đưa lên Git: file hướng dẫn agent cá nhân, dataset, output, file build, file tạm của LaTeX |
 | `docs/plan.md` | Kế hoạch: mục tiêu, phân vai, nguyên tắc làm việc, lịch các phase, task Phase 0, Go/No-Go, dataset, môi trường, paper, rủi ro |
 | `docs/stages.md` | Các stage của pipeline: mục tiêu, đầu vào, đầu ra, núm chỉnh, người phụ trách, controller |
+| `docs/conventions.md` | Quy ước chung: cấu trúc repo, môi trường, interface giữa các stage, file kết quả, đo thời gian, Git |
+| `docs/s1-preprocessing.md` | Quyết định kỹ thuật S1 |
+| `docs/decisions/TEMPLATE.md` | Mẫu ghi quyết định kỹ thuật |
+| `src/common/` | Header interface dùng chung |
+| `tools/mock/` | Script sinh mock data và bản giả OpenCV của từng stage |
+| `tests/` | Test CTest (C++/CUDA) và pytest (`tests/python/`) |
 
-Cấu trúc repo đầy đủ (code, paper, quyết định kỹ thuật...) được chốt trong quy ước chung ở Phase 0.
+Cấu trúc thư mục đầy đủ của mã nguồn nằm trong [docs/conventions.md](docs/conventions.md).
 
 ## Bắt đầu
 

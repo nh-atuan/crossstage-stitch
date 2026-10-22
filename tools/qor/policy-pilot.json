@@ -1,0 +1,11 @@
+{
+  "version": "qor-pilot-v1",
+  "status": "pilot-not-team-approved",
+  "color_space": "RGB",
+  "data_range": 255,
+  "min_coverage": 0.95,
+  "max_ssim_drop": 0.02,
+  "max_psnr_drop_db": 0.5,
+  "ssim_window": 11,
+  "ssim_sigma": 1.5
+}

@@ -15,21 +15,21 @@ constexpr int threads = 128;
 struct Points {
     Keypoints a, b;
     Matches m;
-    __device__ Point operator()(int i) const {
+    __host__ __device__ Point operator()(int i) const {
         return {a.x[m.idx_a[i]], a.y[m.idx_a[i]], b.x[m.idx_b[i]], b.y[m.idx_b[i]]};
     }
 };
 
 struct Four {
     Point p[4];
-    __device__ Point operator()(int i) const { return p[i]; }
+    __host__ __device__ Point operator()(int i) const { return p[i]; }
 };
 
 struct Inliers {
     Points points;
     const double* h;
     double threshold2;
-    __device__ bool operator()(int i) const { return residual_squared(h, points(i)) <= threshold2; }
+    __host__ __device__ bool operator()(int i) const { return residual_squared(h, points(i)) <= threshold2; }
 };
 
 __device__ bool same_scale(const ScaleInfo& a, const ScaleInfo& b) {

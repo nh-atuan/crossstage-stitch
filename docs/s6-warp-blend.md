@@ -1,12 +1,12 @@
 # S6 — Warping and blending cho workshop PARMA-DITAM 2027
 
-Người phụ trách: Chương. Ngày cập nhật và tra cứu: 15/10 (Thứ 5), năm 2026.
+Người phụ trách: Chương. Ngày cập nhật triển khai: 22/10 (Thứ 5), năm 2026; khảo sát nguồn gốc: 15/10 (Thứ 5).
 
-Task hiện tại: **Phase 0 — khảo sát và chốt phương pháp chủ chốt cho S6**, deadline chung 15/10 (Thứ 5), theo [kế hoạch](plan.md#6-phase-0-khởi-động). Dựng khung LaTeX là task riêng, không thuộc tài liệu này.
+Task hiện tại: **Phase 1 — triển khai S6 và evaluator QoR của Chương**, theo [kế hoạch](plan.md). Quyết định phương pháp Phase 0 được giữ bên dưới; API, mã nguồn, bằng chứng kiểm tra và lệnh chạy T4 ở [bàn giao P1](s6-p1-implementation.md). Dựng khung LaTeX là task riêng.
 
 **Quyết định thiết kế:** global homography B → A, inverse warping và bilinear; tự viết CUDA cho hai họ blend là feather và Laplacian multi-band. Núm `B` ban đầu gồm `feather`, `multiband_3`, `multiband_5`. Average 50/50 chỉ làm đối chứng. Controller của Đế chọn `B` cùng `S, K, R`; S6 không dựng một controller khác.
 
-Đây là quyết định phương pháp Phase 0, chưa phải kết luận tối ưu hay nghiệm thu triển khai. Repo hiện chỉ có `README.md`, `AGENTS_TEMPLATE.md`, `.gitignore` và ba tài liệu trong `docs/`. Không có `src/`, `tests/`, interface chung, dataset hay kết quả Colab T4. Thông tin V0, 194 assertions, sanitizer và dataset tự chụp trong bản trước thuộc ngữ cảnh đồ án; chưa có artifact trong repo này để dùng làm bằng chứng.
+Đây chưa phải kết luận tối ưu hay nghiệm thu P1. Repo hiện có mã S6, reference FP64, test geometry/CUDA và evaluator QoR; đã kiểm tra Python và host C++, **chưa biên dịch/chạy CUDA hoặc đo Colab T4**. Thông tin V0, 194 assertions và dataset tự chụp của đồ án không được dùng làm bằng chứng cho triển khai workshop.
 
 ## 1. Bối cảnh và tiêu chí quyết định
 
@@ -129,7 +129,7 @@ flowchart LR
 
 ### 5.1. Đầu vào, hệ tọa độ và đầu ra
 
-Đây là **đề xuất interface S6** để Tuấn tích hợp vào quy ước chung; chưa tạo/sửa header chung trong task này.
+Contract đã được hiện thực bằng API riêng ở [src/s6/s6.hpp](../src/s6/s6.hpp) và [geometry.hpp](../src/s6/geometry.hpp), dùng `ImageView`/`Status`/stream chung hiện có. Chưa sửa header chung hoặc root CMake; Tuấn cần review tích hợp. `Geometry.origin_x/y` là tọa độ trong A của góc canvas, **ngược dấu offset A → canvas** trong công thức dưới. Mask union có giá trị 0/1.
 
 | Thành phần | Contract đề xuất |
 |---|---|
@@ -223,20 +223,20 @@ Dùng RGB đã decode chuẩn hóa `[0,1]`, chưa gamma/gain correction; không 
 | Mục | Quyết định / điều kiện triển khai |
 |---|---|
 | Reference | FP64 kiểm tra H, canvas, sampling, blend; oracle correctness, không dùng latency CPU làm kết quả GPU |
-| GPU | Dự kiến FP32 per-pixel/filter; FP64 setup nhỏ khi cần. Chốt tolerance bằng test, không hứa bit-identical |
+| GPU | Bản P1 dùng FP64 tọa độ warp, FP32 màu/filter/pyramid. Tolerance RGB tối đa 2 mức uint8 được đặt trước trong harness, chưa xác nhận trên GPU; không hứa bit-identical |
 | Hình học | Version hóa normalize H, mẫu số tương đối, snap số nguyên, conditioning cùng S5; không coi ngưỡng cũ là Nhóm đã chốt |
 | Correctness | Canvas/offset/mask khớp reference trước màu; giới hạn màu định trước. Sát biên cần đường tính ổn định hơn nếu FP32 không đủ |
 | Texture/fast math | Bilinear tự tính ở bản đầu. Chỉ khảo sát hardware filtering sau profiling/sai số; CUDA 12.5 nêu weights có 8 bit phần lẻ [I2] |
 | Bộ nhớ | Budget theo live buffers/levels/padding/workspace khác, không riêng mốc 100 triệu pixel cũ |
 
-Tolerance số cụ thể, ABI và ngưỡng sai khác màu CPU/GPU là chi tiết cần ghi trước benchmark ở phase sau; khác với QoR `Qmin` do Đế phụ trách.
+Tolerance số và API riêng S6 đã ghi tại [bàn giao P1](s6-p1-implementation.md#3-quy-tắc-số-học-và-blender); còn phải kiểm chứng GPU và review tích hợp. Các guard số học khác với QoR `Qmin` do Đế phụ trách.
 
 ## 6. Mapping CUDA, bộ nhớ và tái sử dụng
 
-Tách trách nhiệm: `prepare_geometry`, `warp_and_mask`, `blend_feather`, `build_pyramids`, `blend_reconstruct`, `collect_telemetry`. Đây là ranh giới module, chưa cam kết tạo file/header trong Phase 0.
+Tách trách nhiệm geometry, warp/mask, feather, pyramid/reconstruction và telemetry. Bản P1 công khai `prepare_geometry`, `s6_workspace_bytes`, `render`; các kernel nội bộ nằm ở `src/s6/s6.cu`, timing runner nằm trong test riêng. Đây không phải thay đổi interface common.
 
 - Warp/feather: một thread cho một pixel output, ghi độc lập. Không copy A rồi ghi lại toàn canvas nếu một pass đủ.
-- Pyramid: filter separable hai pass và giảm mẫu; xét fusion sau profiling. Shared memory không mặc nhiên có lợi cho gather projective.
+- Pyramid: kernel là separable về toán học; bản correctness P1 dùng vòng lọc 5×5 trực tiếp. Tách hai pass/fusion sau profiling. Shared memory không mặc nhiên có lợi cho gather projective.
 - Các level cùng pyramid phụ thuộc nhau. Hai nhánh ảnh có thể chạy đồng thời bằng stream/events; không chạy các level phụ thuộc như thể độc lập.
 - Ảnh/buffer trung gian ở device. Setup 3×3/bbox có thể dùng host metadata trong bản đầu; công bố host/sync/allocation, không gọi toàn S6 thuần GPU khi chưa đúng.
 - Tính launch/copy/allocation trong ranh giới đo tương ứng. So fused feather và đường materialize cache bằng tổng cost của policy sử dụng chúng.
@@ -310,7 +310,7 @@ Theo [Go/No-Go](plan.md#7-gonogo), ngưỡng quyết định do cả Nhóm thố
 
 ## 9. Kiểm chứng cần thực hiện và bàn giao
 
-**Chưa chạy** các test sau: repo chưa có code/harness và chưa kết nối Colab T4 trong task này. Chưa có lệnh build đầy đủ chạy ngay. Khi có entrypoint, harness phải in GPU/toolkit, build `nvcc -arch=sm_75`, lưu seed/config. Output là pass/fail theo số case thực tế, không dự kiến sẵn “194 assertions”.
+Đã có code/harness và đã chạy kiểm tra Python/geometry host; **CUDA, sanitizer và profiling T4 chưa chạy**. Lệnh build/test và phạm vi bằng chứng cụ thể ở [bàn giao P1](s6-p1-implementation.md#4-bằng-chứng-đã-chạy-tại-máy-phát-triển). Bảng dưới giữ vai trò checklist nghiệm thu; không phải mọi hàng đều đã có test hoặc đã pass. Cache chưa được triển khai. Ghi GPU/toolkit/commit khi chạy và dùng pass/fail thực tế, không kế thừa “194 assertions”.
 
 | Nhóm test | Trường hợp và kết quả bắt buộc |
 |---|---|
@@ -327,7 +327,7 @@ Theo [Go/No-Go](plan.md#7-gonogo), ngưỡng quyết định do cả Nhóm thố
 
 Synthetic expected output phải tính độc lập helper đang test. OpenCV chỉ làm reference/baseline/mock theo kế hoạch [I1], không thay CUDA chính. Khi đối chiếu OpenCV phải cùng miền tâm pixel/mask; giải thích sai khác border/precision/weights thay vì ép khớp baseline khác thuật toán.
 
-Phase 0 hoàn tất ở mức tài liệu khi có lựa chọn/trade-off/fallback, contract đề xuất, nguồn và cách kiểm chứng. Trước triển khai cần Tuấn chốt ABI/buffer/timing/CSV; Đế cùng Chương xác nhận chiều H, `D_A/D_B`, QoR render, proxy/cache. Không ghi như đã quyết định thay thành viên khác. Chưa nghiệm thu correctness, chất lượng hoặc performance S6.
+Phase 0 chốt phương pháp là cơ sở cho bản triển khai P1 hiện có. Tiếp theo cần chạy CUDA/T4, Tuấn review tích hợp target/buffer/timing và Đế review evaluator/policy QoR. Chưa nghiệm thu correctness GPU, chất lượng hoặc performance S6; không ghi như đã quyết định thay thành viên khác.
 
 ## 10. Quyết định, fallback và nguồn
 
@@ -372,3 +372,4 @@ Nguồn được tra cứu ngày 15/10 (Thứ 5), năm 2026. URL hỗ trợ nộ
 |---|---|
 | 13/10 (Thứ 3) | Bản cũ ghi average cho đồ án và kết quả local ngoài repo; giữ như thông tin lịch sử, không xác nhận triển khai tại đây |
 | 15/10 (Thứ 5) | Viết lại Phase 0 workshop: hai họ blend/ba B, H scale, ownership/pyramid, cache, QoR sau blend, đo và fallback. Chưa có thực nghiệm |
+| 22/10 (Thứ 5) | Bắt đầu P1: thêm S6 CUDA/API riêng, geometry host, reference/test/fixture và evaluator QoR pilot; kiểm tra Python/host, còn chờ CUDA/T4 và review tích hợp |

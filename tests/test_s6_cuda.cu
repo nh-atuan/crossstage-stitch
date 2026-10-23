@@ -1,6 +1,7 @@
 // Synthetic contract tests and optional independent CPU-reference fixtures.
 // Run: test_s6_cuda [--timings results/s6-timings.csv] [--golden fixture.bin ...].
-// Options may appear in either order. Exit 77 means no CUDA device.
+// Options may mix: --require-t4 --artifacts DIR --timings CSV --golden fixture...
+// Exit 77 means no CUDA device (strict --require-t4 instead fails).
 // Timings are steady-state S6 only, not pipeline runs.csv or end-to-end latency.
 #include <cuda_runtime.h>
 #include "s6/s6.hpp"
@@ -15,6 +16,8 @@
 #include <fstream>
 #include <iomanip>
 #include <limits>
+#include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -67,6 +70,20 @@ struct Workspace {
     ~Workspace() { if (data) cudaFree(data); }
     Workspace(const Workspace&) = delete;
 };
+struct DeviceStatistics {
+    RenderStatistics* data = nullptr;
+    explicit DeviceStatistics(bool allocate = true) {
+        if (allocate) CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&data), sizeof(RenderStatistics)));
+    }
+    ~DeviceStatistics() { if (data) cudaFree(data); }
+    DeviceStatistics(const DeviceStatistics&) = delete;
+    DeviceStatistics& operator=(const DeviceStatistics&) = delete;
+    RenderStatistics download() const {
+        RenderStatistics host{};
+        CUDA_CHECK(cudaMemcpy(&host, data, sizeof(host), cudaMemcpyDeviceToHost));
+        return host;
+    }
+};
 struct Stream {
     cudaStream_t value{};
     Stream() { CUDA_CHECK(cudaStreamCreateWithFlags(&value, cudaStreamNonBlocking)); }
@@ -78,8 +95,9 @@ Geometry geometry(int wa, int ha, int wb, int hb, const double* h = kIdentity) {
     return result;
 }
 void execute(const DeviceImage& a, const DeviceImage& b, const Geometry& g, BlendMode mode,
-             DeviceImage& out, DeviceImage& mask, Workspace& work, const Stream& stream) {
-    CHECK(render(a.view, b.view, g, mode, out.view, mask.view, work.data, work.bytes, stream.value) == Status::OK);
+             DeviceImage& out, DeviceImage& mask, Workspace& work, const Stream& stream,
+             RenderStatistics* statistics = nullptr) {
+    CHECK(render(a.view, b.view, g, mode, out.view, mask.view, work.data, work.bytes, stream.value, statistics) == Status::OK);
     // Render only reports launch status. The caller must check completion.
     CUDA_CHECK(cudaStreamSynchronize(stream.value));
 }
@@ -172,6 +190,64 @@ void test_validation() {
     CUDA_CHECK(cudaStreamSynchronize(stream.value));
 }
 
+void test_statistics() {
+    Stream stream;
+    const double h[9]{1, 0, -2, 0, 1, -1, 0, 0, 1};
+    const auto g = geometry(5, 3, 5, 3, h);
+    DeviceImage a(5, 3, 3), b(5, 3, 3), out(g.width, g.height, 3), mask(g.width, g.height, 1);
+    // Black is valid. The 5x3 footprints overlap over 3x2 pixels.
+    a.upload(std::vector<std::uint8_t>(45, 0)); b.upload(std::vector<std::uint8_t>(45, 0));
+    DeviceStatistics counters;
+    for (const auto mode : kModes) {
+        Workspace workspace(g, mode);
+        CUDA_CHECK(cudaMemsetAsync(counters.data, 0xff, sizeof(RenderStatistics), stream.value));
+        execute(a, b, g, mode, out, mask, workspace, stream, counters.data);
+        const auto measured = counters.download();
+        if (measured.union_pixels != 24 || measured.overlap_pixels != 6)
+            std::fprintf(stderr, "Statistics mismatch mode=%d union=%llu overlap=%llu\n", int(mode),
+                         static_cast<unsigned long long>(measured.union_pixels),
+                         static_cast<unsigned long long>(measured.overlap_pixels));
+        CHECK(measured.union_pixels == 24 && measured.overlap_pixels == 6);
+        // A second call resets the same counters instead of accumulating.
+        execute(a, b, g, mode, out, mask, workspace, stream, counters.data);
+        const auto second = counters.download();
+        CHECK(second.union_pixels == 24 && second.overlap_pixels == 6);
+        CHECK(render(a.view, b.view, g, mode, out.view, mask.view, workspace.data, workspace.bytes,
+                     stream.value, reinterpret_cast<RenderStatistics*>(a.view.data)) == Status::INVALID_ARGUMENT);
+        CHECK(render(a.view, b.view, g, mode, out.view, mask.view, workspace.data, workspace.bytes,
+                     stream.value, reinterpret_cast<RenderStatistics*>(out.view.data)) == Status::INVALID_ARGUMENT);
+        CHECK(render(a.view, b.view, g, mode, out.view, mask.view, workspace.data, workspace.bytes,
+                     stream.value, reinterpret_cast<RenderStatistics*>(mask.view.data)) == Status::INVALID_ARGUMENT);
+        CHECK(render(a.view, b.view, g, mode, out.view, mask.view, workspace.data, workspace.bytes,
+                     stream.value, reinterpret_cast<RenderStatistics*>(reinterpret_cast<std::uint8_t*>(counters.data) + 1)) == Status::INVALID_ARGUMENT);
+        if (workspace.bytes) {
+            CHECK(render(a.view, b.view, g, mode, out.view, mask.view, workspace.data, workspace.bytes,
+                         stream.value, reinterpret_cast<RenderStatistics*>(workspace.data)) == Status::INVALID_ARGUMENT);
+            CHECK(render(a.view, b.view, g, mode, out.view, mask.view, workspace.data, workspace.bytes - 1,
+                         stream.value, counters.data) == Status::INSUFFICIENT_WORKSPACE);
+        }
+        auto bad_out = out.view; bad_out.data = nullptr;
+        CHECK(render(a.view, b.view, g, mode, bad_out, mask.view, workspace.data, workspace.bytes,
+                     stream.value, counters.data) == Status::INVALID_ARGUMENT);
+        CUDA_CHECK(cudaStreamSynchronize(stream.value));
+        const auto unchanged = counters.download();
+        CHECK(unchanged.union_pixels == 24 && unchanged.overlap_pixels == 6);
+    }
+    const auto identity_g = geometry(5, 3, 5, 3);
+    DeviceImage identity_out(5, 3, 3), identity_mask(5, 3, 1);
+    Workspace identity_work(identity_g, BlendMode::Feather);
+    execute(a, b, identity_g, BlendMode::Feather, identity_out, identity_mask, identity_work, stream, counters.data);
+    const auto full = counters.download();
+    CHECK(full.union_pixels == 15 && full.overlap_pixels == 15);
+    // More than one CUDA block; atomic aggregation must count each valid pixel once.
+    const auto large_g = geometry(259, 3, 259, 3);
+    DeviceImage large_a(259, 3, 3), large_b(259, 3, 3), large_out(259, 3, 3), large_mask(259, 3, 1);
+    large_a.upload(std::vector<std::uint8_t>(777 * 3, 0)); large_b.upload(std::vector<std::uint8_t>(777 * 3, 0));
+    Workspace large_work(large_g, BlendMode::Feather);
+    execute(large_a, large_b, large_g, BlendMode::Feather, large_out, large_mask, large_work, stream, counters.data);
+    const auto large = counters.download();
+    CHECK(large.union_pixels == 777 && large.overlap_pixels == 777);
+}
 // Events are allocated outside the timed region and destroyed on normal scope exit.
 struct Event {
     cudaEvent_t value{};
@@ -221,10 +297,63 @@ void profile(const char* fixture, const DeviceImage& a, const DeviceImage& b,
     }
 }
 
+struct RuntimeInformation {
+    std::string gpu_name;
+    int major = 0, minor = 0, runtime = 0, driver = 0;
+};
+std::string json_string(const std::string& text) {
+    std::ostringstream out; out << '"';
+    for (unsigned char c : text) {
+        if (c == '"' || c == '\\') { out << '\\' << static_cast<char>(c); }
+        else if (c < 32) { out << "\\u" << std::hex << std::setw(4) << std::setfill('0') << int(c) << std::dec; }
+        else out << static_cast<char>(c);
+    }
+    out << '"'; return out.str();
+}
+void exclusive_write(const std::filesystem::path& path, const std::string& header,
+                     const std::vector<std::uint8_t>* payload = nullptr) {
+    // C11 exclusive create refuses existing files and symlinks, including a race
+    // after CLI preflight. Never truncate a previous validation artifact.
+    std::FILE* file = std::fopen(path.string().c_str(), "wbx");
+    CHECK(file != nullptr);
+    CHECK(std::fwrite(header.data(), 1, header.size(), file) == header.size());
+    if (payload) CHECK(std::fwrite(payload->data(), 1, payload->size(), file) == payload->size());
+    CHECK(std::fclose(file) == 0);
+}
+void write_artifacts(const std::string& directory, const char* fixture, const Geometry& g,
+                     BlendMode mode, std::size_t workspace_bytes, const RenderStatistics& counts,
+                     int worst, const RuntimeInformation& runtime,
+                     const std::vector<std::uint8_t>& rgb, const std::vector<std::uint8_t>& mask) {
+    namespace fs = std::filesystem;
+    const auto stem = fs::path(fixture).stem().string();
+    const fs::path base = fs::path(directory) / stem;
+    const auto shape = std::to_string(g.width) + " " + std::to_string(g.height) + "\n";
+    exclusive_write(base.string() + ".ppm", "P6\n" + shape + "255\n", &rgb);
+    // PGM maxval1 preserves the actual 0/1 samples and displays valid as white.
+    exclusive_write(base.string() + ".pgm", "P5\n" + shape + "1\n", &mask);
+    std::ostringstream metadata;
+    metadata << "{\n  \"fixture\": " << json_string(fixture)
+             << ",\n  \"blend_mode\": " << json_string(mode_name(mode))
+             << ",\n  \"width\": " << g.width << ",\n  \"height\": " << g.height
+             << ",\n  \"origin_x\": " << g.origin_x << ",\n  \"origin_y\": " << g.origin_y
+             << ",\n  \"effective_reductions\": " << effective_reductions(g, mode)
+             << ",\n  \"workspace_bytes\": " << workspace_bytes
+             << ",\n  \"statistics_bytes\": " << sizeof(RenderStatistics)
+             << ",\n  \"union_pixels\": " << counts.union_pixels
+             << ",\n  \"overlap_pixels\": " << counts.overlap_pixels
+             << ",\n  \"max_abs_rgb\": " << worst
+             << ",\n  \"mask_exact\": true,\n  \"mask_maxval\": 1,\n  \"telemetry_enabled\": true"
+             << ",\n  \"gpu_name\": " << json_string(runtime.gpu_name)
+             << ",\n  \"sm_major\": " << runtime.major << ",\n  \"sm_minor\": " << runtime.minor
+             << ",\n  \"cuda_runtime_version\": " << runtime.runtime
+             << ",\n  \"cuda_driver_version\": " << runtime.driver << "\n}\n";
+    exclusive_write(base.string() + ".json", metadata.str());
+}
 // S6GOLD01, int32 LE[9]: wa,ha,wb,hb,wc,hc,origin_x,origin_y,mode;
 // double LE[9] H B->A; packedRGB A, packedRGB B, expectedRGB, expected mask.
 // This host fixture loader supports little-endian machines with IEEE FP64.
-void golden(const char* path, std::ostream* timings, const std::string& gpu_name) {
+void golden(const char* path, std::ostream* timings, const RuntimeInformation& runtime,
+            const std::string& artifact_directory) {
     const std::uint32_t endian = 1;
     CHECK(*reinterpret_cast<const std::uint8_t*>(&endian) == 1);
     static_assert(sizeof(double) == 8 && std::numeric_limits<double>::is_iec559);
@@ -256,7 +385,8 @@ void golden(const char* path, std::ostream* timings, const std::string& gpu_name
     DeviceImage out(g.width, g.height, 3), mask(g.width, g.height, 1);
     a.upload(pa); b.upload(pb);
     Workspace work(g, mode); Stream stream;
-    execute(a, b, g, mode, out, mask, work, stream);
+    DeviceStatistics counters(!artifact_directory.empty());
+    execute(a, b, g, mode, out, mask, work, stream, artifact_directory.empty() ? nullptr : counters.data);
     const auto actual = out.download_and_check_padding();
     const auto actual_mask = mask.download_and_check_padding();
     CHECK(actual_mask == expected_mask);
@@ -265,15 +395,25 @@ void golden(const char* path, std::ostream* timings, const std::string& gpu_name
         worst = std::max(worst, std::abs(int(actual[i]) - int(expected[i])));
     std::printf("%s: mode=%d RGB max_abs=%d mask exact\n", path, metadata[8], worst);
     CHECK(worst <= 2);  // preregistered implementation tolerance, not QoR.
-    if (timings) profile(path, a, b, g, mode, out, mask, work, stream, gpu_name, *timings);
+    if (!artifact_directory.empty()) {
+        const auto measured = counters.download();
+        std::uint64_t mask_count = 0;
+        for (auto value : actual_mask) mask_count += value;
+        CHECK(measured.union_pixels == mask_count && measured.overlap_pixels <= measured.union_pixels);
+        write_artifacts(artifact_directory, path, g, mode, work.bytes, measured, worst, runtime, actual, actual_mask);
+    }
+    if (timings) profile(path, a, b, g, mode, out, mask, work, stream, runtime.gpu_name, *timings);
 }
 }  // namespace
 
 // Validate paths before opening the output so it can never truncate a fixture.
-// Parent directories must already exist; no directory creation is hidden here.
+// Timing parent directories must exist. Artifact directories may be created
+// explicitly for --artifacts after the strict GPU check, before fixture rendering.
 struct Options {
     std::vector<std::string> fixtures;
     std::string timings;
+    std::string artifacts;
+    bool require_t4 = false;
 };
 Options parse_options(int argc, char** argv) {
     Options options;
@@ -287,6 +427,12 @@ Options parse_options(int argc, char** argv) {
             CHECK(options.timings.empty() && i + 1 < argc);
             options.timings = argv[++i]; clean_path(options.timings);
             CHECK(options.timings.rfind("--", 0) != 0);
+        } else if (option == "--artifacts") {
+            CHECK(options.artifacts.empty() && i + 1 < argc);
+            options.artifacts = argv[++i]; clean_path(options.artifacts);
+            CHECK(options.artifacts.rfind("--", 0) != 0);
+        } else if (option == "--require-t4") {
+            CHECK(!options.require_t4); options.require_t4 = true;
         } else if (option == "--golden") {
             const auto count_before = options.fixtures.size();
             while (i + 1 < argc && std::string(argv[i + 1]).rfind("--", 0) != 0) {
@@ -294,7 +440,7 @@ Options parse_options(int argc, char** argv) {
             }
             CHECK(options.fixtures.size() > count_before);
         } else {
-            std::fprintf(stderr, "Unknown option: %s\nUsage: test_s6_cuda [--timings output.csv] [--golden fixture.bin ...]\n", argv[i]);
+            std::fprintf(stderr, "Unknown option: %s\nUsage: test_s6_cuda [--require-t4] [--artifacts DIR] [--timings output.csv] [--golden fixture.bin ...]\n", argv[i]);
             CHECK(false);
         }
     }
@@ -311,6 +457,26 @@ Options parse_options(int argc, char** argv) {
             if (fs::exists(output)) CHECK(!fs::equivalent(output, input));
         }
     }
+    if (!options.artifacts.empty()) {
+        CHECK(!options.fixtures.empty());
+        const fs::path directory = fs::absolute(options.artifacts);
+        CHECK(!fs::exists(directory) || fs::is_directory(directory));
+        std::set<std::string> names;
+        for (const auto& fixture : options.fixtures) {
+            const std::string stem = fs::path(fixture).stem().string();
+            CHECK(!stem.empty() && stem != "." && stem != "..");
+            std::string folded = stem;
+            for (char& c : folded) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c + ('a' - 'A'));
+            CHECK(names.insert(folded).second);
+            for (const char* extension : {".ppm", ".pgm", ".json"}) {
+                const auto candidate = directory / (stem + extension);
+                CHECK(!fs::exists(candidate) && !fs::is_symlink(candidate));
+                if (!options.timings.empty()) CHECK(fs::weakly_canonical(candidate) != fs::weakly_canonical(fs::absolute(options.timings)));
+                for (const auto& input : options.fixtures)
+                    CHECK(fs::weakly_canonical(candidate) != fs::weakly_canonical(fs::absolute(input)));
+            }
+        }
+    }
     return options;
 }
 
@@ -320,6 +486,7 @@ int main(int argc, char** argv) {
     const auto device_status = cudaGetDeviceCount(&devices);
     if (device_status != cudaSuccess || devices == 0) {
         std::fprintf(stderr, "SKIP: CUDA device unavailable (%s)\n", cudaGetErrorString(device_status));
+        if (options.require_t4) { std::fprintf(stderr, "FAIL: --require-t4 needs an actual CUDA T4 device\n"); return 1; }
         return 77;
     }
     int device = 0;
@@ -331,6 +498,18 @@ int main(int argc, char** argv) {
     CUDA_CHECK(cudaDriverGetVersion(&driver_version));
     std::printf("GPU: %s sm_%d%d runtime=%d driver=%d\n", device_properties.name,
                 device_properties.major, device_properties.minor, runtime_version, driver_version);
+    if (options.require_t4) {
+        const std::string name = device_properties.name;
+        const bool t4_name = name == "Tesla T4" || name == "NVIDIA T4" || name == "T4";
+        if (!t4_name || device_properties.major != 7 || device_properties.minor != 5) {
+            std::fprintf(stderr, "FAIL: --require-t4 requires T4 sm75; actual %s sm_%d%d\n",
+                         device_properties.name, device_properties.major, device_properties.minor);
+            return 1;
+        }
+    }
+    if (!options.artifacts.empty()) std::filesystem::create_directories(options.artifacts);
+    const RuntimeInformation runtime{device_properties.name, device_properties.major,
+                                     device_properties.minor, runtime_version, driver_version};
     std::ofstream timings;
     if (!options.timings.empty()) {
         timings.open(options.timings, std::ios::out | std::ios::trunc);
@@ -338,9 +517,9 @@ int main(int argc, char** argv) {
         timings << "fixture,blend_mode,width,height,repeat_idx,is_warmup,gpu_ms,host_ms,workspace_bytes,gpu_name\n";
         CHECK(timings.good());
     }
-    test_identity(); test_full_overlap_ownership(); test_negative_origin(); test_validation();
+    test_identity(); test_full_overlap_ownership(); test_negative_origin(); test_validation(); test_statistics();
     for (const auto& fixture : options.fixtures)
-        golden(fixture.c_str(), options.timings.empty() ? nullptr : &timings, device_properties.name);
+        golden(fixture.c_str(), options.timings.empty() ? nullptr : &timings, runtime, options.artifacts);
     if (timings.is_open()) { timings.flush(); CHECK(timings.good()); }
     std::puts("S6 CUDA synthetic/fixture checks passed");
     return 0;

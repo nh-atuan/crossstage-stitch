@@ -77,4 +77,27 @@ python -m tools.s6_reference.prepare_mock --mock-root data/mock --output data/s6
 build/s6/test_s6_cuda --golden data/s6-mock-2g/*.bin
 ```
 
-Giá trị budget phải dương/hữu hạn; đây vẫn là ước lượng admission, chưa là peak RAM đo được. Ảnh/H không thay đổi; hash của cùng fixture thành công giữ nguyên trong cùng môi trường. Manifest có thể thêm fixture nếu ngân sách mới cho phép xử lý thêm handoff. Chưa chạy HPatches hoặc CUDA không được ghi là đã nghiệm thu bằng dữ liệu thực/GPU; tests mới chỉ dùng mock directory tổng hợp để kiểm tra luồng bàn giao.
+Giá trị budget phải dương/hữu hạn; đây vẫn là ước lượng admission, chưa là peak RAM đo được. Ảnh/H không thay đổi; hash của cùng fixture thành công giữ nguyên trong cùng môi trường. Manifest có thể thêm fixture nếu ngân sách mới cho phép xử lý thêm handoff.
+
+Unit test importer dùng mock directory tổng hợp. Ngoài ra đã chạy S6 CUDA trên hai cặp Oxford graffiti với H của ORB/SIFT mock S5: 12 fixture pass, mask exact, RGB max_abs 1 trên GTX 1650. Chưa chạy HPatches/UDIS-D hoặc nghiệm thu T4; không đổi nhãn Oxford thành các benchmark đó.
+
+## Kiểm tra CUDA có log và artifact
+
+Từ root repo trên Linux/Colab, sau khi có dependency Python và CUDA toolkit:
+
+```bash
+python -m tools.s6_reference.validate_cuda --output results/s6-t4-validation
+```
+
+Runner mặc định yêu cầu T4 thực, sm_75, build có CUDA, unit/native/golden tests và memcheck/racecheck/initcheck/synccheck. Exit 77 hoặc thiếu compiler không được tính pass. Mỗi command có log, timeout và kết quả; `validation.json` giữ cả failure, source hashes, thông tin device, các fixture và median 10 lần đo sau khi bỏ hai warmup. Manifest/hash/metadata phải đủ và khớp; ảnh PPM/PGM thực được so lại golden, timing phải khớp geometry/mode/GPU/workspace.
+
+```bash
+python -m tools.s6_reference.validate_cuda --mock-root data/mock --max-reference-mib 2048 --output results/s6-t4-mock
+python -m tools.s6_reference.validate_cuda --fixtures-dir data/s6-mock-fixtures --output results/s6-t4-prepared
+```
+
+Hai kiểu input trên loại trừ nhau; nếu không chọn thì sinh 27 fixture synthetic/mock. Không rewrite fixture có sẵn. Importer có handoff bị bỏ thì runner từ chối nghiệm thu toàn tập và giữ ledger để review. Output phải mới/rỗng, không ghi đè evidence cũ.
+
+Chạy cục bộ khác T4 cần chọn rõ `--allow-non-t4`; môi trường không chạy được sanitizer có thể chọn thêm `--skip-sanitizer`. Cả hai trường hợp đều chỉ ghi `acceptance=preliminary`, không ghi hoàn tất nghiệm thu T4. Runner không cài package/driver hoặc thay thiết lập debugger.
+
+Native CLI có `--artifacts DIR` để xuất RGB PPM, mask PGM maxval 1 và JSON geometry/counts/workspace/device. Mask payload giữ 0/1, decoder ảnh có thể scale thành 0/255. Artifact không được ghi đè; tên fixture trùng bị từ chối. Counter là optional caller-owned device buffer; timing mặc định tắt counter, chỉ đo S6 steady-state, không phải end-to-end pipeline.

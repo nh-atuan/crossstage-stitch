@@ -1,12 +1,12 @@
 # S6 — Warping and blending cho workshop PARMA-DITAM 2027
 
-Người phụ trách: Chương. Ngày cập nhật triển khai: 22/10 (Thứ 5), năm 2026; khảo sát nguồn gốc: 15/10 (Thứ 5).
+Người phụ trách: Chương. Ngày cập nhật triển khai: 23/10 (Thứ 6), năm 2026; khảo sát nguồn gốc: 15/10 (Thứ 5).
 
 Task hiện tại: **Phase 1 — triển khai S6 và evaluator QoR của Chương**, theo [kế hoạch](plan.md). Quyết định phương pháp Phase 0 được giữ bên dưới; API, mã nguồn, bằng chứng kiểm tra và lệnh chạy T4 ở [bàn giao P1](s6-p1-implementation.md). Dựng khung LaTeX là task riêng.
 
 **Quyết định thiết kế:** global homography B → A, inverse warping và bilinear; tự viết CUDA cho hai họ blend là feather và Laplacian multi-band. Núm `B` ban đầu gồm `feather`, `multiband_3`, `multiband_5`. Average 50/50 chỉ làm đối chứng. Controller của Đế chọn `B` cùng `S, K, R`; S6 không dựng một controller khác.
 
-Đây chưa phải kết luận tối ưu hay nghiệm thu P1. Repo hiện có mã S6, reference FP64, test geometry/CUDA và evaluator QoR; đã kiểm tra Python và host C++, **chưa biên dịch/chạy CUDA hoặc đo Colab T4**. Thông tin V0, 194 assertions và dataset tự chụp của đồ án không được dùng làm bằng chứng cho triển khai workshop.
+Đây chưa phải kết luận tối ưu hay nghiệm thu chính thức P1. Đã build NVCC và chạy native/golden tests trên GTX 1650 sm_75: 27 fixture synthetic/mock và 12 fixture ảnh thật từ bốn handoff pass, mask exact, RGB max_abs 1. **T4 và sanitizer còn chờ**; evidence, telemetry, artifact export và runner nằm tại [bàn giao P1](s6-p1-implementation.md). Không dùng thông tin V0/194 assertions của đồ án làm bằng chứng workshop.
 
 ## 1. Bối cảnh và tiêu chí quyết định
 
@@ -223,7 +223,7 @@ Dùng RGB đã decode chuẩn hóa `[0,1]`, chưa gamma/gain correction; không 
 | Mục | Quyết định / điều kiện triển khai |
 |---|---|
 | Reference | FP64 kiểm tra H, canvas, sampling, blend; oracle correctness, không dùng latency CPU làm kết quả GPU |
-| GPU | Bản P1 dùng FP64 tọa độ warp, FP32 màu/filter/pyramid. Tolerance RGB tối đa 2 mức uint8 được đặt trước trong harness, chưa xác nhận trên GPU; không hứa bit-identical |
+| GPU | Bản P1 dùng FP64 tọa độ warp, FP32 màu/filter/pyramid. Tolerance RGB tối đa 2 mức uint8; các ca GTX 1650 hiện có max_abs 1, còn xác nhận trên T4; không hứa bit-identical |
 | Hình học | Version hóa normalize H, mẫu số tương đối, snap số nguyên, conditioning cùng S5; không coi ngưỡng cũ là Nhóm đã chốt |
 | Correctness | Canvas/offset/mask khớp reference trước màu; giới hạn màu định trước. Sát biên cần đường tính ổn định hơn nếu FP32 không đủ |
 | Texture/fast math | Bilinear tự tính ở bản đầu. Chỉ khảo sát hardware filtering sau profiling/sai số; CUDA 12.5 nêu weights có 8 bit phần lẻ [I2] |
@@ -310,7 +310,7 @@ Theo [Go/No-Go](plan.md#7-gonogo), ngưỡng quyết định do cả Nhóm thố
 
 ## 9. Kiểm chứng cần thực hiện và bàn giao
 
-Đã có code/harness và đã chạy kiểm tra Python/geometry host; **CUDA, sanitizer và profiling T4 chưa chạy**. Lệnh build/test và phạm vi bằng chứng cụ thể ở [bàn giao P1](s6-p1-implementation.md#4-bằng-chứng-đã-chạy-tại-máy-phát-triển). Bảng dưới giữ vai trò checklist nghiệm thu; không phải mọi hàng đều đã có test hoặc đã pass. Cache chưa được triển khai. Ghi GPU/toolkit/commit khi chạy và dùng pass/fail thực tế, không kế thừa “194 assertions”.
+Đã chạy Python/host và CUDA cục bộ; **sanitizer và profiling T4 chưa nghiệm thu**. Sanitizer thử trong WSL không khởi tạo được WDDM debugger interface; không tính là pass. Lệnh build/test và phạm vi bằng chứng ở [bàn giao P1](s6-p1-implementation.md#4-bằng-chứng-đã-chạy-tại-máy-phát-triển). Bảng dưới giữ vai trò checklist nghiệm thu; không phải mọi hàng đều đã pass. Cache chưa triển khai. Ghi GPU/toolkit/commit và dùng pass/fail thực tế.
 
 | Nhóm test | Trường hợp và kết quả bắt buộc |
 |---|---|
@@ -373,3 +373,4 @@ Nguồn được tra cứu ngày 15/10 (Thứ 5), năm 2026. URL hỗ trợ nộ
 | 13/10 (Thứ 3) | Bản cũ ghi average cho đồ án và kết quả local ngoài repo; giữ như thông tin lịch sử, không xác nhận triển khai tại đây |
 | 15/10 (Thứ 5) | Viết lại Phase 0 workshop: hai họ blend/ba B, H scale, ownership/pyramid, cache, QoR sau blend, đo và fallback. Chưa có thực nghiệm |
 | 22/10 (Thứ 5) | Bắt đầu P1: thêm S6 CUDA/API riêng, geometry host, reference/test/fixture và evaluator QoR pilot; kiểm tra Python/host, còn chờ CUDA/T4 và review tích hợp |
+| 23/10 (Thứ 6) | Sửa lỗi build NVCC, chạy CUDA sm_75 trên GTX 1650, thêm counter/artifacts, importer mock, report QoR và runner strict T4. Pass 27 fixture synthetic/mock + 12 fixture ảnh thật; còn T4/sanitizer và review Nhóm |

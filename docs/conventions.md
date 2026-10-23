@@ -14,7 +14,8 @@ Quy ước này chỉ gồm những gì mọi thành viên cùng dùng. Phương
 | `src/common/` | Header interface dùng chung (struct, mã lỗi, helper hình học) | Tuấn |
 | `src/s1/` | S1 Preprocessing | Tuấn |
 | `src/s2_s3/` | S2 Keypoint detection, S3 Description | Thành |
-| `src/s4_s5/` | S4 Matching, S5 Homography | Đế |
+| `src/s4/` | S4 Matching | Đế |
+| `src/s5/` | S5 Homography | Đế |
 | `src/s6/` | S6 Warping and blending | Chương |
 | `src/controller/` | Controller | Đế |
 | `harness/` | Chương trình chạy S1–S6, đo thời gian, ghi CSV | Tuấn |

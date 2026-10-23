@@ -1,7 +1,7 @@
 #include "check.hpp"
 #include "common/geometry.hpp"
-#include "s4_s5/s5.hpp"
-#include "s4_s5/s5_math.hpp"
+#include "s5/s5.hpp"
+#include "s5/s5_math.hpp"
 
 #include <array>
 #include <cstdio>

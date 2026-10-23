@@ -2,6 +2,7 @@
 
 - Người phụ trách: Đế.
 - Ngày ghi nhận: 22/10 (Thứ 5), năm 2026.
+- Cập nhật cấu trúc thư mục: 23/10 (Thứ 6), năm 2026, theo yêu cầu của Đế.
 - Phase 1, deadline chung: 25/10 (Chủ nhật).
 - Trạng thái: đã triển khai; test host pass. CUDA chưa được biên dịch hoặc chạy trên T4. Đế đã chọn triển khai trước, kiểm chứng GPU sau.
 
@@ -11,16 +12,30 @@ Phạm vi theo [kế hoạch, mục 8](plan.md): S4 matching; S5 homography có 
 
 | Đường dẫn | Nội dung |
 |---|---|
-| `src/s4_s5/s4.hpp`, `s4.cu`, `s4_config.cpp` | Top-2 matching, ratio test, cross-check tùy chọn, query workspace |
-| `src/s4_s5/s5.hpp`, `s5.cu`, `s5_config.cpp` | Batched MSAC, refinement, R extension, query workspace |
-| `src/s4_s5/s5_math.hpp`, `s5_internal.hpp` | Solver số học dùng chung host/device và layout workspace riêng S5 |
-| `src/s4_s5/CMakeLists.txt` | Build độc lập, không sửa CMake hoặc interface chung |
+| `src/s4/s4.hpp`, `s4.cu`, `s4_config.cpp` | Top-2 matching, ratio test, cross-check tùy chọn, query workspace |
+| `src/s5/s5.hpp`, `s5.cu`, `s5_config.cpp` | Batched MSAC, refinement, R extension, query workspace |
+| `src/s5/s5_math.hpp`, `s5_internal.hpp` | Solver số học dùng chung host/device và layout workspace riêng S5 |
+| `src/s4/CMakeLists.txt`, `src/s5/CMakeLists.txt` | Build độc lập của từng stage, không sửa CMake hoặc interface chung |
+| `tests/s4_s5/CMakeLists.txt` | Build kiểm thử cả hai stage và mock driver |
 | `tests/test_s4_config.cpp`, `test_s5_math.cpp` | Kiểm tra host, không cần CUDA |
 | `tests/test_s4_cuda.cu`, `test_s5_cuda.cu` | Kiểm tra GPU; trả 77 nếu thiếu device |
 | `tests/s4_s5_mock_driver.cu` | Chạy S4 → S5 trên cùng stream, không đọc count về host giữa hai stage |
 | `tools/s4_s5/check_mock_pipeline.py` | OpenCV mock S1–S3 → CUDA S4/S5 → OpenCV mock S6 |
 
-Root build chưa đưa các target này vào pipeline. Tuấn có thể dùng `add_subdirectory(src/s4_s5)` rồi link `stitch_s4`, `stitch_s5`. Test host link các library `stitch_s4_config`, `stitch_s5_config`; stage không phụ thuộc OpenCV.
+Root build chưa đưa các target này vào pipeline. Tuấn có thể dùng `add_subdirectory(src/s4)` và `add_subdirectory(src/s5)` rồi link `stitch_s4`, `stitch_s5`. Test host của mỗi stage chỉ link library config tương ứng; stage không phụ thuộc OpenCV hoặc thư viện của stage kia.
+
+Đế yêu cầu tách source để mở rộng từng stage riêng. Phương án chọn là mỗi stage giữ header, implementation và CMake trong thư mục của mình; build phối hợp nằm trong `tests/s4_s5`, cùng nhóm với mock driver. Đổi lại, phần khai báo CMake của hai stage có một số dòng giống nhau. Không thêm lớp build dùng chung cho phần nhỏ này. Có thể dùng build kiểm thử cả hai stage khi cần chạy cùng một lệnh; API, thuật toán, tham số và cơ chế reuse R giữ nguyên.
+
+Build riêng từng stage:
+
+```bash
+cmake -S src/s4 -B build/s4 -DCMAKE_CUDA_ARCHITECTURES=75
+cmake --build build/s4 -j 2
+ctest --test-dir build/s4 --output-on-failure
+cmake -S src/s5 -B build/s5 -DCMAKE_CUDA_ARCHITECTURES=75
+cmake --build build/s5 -j 2
+ctest --test-dir build/s5 --output-on-failure
+```
 
 ## 2. S4
 
@@ -84,11 +99,11 @@ Máy phát triển: Linux x64, g++ 15.2.0. Không có `nvcc`, GPU, CMake, `clang
 ```bash
 mkdir -p build/s4_s5-host
 g++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -Isrc -Itests \
-  tests/test_s4_config.cpp src/s4_s5/s4_config.cpp \
+  tests/test_s4_config.cpp src/s4/s4_config.cpp \
   -o build/s4_s5-host/test_s4_config
 build/s4_s5-host/test_s4_config
 g++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -Isrc -Itests \
-  tests/test_s5_math.cpp src/s4_s5/s5_config.cpp \
+  tests/test_s5_math.cpp src/s5/s5_config.cpp \
   -o build/s4_s5-host/test_s5_math
 build/s4_s5-host/test_s5_math
 python3 -m py_compile tools/s4_s5/check_mock_pipeline.py
@@ -106,7 +121,7 @@ Từ root repo, kiểm tra `nvidia-smi` hiển thị Tesla T4, ghi version CUDA 
 
 ```bash
 python -m pip install -r tools/requirements.txt
-cmake -S src/s4_s5 -B build/s4_s5 -DCMAKE_CUDA_ARCHITECTURES=75
+cmake -S tests/s4_s5 -B build/s4_s5 -DCMAKE_CUDA_ARCHITECTURES=75
 cmake --build build/s4_s5 -j 2
 test -x build/s4_s5/test_s4_cuda
 test -x build/s4_s5/test_s5_cuda
@@ -126,7 +141,7 @@ Nếu không dùng CMake, build riêng S5:
 
 ```bash
 nvcc -std=c++17 -arch=sm_75 -Isrc -Itests \
-  src/s4_s5/s5.cu src/s4_s5/s5_config.cpp tests/test_s5_cuda.cu \
+  src/s5/s5.cu src/s5/s5_config.cpp tests/test_s5_cuda.cu \
   -o build/test_s5_cuda
 build/test_s5_cuda
 ```

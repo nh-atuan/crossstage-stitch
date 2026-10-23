@@ -1,7 +1,7 @@
 #include <cuda_runtime.h>
 #include "check.hpp"
 #include "common/geometry.hpp"
-#include "s4_s5/s5.hpp"
+#include "s5/s5.hpp"
 
 #include <cmath>
 #include <cstdio>

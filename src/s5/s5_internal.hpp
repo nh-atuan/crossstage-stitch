@@ -1,6 +1,6 @@
 #pragma once
 
-#include "s4_s5/s5.hpp"
+#include "s5/s5.hpp"
 
 namespace stitch::s5::detail {
 

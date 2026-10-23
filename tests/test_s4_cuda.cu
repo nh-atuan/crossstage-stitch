@@ -1,6 +1,6 @@
 #include <cuda_runtime.h>
 
-#include "s4_s5/s4.hpp"
+#include "s4/s4.hpp"
 #include "check.hpp"
 
 #include <algorithm>

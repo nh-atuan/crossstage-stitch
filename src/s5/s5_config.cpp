@@ -1,4 +1,4 @@
-#include "s4_s5/s5_internal.hpp"
+#include "s5/s5_internal.hpp"
 
 #include <cmath>
 #include <limits>

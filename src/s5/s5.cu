@@ -4,8 +4,8 @@
 #include <cstdint>
 #include <limits>
 #include "common/geometry.hpp"
-#include "s4_s5/s5_internal.hpp"
-#include "s4_s5/s5_math.hpp"
+#include "s5/s5_internal.hpp"
+#include "s5/s5_math.hpp"
 
 namespace stitch::s5 {
 namespace {

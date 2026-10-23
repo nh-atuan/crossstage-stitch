@@ -86,7 +86,8 @@ void execute(const DeviceImage& a, const DeviceImage& b, const Geometry& g, Blen
 
 void test_identity() {
     Stream stream;
-    for (const auto shape : {std::array<int, 2>{1, 1}, {1, 9}, {11, 1}, {11, 7}, {33, 17}}) {
+    constexpr std::array<std::array<int, 2>, 5> shapes{{{1, 1}, {1, 9}, {11, 1}, {11, 7}, {33, 17}}};
+    for (const auto& shape : shapes) {
         const int w = shape[0], h = shape[1];
         const auto g = geometry(w, h, w, h);
         DeviceImage a(w, h, 3), b(w, h, 3), out(w, h, 3), mask(w, h, 1);
@@ -325,6 +326,11 @@ int main(int argc, char** argv) {
     cudaDeviceProp device_properties{};
     CUDA_CHECK(cudaGetDevice(&device));
     CUDA_CHECK(cudaGetDeviceProperties(&device_properties, device));
+    int runtime_version = 0, driver_version = 0;
+    CUDA_CHECK(cudaRuntimeGetVersion(&runtime_version));
+    CUDA_CHECK(cudaDriverGetVersion(&driver_version));
+    std::printf("GPU: %s sm_%d%d runtime=%d driver=%d\n", device_properties.name,
+                device_properties.major, device_properties.minor, runtime_version, driver_version);
     std::ofstream timings;
     if (!options.timings.empty()) {
         timings.open(options.timings, std::ios::out | std::ios::trunc);

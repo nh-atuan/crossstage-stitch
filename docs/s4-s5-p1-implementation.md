@@ -4,7 +4,7 @@
 - Ngày ghi nhận: 22/10 (Thứ 5), năm 2026.
 - Cập nhật cấu trúc thư mục: 23/10 (Thứ 6), năm 2026, theo yêu cầu của Đế.
 - Phase 1, deadline chung: 25/10 (Chủ nhật).
-- Trạng thái: đã triển khai; test host pass. CUDA chưa được biên dịch hoặc chạy trên T4. Đế đã chọn triển khai trước, kiểm chứng GPU sau.
+- Trạng thái: đã build và chạy test S4/S5 trên Colab Tesla T4 ngày 23/10 (Thứ 6). CTest, memcheck/racecheck và mock tổng hợp ORB/SIFT pass; xem [bằng chứng T4](s4-s5-t4-validation.md). Chưa nghiệm thu toàn bộ Phase 1 trên benchmark thật.
 
 Phạm vi theo [kế hoạch, mục 8](plan.md): S4 matching; S5 homography có núm R, tín hiệu tự kiểm tra và tái sử dụng khi chỉ tăng R. Controller thuộc Phase 2. Ghép đủ sáu stage và Go/No-Go còn phụ thuộc kernel của các thành viên, harness của Tuấn và kết quả trên development data.
 
@@ -111,11 +111,13 @@ python3 -m py_compile tools/s4_s5/check_mock_pipeline.py
 
 Hai executable host pass; script Python qua kiểm tra cú pháp. `test_common` hiện có cũng pass. Solver host còn được build/chạy với `-fsanitize=address,undefined -fno-omit-frame-pointer`, không có báo lỗi.
 
-Lệnh `python3 -m pytest tests/python/test_qor.py -q` dừng ở collection vì `ModuleNotFoundError: No module named 'cv2'`; chưa có test QoR nào chạy trong phiên này. Diagnostics LSP không chạy được vì thiếu `clangd` và `basedpyright`.
+Ở lần kiểm tra local ban đầu, lệnh `python3 -m pytest tests/python/test_qor.py -q` dừng ở collection vì `ModuleNotFoundError: No module named 'cv2'`. Diagnostics LSP không chạy được vì thiếu `clangd` và `basedpyright`. Sau đó bộ test Python đã được chạy trên Colab, kết quả ở [bằng chứng T4](s4-s5-t4-validation.md).
 
 Host tests kiểm tra workspace/config, homography projective đã biết, sample bốn điểm, suy biến, sample counter xác định và chuyển hệ half-pixel. Chúng không chứng minh CUDA biên dịch, GPU correctness, reuse trên GPU hoặc hiệu năng.
 
-## 5. Các bước cần chạy trên Colab T4
+## 5. Quy trình kiểm thử trên Colab T4
+
+Quy trình này đã được chạy trên revision `aaa937a`; kết quả và môi trường Python riêng được ghi tại [bằng chứng T4](s4-s5-t4-validation.md).
 
 Từ root repo, kiểm tra `nvidia-smi` hiển thị Tesla T4, ghi version CUDA và commit SHA vào log. Cài các dependency đã khai báo của Nhóm nếu phiên Colab chưa có:
 
@@ -162,13 +164,13 @@ python -m tools.s4_s5.check_mock_pipeline \
 
 Runner tính lại mock S1–S3 từ RGB, chuyển tọa độ/descriptors sang driver CUDA, so S4 với OpenCV BFMatcher, kiểm tra H gốc, rồi warp/blend bằng mock S6. Các giá trị S=0.5, ratio=0.8, R=2000, threshold=3 pixel S1 và seed=0 ở đây theo fixture mock; không phải cấu hình chính thức của stage.
 
-Match indices phải khớp; distance tolerance `rtol=1e-5`, `atol=1e-4`. Với S5, không yêu cầu mask hoặc ma trận H giống bitwise OpenCV vì sampling/scoring khác nhau. Runner yêu cầu mean corner difference của CUDA H và OpenCV H không quá 3 pixel gốc, ghi thêm known-H error nếu fixture có ground truth. Đây là tiêu chí correctness sơ bộ chưa chạy trên GPU, không thay quality policy của paper. Nếu fail phải lưu pair, điều tra trước khi đổi tolerance.
+Match indices phải khớp; distance tolerance `rtol=1e-5`, `atol=1e-4`. Với S5, không yêu cầu mask hoặc ma trận H giống bitwise OpenCV vì sampling/scoring khác nhau. Runner yêu cầu mean corner difference của CUDA H và OpenCV H không quá 3 pixel gốc, ghi thêm known-H error nếu fixture có ground truth. Tiêu chí này đã pass trên fixture tổng hợp có cấu trúc, chưa được kiểm chứng trên HPatches/UDIS-D thật và không thay quality policy của paper. Nếu fail phải lưu pair, điều tra trước khi đổi tolerance.
 
 Kỳ vọng: runner in thông báo pass cho cả ORB và SIFT; `results/` chứa H, panorama, mask và report. Stage/reference thất bại làm lệnh fail, không tự bỏ pair. Driver ghi tên GPU và seed; chưa đo latency. Cần xem panorama/crop sau khi chạy, không chỉ đọc thông báo pass.
 
 ## 6. Review QoR của Chương
 
-Đã đọc `tools/qor/evaluate.py`, test QoR và README, đối chiếu với quyết định Phase 0 và quy ước chung. Chưa chạy test Python do thiếu `cv2`; không sửa code của Chương.
+Đã đọc `tools/qor/evaluate.py`, test QoR và README, đối chiếu với quyết định Phase 0 và quy ước chung. Bộ test `tests/python` đã pass trên Colab trong môi trường OpenCV đúng bản pin; không sửa code của Chương.
 
 Không thấy sai lệch chặn việc thử pilot qua review tĩnh: miền Ω lấy từ reference; coverage chia cho Ω; PSNR dùng RGB; SSIM chỉ dùng cửa sổ hoàn toàn hợp lệ; reference/pipeline failure giữ lại trong CSV. Reference unreliable không thể pass. Đây chưa phải phê duyệt quality policy để dùng trong paper.
 
@@ -185,7 +187,7 @@ Triển khai ban đầu dùng FP64 cho fitting/scoring. Generate hypotheses ch�
 
 Nếu solver/refinement không ổn định, giữ phương án phụ đã ghi ở Phase 0: vanilla RANSAC với inlier-count score và một lần least-squares refinement, sau khi Đế xác nhận. Không tự thay method hoặc nới tolerance để test pass.
 
-Chưa nghiệm thu: build CUDA, test và sanitizer GPU, mock end-to-end, ảnh HPatches/UDIS-D thực, latency, ghép đủ sáu stage, review trực quan và Go/No-Go. Không có số đo mới cho paper.
+Đã kiểm chứng build CUDA, test và sanitizer GPU, mock end-to-end tổng hợp và ảnh preview của mock. Chưa nghiệm thu ảnh HPatches/UDIS-D thực, latency, ghép đủ sáu stage GPU, quality policy trên development data và Go/No-Go. Chưa có số đo hiệu năng cho paper.
 
 ## 8. Nguồn
 

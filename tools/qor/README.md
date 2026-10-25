@@ -1,6 +1,6 @@
 # Bộ đánh giá QoR alignment offline (P1)
 
-- **Ngày cập nhật và đối chiếu nguồn:** 22/10 (Thứ 5), năm 2026.
+- **Ngày cập nhật:** 23/10 (Thứ 6), năm 2026; ngày đối chiếu nguồn SSIM ghi ở cuối.
 - **Trạng thái:** Bản pilot; quality policy **chưa được Nhóm phê duyệt**.
 
 Bộ đánh giá trên CPU thực hiện protocol **đề xuất để pilot** trong
@@ -66,6 +66,41 @@ dấu kém chất lượng giữ `reference_unreliable` và không thể pass.
 
 Không âm thầm bỏ dòng thất bại. `quality_pass` và `pair_disposition` là helper
 phân tích riêng; `Pass_i(c)` và `unachievable` không phải cột bổ sung trong CSV.
+
+## Báo cáo phân loại từ qor.csv
+
+CLI riêng đọc tám cột hiện có và policy pilot để tính pass/fail, lý do và số lượng
+pair theo trạng thái; không phân tích latency hoặc chọn Pareto:
+
+```powershell
+python -m tools.qor.report --qor results/qor.csv --policy tools/qor/policy-pilot.json --output results/qor-report.json
+python -m tools.qor.report --qor results/qor.csv --policy tools/qor/policy-pilot.json --candidate-config S0.50_K1000_R256_Bfeather --candidate-config S1_K2000_R1024_Bfeather --output results/qor-report-selected.json
+python -m pytest tests/python/test_qor_report.py
+```
+
+Mặc định tập cấu hình hữu hạn là toàn bộ `config_id` xuất hiện trong CSV, **gồm
+cấu hình reference**. Reference hợp lệ tự pass, nên nếu nó có trong tập này thì
+`unachievable_pairs` có thể luôn bằng 0. Đó là hệ quả của định nghĩa, không tự loại
+reference để tạo ra trường hợp unachievable. Caller có thể lặp `--candidate-config`
+để chọn rõ tập cần khảo sát, có hoặc không gồm reference. Mọi pair phải có đủ mọi
+cấu hình trong tập đã chọn và dòng reference; thiếu cấu hình sẽ báo lỗi. Tập chọn
+được ghi trong JSON, không suy ra từ kết quả pass/fail. API cho phép tập rỗng tường
+minh và ghi `no_candidates`; CLI luôn có ít nhất một cấu hình khi chọn tường minh.
+
+JSON chứa `schema_version`, toàn bộ policy, `candidate_configs`, `counts` và danh
+sách pair/config với `pass`, `reasons`, `is_reference`, `selected_candidate` và
+metric. Đếm candidate chỉ áp dụng tập đã chọn; tất cả dòng CSV vẫn được phân loại
+và giữ trong JSON. `reference_failure_pairs`, `reference_unreliable_pairs` và
+`unachievable_pairs` được tách riêng; reference lỗi/kém tin cậy không được xem là
+pair unachievable thông thường. `unachievable` chỉ nói về tập hữu hạn đã ghi,
+không kết luận không tồn tại cấu hình tốt ngoài tập đó.
+
+PSNR dương vô hạn được mã hóa bằng chuỗi JSON `"inf"`; metric không xác định là
+`null`. Bộ ghi dùng `allow_nan=False`, không sinh token JSON không chuẩn như
+`Infinity`/`NaN`. Dòng trùng pair/config, thiếu reference, mapping/trạng thái
+reference mâu thuẫn, metric không hợp lệ hoặc coverage ngoài [0,1] đều bị từ chối.
+Output không được ghi đè CSV/policy đầu vào, kể cả alias hardlink. Báo cáo tiếp tục
+ghi **pilot-not-team-approved**, chưa có xác nhận ngưỡng của Đế hoặc cả Nhóm.
 
 ## Định nghĩa metric
 

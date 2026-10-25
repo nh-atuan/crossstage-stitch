@@ -174,9 +174,12 @@ __device__ bool sample(const ImageView& image, double x, double y, float* rgb,
 __device__ std::uint8_t quantize(float x) {
     return static_cast<std::uint8_t>(floorf(fminf(255.0f, fmaxf(0.0f, 255.0f * x)) + 0.5f));
 }
+template <bool CollectStatistics>
 __global__ void warp(const ImageView a, const ImageView b, Geometry g,
                      ImageView output, ImageView mask, float* ca, float* cb,
-                     float* va, float* vb, float* ua, float* ub) {
+                     float* va, float* vb, float* ua, float* ub,
+                     RenderStatistics* statistics) {
+    unsigned long long union_count = 0, overlap_count = 0;
     const std::size_t n = static_cast<std::size_t>(g.width) * g.height;
     for (auto p = thread_index(); p < n; p += thread_step()) {
         const int x = static_cast<int>(p % g.width), y = static_cast<int>(p / g.width);
@@ -194,6 +197,10 @@ __global__ void warp(const ImageView a, const ImageView b, Geometry g,
             mb = sample(b, xb, yb, rb, sb, g.snap_tolerance);
         }
         mask.data[static_cast<std::size_t>(y) * mask.pitch_bytes + x] = ma || mb ? 1 : 0;
+        if constexpr (CollectStatistics) {
+            union_count += ma || mb ? 1 : 0;
+            overlap_count += ma && mb ? 1 : 0;
+        }
         if (ca) {
             va[p] = ma ? 1.0f : 0.0f; vb[p] = mb ? 1.0f : 0.0f;
             ua[p] = ma && (!mb || sa >= sb) ? 1.0f : 0.0f;
@@ -205,6 +212,24 @@ __global__ void warp(const ImageView a, const ImageView b, Geometry g,
                 const float color = ma && mb ? static_cast<float>((sa * ra[c] + sb * rb[c]) / (sa + sb)) : (ma ? ra[c] : rb[c]);
                 out[c] = quantize(color);
             }
+        }
+    }
+    if constexpr (CollectStatistics) {
+        __shared__ unsigned long long unions[kBlock], overlaps[kBlock];
+        unions[threadIdx.x] = union_count;
+        overlaps[threadIdx.x] = overlap_count;
+        __syncthreads();
+        for (unsigned stride = kBlock / 2; stride > 0; stride /= 2) {
+            if (threadIdx.x < stride) {
+                unions[threadIdx.x] += unions[threadIdx.x + stride];
+                overlaps[threadIdx.x] += overlaps[threadIdx.x + stride];
+            }
+            __syncthreads();
+        }
+        if (threadIdx.x == 0) {
+            static_assert(sizeof(std::uint64_t) == sizeof(unsigned long long));
+            if (unions[0]) atomicAdd(reinterpret_cast<unsigned long long*>(&statistics->union_pixels), unions[0]);
+            if (overlaps[0]) atomicAdd(reinterpret_cast<unsigned long long*>(&statistics->overlap_pixels), overlaps[0]);
         }
     }
 }
@@ -302,7 +327,8 @@ Status s6_workspace_bytes(const Geometry& g, BlendMode mode, std::size_t* bytes)
 
 Status render(const ImageView& a, const ImageView& b, const Geometry& g,
               BlendMode mode, const ImageView& output, const ImageView& mask,
-              void* workspace, std::size_t available, cudaStream_t stream) {
+              void* workspace, std::size_t available, cudaStream_t stream,
+              RenderStatistics* statistics) {
     Layout layout;
     const auto status = layout_for(g, mode, layout);
     if (status != Status::OK) return status;
@@ -324,17 +350,40 @@ Status render(const ImageView& a, const ImageView& b, const Geometry& g,
         const Range arena{address, address + available};
         for (const auto& range : ranges) if (overlaps(range, arena)) return Status::INVALID_ARGUMENT;
     }
+    if (statistics) {
+        const auto address = reinterpret_cast<std::uintptr_t>(statistics);
+        const auto max = std::numeric_limits<std::uintptr_t>::max();
+        if (address % alignof(RenderStatistics) || address > max - sizeof(RenderStatistics))
+            return Status::INVALID_ARGUMENT;
+        const Range counters{address, address + sizeof(RenderStatistics)};
+        for (const auto& range : ranges) if (overlaps(range, counters)) return Status::INVALID_ARGUMENT;
+        // Check even an optional unused feather workspace when it is supplied.
+        if (workspace && available) {
+            const auto arena = reinterpret_cast<std::uintptr_t>(workspace);
+            if (arena > max - available || overlaps(counters, Range{arena, arena + available}))
+                return Status::INVALID_ARGUMENT;
+        }
+    }
+    // Every host-side validation precedes any device write or launch.
+    if (statistics && cudaMemsetAsync(statistics, 0, sizeof(RenderStatistics), stream) != cudaSuccess)
+        return Status::CUDA_ERROR;
     const std::size_t n = static_cast<std::size_t>(g.width) * g.height;
     const unsigned grid = blocks_for(n);
 #define S6_LAUNCH_CHECK() do { if (cudaGetLastError() != cudaSuccess) return Status::CUDA_ERROR; } while (false)
     if (mode == BlendMode::Feather) {
-        warp<<<grid, kBlock, 0, stream>>>(a, b, g, output, mask, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+        if (statistics)
+            warp<true><<<grid, kBlock, 0, stream>>>(a, b, g, output, mask, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, statistics);
+        else
+            warp<false><<<grid, kBlock, 0, stream>>>(a, b, g, output, mask, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
         S6_LAUNCH_CHECK();
         return Status::OK;
     }
     auto ptr = [&](std::size_t offset) { return buffer(workspace, offset); };
     const auto& base = layout.levels[0];
-    warp<<<grid, kBlock, 0, stream>>>(a, b, g, output, mask, ptr(base.a), ptr(base.b), ptr(base.va), ptr(base.vb), ptr(base.ua), ptr(base.ub));
+    if (statistics)
+        warp<true><<<grid, kBlock, 0, stream>>>(a, b, g, output, mask, ptr(base.a), ptr(base.b), ptr(base.va), ptr(base.vb), ptr(base.ua), ptr(base.ub), statistics);
+    else
+        warp<false><<<grid, kBlock, 0, stream>>>(a, b, g, output, mask, ptr(base.a), ptr(base.b), ptr(base.va), ptr(base.vb), ptr(base.ua), ptr(base.ub), nullptr);
     S6_LAUNCH_CHECK();
     // Pull raw numerator/validity all the way to 1x1 before any normalization.
     for (int l = 1; l <= layout.top; ++l) {

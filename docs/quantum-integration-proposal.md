@@ -1,336 +1,328 @@
-# Đề xuất tích hợp quantum cho workshop PARMA-DITAM 2027
+# Quantum integration cho adaptive GPU panorama-stitching runtime
 
-Ngày khảo sát: **21/10 (Thứ 4), năm 2026**. Trạng thái: **đề xuất nghiên cứu để thảo luận**, chưa thay đổi phương pháp, interface hoặc phân công của Nhóm. Chưa triển khai solver, chưa chạy QPU và chưa có kết quả quantum trên pipeline của Nhóm.
+## Material Passport
 
-## 1. Khuyến nghị và phạm vi
+- Origin Skill: academic-research-suite / deep-research.
+- Origin Mode: nghiên cứu định hướng và thiết kế thực nghiệm theo RQ đã xác định.
+- Origin Date: 2026-10-24; cập nhật 24/10 (Thứ 7), năm 2026.
+- Verification Status: ANALYZED — đã đối chiếu nguồn và thiết kế; chưa chạy QAOA của dự án.
+- Version Label: quantum_catalogue_v2.
+- Snapshot: `d5d5acd`, nhánh `chuong/p1-s6-completion`; thay bản ngày 21/10. Các ngưỡng, owner và split mới dưới đây là đề xuất cần Nhóm duyệt.
 
-**Ưu tiên một thí nghiệm chọn catalogue cấu hình offline bằng QUBO/QAOA; giữ controller online và S1–S6 chạy cổ điển trên CPU/GPU.** Catalogue là tập nhỏ các cấu hình `(S, K, R, B)` dùng chung cho nhiều cảnh. Chỉ xem xét đưa thí nghiệm vào paper sau khi có bảng latency/QoR thực và vượt các điều kiện ở mục 8.
+## 1. Quyết định và phạm vi bàn giao
 
-Lý do chọn hướng này là khả năng dùng lại dữ liệu characterization/Pareto, kiểm chứng nghiệm bằng code cổ điển và tách chi phí quantum khỏi đường chạy từng cặp ảnh. Đây là đánh giá khả thi về kiến trúc; chưa có bằng chứng catalogue do quantum tìm được tốt hơn catalogue do solver cổ điển tìm được.
+**Primary Quantum Integration Path: Hướng A — Offline QUBO/QAOA catalogue selection for quality-constrained adaptive GPU panorama stitching.** Quantum giải bài toán chọn tập cấu hình nhỏ dùng chung cho nhiều cảnh từ bảng CUDA latency–QoR. Controller online và S1–S6 tiếp tục chạy cổ điển. B cố định trong thí nghiệm đầu; đề xuất feather, cần Chương và Nhóm xác nhận.
 
-Nếu ưu tiên đóng góp quantum trực tiếp vào computer vision cho nghiên cứu dài hơn, **S5 robust fitting** có nền tảng liên quan rõ hơn qua CVPR 2022 và ECCV 2024 [R1, R2]. Thay S5 ở thời điểm hiện tại sẽ làm thay đổi estimator, núm R, trạng thái reuse và cách đo overhead; chưa khuyến nghị cho bản workshop đang triển khai.
+Quantum là thành phần bắt buộc của kế hoạch: phải chạy QAOA circuit trên simulator cho ít nhất một instance phát sinh từ sweep CUDA, lưu raw distribution/bitstrings và so với classical solvers. Chỉ có công thức QUBO, SA hoặc toy circuit chưa hoàn thành tích hợp ứng dụng. QPU là tùy chọn; phiên này chưa xác nhận quyền truy cập QPU. Hai tài liệu hiện tại bàn giao nghiên cứu và backlog, chưa báo kết quả quantum đã thực hiện.
 
-Tài liệu phân biệt ba loại kết luận:
+Kết quả mong đợi là biết catalogue có nén được không, QAOA tạo nghiệm khả thi ở mức nào và lợi ích đến từ solver, catalogue hay controller/reuse. Quantum không bắt buộc phải thắng. Nếu kết quả âm, giữ artifact và báo cáo; không chuyển toàn bộ quantum thành Future Work, không đổi nhãn classical thành quantum. Nếu không có dữ liệu/circuit thực, ghi phần thực nghiệm chưa hoàn thành.
 
-- **Bằng chứng bên ngoài:** paper đã công bố, phương pháp, backend và giới hạn đọc được từ nguồn gốc.
-- **Suy luận cho dự án:** mức phù hợp với contract và research question hiện tại.
-- **Thiết kế đề xuất:** mô hình toán, protocol và điều kiện dừng do tài liệu này đề nghị; cần Nhóm xét duyệt trước triển khai.
+Đưa vào paper khi có provenance dữ liệu, encoding đúng, baseline mạnh và kết quả simulator thật trên instance của pipeline. Claim về runtime cần thêm chạy controller thật; nếu chưa có, giới hạn kết luận ở tối ưu offline. Đề xuất một subsection 1–1,5 trang gồm bảng/plot trong ngân sách nội dung đã có; không cộng thêm ngoài outline hiện tại. Không thay plan, common ABI hoặc estimator của thành viên khác trong lượt viết này.
 
-Mục tiêu là xây một đề xuất có thể bị kiểm chứng và bác bỏ. Việc dùng nguồn từ CVPR, ECCV, AAAI hoặc Nature Computational Science không bảo đảm novelty hay khả năng được chấp nhận ở các venue đó.
+### Primary Quantum Integration Path — đoạn dùng trong internal planning
 
-## 2. Bối cảnh repo và câu hỏi nghiên cứu
+Chọn Hướng A: chọn catalogue cấu hình offline bằng QUBO và QAOA cho runtime ghép panorama GPU dưới ràng buộc QoR. Đầu vào là bảng sweep CUDA đã kiểm tra, gồm latency, trạng thái và QoR cho từng cặp ảnh, cấu hình. Với B cố định, bài toán chọn ít cấu hình nhất sao cho mỗi cặp development có một lựa chọn đạt QoR và nằm trong mức regret so với Oracle. QAOA p=1,2 chạy trên simulator, tạo bitstrings để giải bài toán này; exhaustive, CP-SAT, greedy, SA và random dùng cùng instance làm đối chứng. Mọi nghiệm được giải mã và kiểm tra lại coverage; raw samples và nghiệm sau repair được báo riêng. Catalogue được xuất thành artifact có hash, rồi controller cổ điển dùng để chọn budget, escalate và reuse trên GPU. Quantum không nằm trong đường chạy mỗi ảnh. Validation chọn tham số; final chỉ chạy sau khi khóa protocol. Đánh giá gồm kích thước catalogue, coverage, regret, feasibility, chi phí solver và latency thực của controller. Nếu classical solver giải nhanh hoặc repair quyết định kết quả, báo feasibility hay negative result. Hướng này giữ nguyên S1–S6 và RQ chính, đồng thời tạo thí nghiệm quantum có thể kiểm chứng.
 
-Nguồn nội bộ: [kế hoạch](plan.md), [pipeline](stages.md), [quy ước](conventions.md), [benchmark/QoR/S4–S5](benchmark-qor-s4-s5-decisions.md), [S6](s6-warp-blend.md) và [khung paper](../PARMA-DITAM_2027_Workshop/README.md). Checkout khảo sát dựa trên `e2c00e8`; đã có header chung, CMake, tests host/CUDA và mock OpenCV. Chưa thấy kernel S1–S6, harness, controller hoặc bảng benchmark trong checkout này. Việc thiếu artifact tại đây không chứng minh các thành viên chưa có code trên nhánh khác hoặc kết quả ngoài repo.
+## 2. Hiện trạng và câu hỏi nghiên cứu
 
-Theo lịch Nhóm, Phase 1 có mốc **25/10 (Chủ nhật)**; mốc nộp của Nhóm là **13/11 (Thứ 6)**. Đây là ràng buộc tiến độ từ kế hoạch, không phải xác nhận các điều kiện bắt đầu phase đã hoàn thành.
+Đã đọc [plan](plan.md), [stages](stages.md), [conventions](conventions.md), [S1](s1-preprocessing.md), [benchmark/QoR/S4–S5](benchmark-qor-s4-s5-decisions.md), [S6](s6-warp-blend.md), [bàn giao P1](s6-p1-implementation.md), [khung workshop](../PARMA-DITAM_2027_Workshop/README.md); kiểm tra source, test, mock và results trong checkout.
 
-Research question hiện tại là giảm GPU stitching latency bằng phân bổ budget theo cảnh dưới quality policy cố định. Câu hỏi mở rộng đề xuất:
+| Có bằng chứng tại checkout | Chưa có bằng chứng tại checkout |
+|---|---|
+| `src/s6`: geometry, warp, feather, multiband 3/5; 3/5 là số REDUCE | Kernel S1–S5 đầy đủ, root harness và controller end-to-end |
+| `tools/qor/evaluate.py`, `report.py`, policy versioned | Sweep CUDA S×K×R; policy đã được Đế duyệt |
+| FP64 reference, mock CPU, importer và CUDA validation runner | Catalogue thật, QUBO từ sweep, QAOA logs hoặc QPU runs |
+| Evidence S6 GTX 1650 và hai cặp Oxford trong bàn giao P1 | Nghiệm thu T4; benchmark UDIS-D của toàn runtime |
 
-**RQ-Q:** Với cùng dữ liệu development và ràng buộc QoR, một solver QAOA có tạo được catalogue ít cấu hình, giữ được độ phủ và latency gần Oracle, với chi phí tìm kiếm cạnh tranh với các solver cổ điển hay không?
+`results/s6-validation-20261023-final/s6-timings.csv` chỉ đo S6 steady-state. `results/s6-qor-smoke/runs.csv` có H mock ORB/SIFT nhưng không có t_e2e; đổi descriptor không phải sweep S/K/R. Không dùng chúng làm characterization chính. Không thấy artifact trong checkout không chứng minh thành viên khác chưa có dữ liệu trên nhánh riêng.
 
-Ba câu hỏi phụ cần trả lời riêng:
+RQ chính giữ nguyên:
 
-1. Catalogue nhỏ có thực sự giúp controller giảm overhead hoặc cải thiện generalization so với dùng toàn bộ lưới cấu hình?
-2. QUBO có biểu diễn đúng bài toán catalogue, sau khi tính đủ slack variables và tiền xử lý?
-3. Quantum solver đóng góp gì ngoài việc thực hiện lại một phép tối ưu mà greedy hoặc exact solver đã giải nhanh?
+*Can a scene-aware cross-stage runtime reduce GPU panorama-stitching latency by dynamically allocating computational budgets while maintaining a predefined Quality-of-Result constraint?*
 
-**Giới hạn quan trọng:** nếu đã biết latency và tính khả thi của mọi cấu hình cho một cặp ảnh, chọn cấu hình nhanh nhất chỉ cần quét `|C|` phần tử. Phần tổ hợp ở đề xuất nằm trong việc nhiều cảnh cùng chia sẻ một catalogue nhỏ. Chưa coi bài toán chọn cấu hình online của repo là NP-hard.
+**RQ-Q:** Với cùng bảng CUDA latency–QoR, cùng coverage/regret constraints và ngân sách tìm kiếm đã khóa, QAOA simulator p=1,2 tạo catalogue có cardinality, feasibility, validation regret và thời gian offline như thế nào so với exhaustive/CP-SAT, greedy, SA và random?
 
-Workshop có các topic về accelerators, heterogeneous computing, runtime management và performance case studies [W1]. Một nghiên cứu phân chia offline/online và đo trade-off có thể phù hợp các topic đó; đây là diễn giải của dự án. Quantum không phải yêu cầu của workshop.
+Tách ba kiểm định: catalogue có ích không; encoding có đúng không; QAOA có thêm giá trị không. Biết trước mọi latency/QoR của một pair thì chọn cấu hình nhanh nhất chỉ cần quét C. Tính tổ hợp nằm ở việc nhiều pair cùng chia sẻ catalogue; không gán NP-hard cho một phép argmin online.
 
-## 3. Cách khảo sát và giới hạn bằng chứng
+Mốc nội bộ từ plan là review P1 ngày 25/10 (Chủ nhật), nộp bài ngày 13/11 (Thứ 6). Backlog quantum mới không thay lịch hoặc tự giao task cho các thành viên.
 
-Khảo sát định hướng, cập nhật đến ngày ghi đầu tài liệu; ưu tiên công trình được xuất bản tại CVPR/ECCV, AAAI và các tạp chí quantum/ML có nguồn gốc truy cập được. Bổ sung Q-SE vì sát bài toán configuration selection, cùng nguồn nền tảng về set cover và graph cuts. Không dùng impact factor, citation count hoặc xếp hạng venue thay cho kiểm tra phương pháp.
+## 3. Khảo sát và bảng so sánh A–F
 
-Các nhóm truy vấn được dùng:
+Khảo sát định hướng đến ngày cập nhật, không phải systematic review/PRISMA. Truy vấn gồm minimum set cover QAOA/QUBO, configuration selection, penalty scaling, multi-objective QAOA, quantum robust fitting, graph-cut segmentation và QML classical benchmarks. Ưu tiên paper gốc, code của tác giả và docs chính thức; không dùng blog, citation count hoặc uy tín venue thay bằng chứng phương pháp. Preprint/bản xuất bản của cùng công trình được tính một nguồn. Phạm vi đọc ghi ở §12; chưa kiểm toán retraction toàn corpus.
 
-- `quantum robust fitting homography`, `robust fitting gate quantum computer`;
-- `quantum multi-model fitting`, `QuCOOP`, `HQC-NBV`;
-- `quantum configuration selection QAOA`, `algorithm portfolio selection`;
-- `quantum multi-objective optimization`, `quantum optimization benchmarking`;
-- `quantum machine learning classical baselines`, `shadow models`.
+| Tiêu chí | A — catalogue cover | B — Pareto catalogue | C — escalation ladder | D — S5 robust fitting | E — S6 seam | F — quantum selector |
+|---|---|---|---|---|---|---|
+| Khớp RQ | Cao: nén lựa chọn budget | Cao, thêm objective | Cao: retry cost | Gián tiếp: đổi estimator | Thấp khi QoR đo alignment | Có thể khớp selection |
+| Dữ liệu | CUDA sweep + QoR + split | A + margin/memory/retry | Transition/reuse traces | Matches/hypotheses, lỗi H | Overlap + composition labels/metric | Features/labels và split đủ lớn |
+| Công triển khai | Thấp nhất tương đối | Vừa–cao | Cao | Cao | Cao | Vừa–cao |
+| Rủi ro | Slack bits, trivial cover, repair | Trọng số tùy ý, thêm assignment | Cost không cộng độc lập | Thay R/estimator/reuse | Metric sai mục tiêu, pixel quá lớn | Baseline mạnh, embedding cost |
+| Vai trò quantum thật | Giải QUBO cover | Giải họ QUBO theo trọng số | Chọn thứ tự/chuyển tiếp | Chọn outlier/hypothesis/subset | Nhãn A/B pixel/superpixel | Quantum kernel/VQC |
+| Classical baseline | Exhaustive, CP-SAT, greedy, SA, random | Native multiobjective MIP, greedy/SA | Enumeration/DP/MIP, heuristic ladder | GPU RANSAC/MSAC, refinement | Min-cut nếu submodular, SA/MIP | Logistic/SVM/RF/MLP, separable ablation |
+| Giá trị kiểm chứng | Cardinality, coverage/regret, cost | Pareto/hypervolume, sensitivity | Expected/measured e2e/retry | Geometry/consensus và e2e | Seam/ghosting và runtime | Calibration, prediction và overhead |
+| Tác động S1–S6 | Không đổi kernel/ABI | Không đổi nếu chỉ offline | Cần transition telemetry | Đổi S5, tương tác S4 | Đổi S6/blender | Thêm feature extraction |
+| Controller/reuse | Cùng controller giữa solver | Có thể đổi preferences | Tác động trực tiếp | Invalidate assumptions | Có thể đổi B/gate | Train/inference path mới |
+| Khả năng kịp lịch | Cao nhất nếu có sweep sớm | Sau A | Thấp khi thiếu controller | Thấp | Thấp | Thấp khi thiếu feature dataset |
+| Khuyến nghị | **Primary, bắt buộc prototype** | Extension sau A | Backlog | Không chọn hiện tại | Không chọn khi thiếu metric | Không chọn cho MVP |
 
-Nguồn tìm và đối chiếu gồm CVF/ECVA, AAAI, trang publisher, kho của tác giả/cơ quan và arXiv. Loại khỏi căn cứ kết luận các bản tin marketing, diễn giải thứ cấp và paper không liên quan đến một điểm tích hợp cụ thể. Bản arXiv và bản hội nghị của cùng công trình được tính là một nguồn. Không thống kê PRISMA hoặc tổng số hits vì công cụ tìm kiếm này không tạo một corpus đầy đủ, ổn định.
+A có tiền lệ set cover và configuration selection [R1–R3]. B có multiobjective QAOA [R4], nhưng regret chứa min/assignment, không tự thành quadratic bằng cộng vài metric. Mở B phải định nghĩa biến, chuẩn hóa objective, quét trọng số/Pareto và so classical cùng objective; không chuyển kết quả MO-MAXCUT thành catalogue evidence.
 
-Phạm vi đọc ghi ở bảng dưới là các phần thực sự được kiểm tra, không có nghĩa đã đọc toàn bộ mọi phụ lục. Khi dùng preprint để đọc phương pháp nhưng metadata của venue để xác minh xuất bản, ghi riêng hai nguồn. Khảo sát không phải kiểm toán retraction đầy đủ và không xác nhận novelty toàn lĩnh vực.
+Catalogue/portfolio selection cũng có tiền lệ cổ điển [R13]. Việc thêm QAOA vào một bài toán cover đã biết chưa đủ làm novelty; đóng góp phải đến từ workload runtime, benchmark và kết quả kiểm chứng được.
 
-ARS được dùng để tổ chức tìm kiếm, kiểm chứng và phản biện. Có một lượt khảo sát nguồn được giao riêng; phần tổng hợp, lập mô hình và tự phản biện được thực hiện trong ngữ cảnh chung. Đây không phải một hội đồng review độc lập hoặc cross-model review. Không gửi manuscript riêng tư sang API nghiên cứu bên ngoài.
+C cần chi phí chuyển tiếp thực: tăng R có thể giữ matches/hypotheses; đổi S/K có thể recompute. Sweep độc lập chưa cung cấp mô hình đó. D có CVPR/ECCV papers [R6–R8], nhưng quy mô/backend không chứng minh thay S5 GPU khả thi. E có tiền lệ segmentation quantum [R9], khác panorama seam; energy nhị phân submodular có baseline min-cut mạnh [R10]. F cần baseline ML tương đương và tính cả preprocessing/inference [R11]. Công sức và tiến độ trong bảng là suy luận cho repo, không phải số đo của các paper.
 
-### 3.1. Bằng chứng liên quan trực tiếp
+## 4. Dữ liệu, Oracle và bài toán gốc
 
-| Nguồn và nơi công bố | Phạm vi đọc/kiểm tra | Bằng chứng dùng được và ranh giới |
-|---|---|---|
-| **[R1] HQC robust fitting — CVPR 2022** | Introduction, §§4.2–4.3, 6.2, 7; metadata CVF | Chuỗi QUBO cho robust fitting; QPU trên synthetic nhỏ, dữ liệu thực ở §6.2 dùng SA trên CPU. Không chứng minh tăng tốc GPU stitching |
-| **[R2] Robust fitting on a gate quantum computer — ECCV 2024** | §§1.3–1.4, 4.2, 5–7; metadata ECVA | IonQ Aria cho minh họa nhỏ; benchmark fundamental matrix dùng thuật toán influence cổ điển. Không coi khả thi circuit là khả thi thay S5 đầy đủ |
-| **[R3] QuMF/DeQuMF — CVPR 2023** | §§3, 5–6 và implementation chính thức | Chọn nhiều mô hình qua annealing, có decomposition. Decomposition không bảo đảm global optimum; phạm vi khác một global H của repo |
-| **[R4] R-QuMF — CVPR Workshops 2025, Image Matching Workshop** | §§4.4, 5.1 và phụ lục timing | Xử lý outlier trong multi-model QUBO, có SA/Gurobi/D-Wave. Anneal duration riêng lẻ không đại diện tổng latency; đây là CVPRW, không phải CVPR main |
-| **[R5] QuCOOP — CVPR 2025** | §§4, 7.4, 8, Appendix G và trang tác giả | QUBO cục bộ cho registration/correspondence, có D-Wave thật. So sánh nhanh hơn Q-Match QA là quantum-vs-quantum, không phải vượt BF matching GPU |
-| **[R6] HQC-NBV — CVPR 2026** | Metadata CVF; §§4–6 của preprint v1 | Quyết định nhỏ kết hợp kiểm tra/fallback cổ điển. §6 dùng Qiskit Aer simulator cho toàn bộ thí nghiệm; exploration efficiency khác computational latency |
-| **[R7] Quantum approximate multi-objective optimization — Nature Computational Science 2025** | Results, phần QAOA/parameter transfer và runtime | QAOA cho MO-MAXCUT, có IBM hardware. Parameter training offline được tách khỏi runtime mỗi instance; kết quả không chuyển trực tiếp sang stitching |
-| **[R8] QOBLIB — Nature Computational Science 2026** | Metadata; formulation, metrics, resources và quantum runtime | Căn cứ thiết kế benchmark theo bài toán gốc, có native MIP và QUBO. Cần công khai conversion overhead, feasibility và tài nguyên |
-| **[R9] Quantum configuration selection — Q-SE 2024** | Formulation, evaluation và discussion | QAOA cho attributed feature models; dùng ideal simulator. Là tiền lệ sát chủ đề, chưa phải bằng chứng advantage cho catalogue của repo |
+### 4.1. Characterization là task đầu tiên
 
-### 3.2. Nguồn dùng để phản biện thiết kế
+Hoàn thành CUDA sweep qua harness của Tuấn và pipeline Đế tích hợp. Mỗi pair/config cần 2 warmup + 10 đo theo conventions, seed thuật toán cố định và H tất định. Nếu nghiên cứu nhiều seed RANSAC, dùng cohort/run riêng; không trộn thành 10 timing repeats.
 
-- **Algorithm portfolios đã có lịch sử nghiên cứu:** Hydra kết hợp configuration và portfolio selection từ AAAI 2010 [R10]. Vì vậy, xây catalogue rồi học selector tự nó chưa đủ làm novelty.
-- **Dữ liệu có thể làm baseline cổ điển mạnh hơn dự đoán:** Huang et al. phân tích vấn đề này và yêu cầu so với cả classical approximations của mô hình quantum [R11]. Không suy ra quantum classifier sẽ tốt hơn trên vài tín hiệu S4/S5.
-- **Offline quantum/online classical có tiền lệ:** shadow models nghiên cứu cách dùng quantum resources ở training và deployment cổ điển [R12]. Catalogue QAOA ở đây chỉ tương đồng ở cách tách offline/online; chưa phải shadow model theo định nghĩa của paper.
-- **Set cover → Ising/QUBO là kỹ thuật đã biết** [R13]. Công thức ở mục 5 là cách cụ thể hóa cho bảng stitching của Nhóm, không tuyên bố phát minh phép biến đổi.
-- **Seam nhị phân submodular có exact classical baseline:** graph cuts áp dụng được cho lớp năng lượng phù hợp [R14]. Khả năng viết seam thành QUBO chưa đủ chứng minh quantum có lợi.
-- **QML phải có ablation phù hợp:** khảo sát thực nghiệm của Bowles et al. cho thấy baseline cổ điển và mô hình bỏ entanglement có thể cạnh tranh trên các tác vụ đã xét [R15]. Nguồn này được dùng dưới trạng thái preprint, không gán venue chưa xác minh.
+Join `runs.csv`, `qor.csv`, `meta.json`; bảng dẫn xuất riêng `characterization.csv` có:
 
-Các nguồn trên nghiêng về optimization và geometric vision vì sát pipeline. Chúng không đại diện toàn bộ quantum image processing hay toàn bộ nghiên cứu quantum hiện hành.
-
-## 4. Đối chiếu các vị trí tích hợp
-
-| Vị trí | Cách tích hợp có thể nghiên cứu | Chi phí/rủi ro đối với repo | Khuyến nghị |
-|---|---|---|---|
-| **Catalogue offline** | Set cover theo QoR và latency regret; so QAOA với solver cổ điển | Cần bảng đo, encoding và validation; không thay stage ABI | **Ứng viên chính có điều kiện** |
-| **S5** | Outlier/inlier selection, robust fitting quantum-classical | Thay estimator, budget R và reuse; mapping homography cần làm riêng | Hướng tiếp theo nếu muốn đóng góp quantum trực tiếp |
-| **S6 seam** | Nhãn chọn nguồn ảnh trên pixel/superpixel | Cần thêm seam solver, metric sau blend; graph-cut baseline mạnh | Chưa ưu tiên trong workshop |
-| **S4 matching** | QAP/correspondence kiểu QuCOOP | Bài toán khác exact top-2 nearest neighbors; dữ liệu và embedding tăng | Chưa thay BF matcher |
-| **Controller QML** | Quantum kernel/VQC trên feature vector nhỏ | Chưa có dữ liệu chứng minh lợi ích; thêm training/inference overhead | Chỉ xét sau baseline cổ điển đủ mạnh |
-| **Warp, resize, pyramid** | Quantum image representation/processing | Phải giải quyết nạp dữ liệu và xuất panorama cổ điển; đổi kiến trúc lớn | Không đưa vào phạm vi đề xuất |
-
-Riêng S6, đề xuất hiện tại là inverse warp và feather/multi-band. Quantum seam sẽ bổ sung một phương pháp mới, trong khi QoR chính đang đánh giá H với B cố định. Muốn nghiên cứu seam phải bổ sung đánh giá composition trước. Không dùng SSIM/PSNR alignment hiện tại để kết luận quantum blender tốt hơn.
-
-## 5. Phương pháp đề xuất: catalogue gần Oracle dưới ràng buộc QoR
-
-### 5.1. Dữ liệu và mục tiêu
-
-Giữ **B cố định** trong thí nghiệm đầu, theo đề xuất phối hợp trong tài liệu benchmark; giá trị cụ thể vẫn do Chương và Nhóm chốt. Khi đó `c = (S, K, R, B_fixed)`. Không tự thêm B vào tối ưu khi chưa có quality policy sau blend.
-
-Với cặp development `i` và cấu hình `c`, dùng:
-
-- `t_ic > 0`: median latency theo protocol của Nhóm;
-- `a_ic ∈ {0,1}`: đạt quality policy, gồm validity, coverage và các tolerance;
-- `C`: lưới cấu hình hữu hạn đã đo;
-- `I_f`: các cặp có reference hợp lệ và có ít nhất một cấu hình đạt policy.
-
-Reference failure và cặp không có cấu hình đạt policy được báo cáo riêng trên toàn tập; không biến chúng thành dữ liệu biến mất khỏi denominator của kết quả hệ thống.
-
-Oracle trên lưới và tập cấu hình chấp nhận được:
-
-$$
-t_i^* = \min_{c\in C:\,a_{ic}=1} t_{ic},\qquad
-U_i(\rho)=\{c\in C:a_{ic}=1,\ t_{ic}\le(1+\rho)t_i^*\}.
-$$
-
-`ρ ≥ 0` là latency regret tolerance trên development. Ví dụ grid `0, 0.05, 0.10, 0.20` chỉ là thiết kế pilot; chọn bằng validation, công bố sensitivity và khóa trước final test. Đây không phải nới quality policy: mọi cấu hình trong `U_i` vẫn phải đạt QoR.
-
-Chọn biến `y_c = 1` nếu cấu hình thuộc catalogue `P`. Bài toán cơ sở:
-
-$$
-\min_{y\in\{0,1\}^{|C|}} \sum_c y_c
-\quad\text{s.t.}\quad
-\sum_{c\in U_i(\rho)}y_c\ge1\quad\forall i\in I_f.
-$$
-
-Đây là minimum set cover trên bảng thực nghiệm. Mục tiêu trực tiếp là giảm số cấu hình dưới coverage/regret constraint; chưa trực tiếp tối ưu mean latency, thứ tự escalation hoặc reuse cost. Khi nhiều catalogue cùng kích thước, dùng quy tắc tie-break cố định trên development và công bố nó. Nếu cần mục tiêu runtime phức tạp hơn, phải thay mô hình một cách minh bạch và so lại baseline.
-
-**Giới hạn bảo đảm:** coverage và regret ở trên chỉ đúng cho restricted Oracle trên dữ liệu đã dùng xây mô hình. Controller online có thể chọn sai và chịu overhead/retry; không được chuyển bảo đảm này thành QoR hoặc latency guarantee trên ảnh mới.
-
-### 5.2. QUBO và điều kiện tương đương
-
-Đặt `A_ic = 1[c ∈ U_i]`, `d_i = |U_i| ≥ 1`. Viết bất đẳng thức thành đẳng thức bằng slack không âm:
-
-$$
-\sum_c A_{ic}y_c-1-s_i=0,\qquad
-s_i=\sum_{k=0}^{b_i-1}2^kz_{ik},\quad b_i=\lceil\log_2 d_i\rceil.
-$$
-
-Khi `d_i=1`, `b_i=0`, `s_i=0`. Khi coverage thỏa, slack cần thiết nằm trong `0,…,d_i−1`, luôn biểu diễn được. Binary encoding có thể biểu diễn thêm vài giá trị lớn hơn; chúng không thể làm residual bằng 0 với một assignment `y` nằm ngoài miền coverage.
-
-Hàm năng lượng đề xuất:
-
-$$
-E(y,z)=\lambda\sum_c y_c+
-\alpha\sum_i\left(\sum_c A_{ic}y_c-1-\sum_k2^kz_{ik}\right)^2,
-\qquad \lambda>0.
-$$
-
-Sau khai triển và dùng `x²=x` cho biến nhị phân, đây là QUBO. Điều kiện đủ trong số học chính xác là **`α > λ|C|`**: có nghiệm cover bằng toàn bộ C với cost không quá `λ|C|`; mọi nghiệm vi phạm có ít nhất một residual nguyên khác 0 và energy ít nhất `α`. Vì vậy ground state phải feasible và tối thiểu hóa kích thước catalogue. Điều này không bảo đảm QAOA tìm được ground state.
-
-Penalty lớn tạo hệ số có dynamic range cao; khi scale hệ số, noise hoặc độ chính xác hữu hạn có thể làm solver khó hơn. Pilot phải kiểm tra nghiệm trong **bài toán gốc** và sensitivity của penalty, thay vì chỉ báo energy đẹp. Cách tiếp cận này theo tinh thần benchmark ứng dụng của [R8]; lập luận tương đương cụ thể ở đây là suy dẫn của đề xuất.
-
-### 5.3. Tiền xử lý và ngân sách qubit
-
-Trước khi tạo QUBO, có thể áp dụng các reduction bảo toàn feasibility và optimum cardinality:
-
-1. Gộp các hàng có cùng `U_i`.
-2. Nếu `U_i ⊆ U_j`, bỏ constraint `j`, vì cover `i` đã cover `j`.
-3. Constraint một phần tử buộc cấu hình đó được chọn; loại tiếp các hàng đã được nó cover.
-4. Bỏ cột không cover hàng nào. Với cột trùng nhau, dùng quy tắc đại diện đã khóa và lưu mapping phục hồi.
-
-Các reduction chỉ bảo toàn bài toán cover tại `ρ` đang xét. Chúng không bảo toàn mọi latency statistic hoặc một mục tiêu escalation khác. Không loại cấu hình chỉ vì dominated trên mean latency: cấu hình đó có thể quan trọng cho một nhóm cảnh.
-
-Số logical bits của encoding trước reduction, với các hàng có `d_i ≥ 1`:
-
-$$
-q_{\mathrm{before}}=|C|+\sum_{i\in I_f}\lceil\log_2 d_i\rceil.
-$$
-
-Sau khi thế biến cố định và reduction, tính lại `q_after = |C_remaining| + Σ_i ceil(log2 d_i_remaining)` trên các hàng còn lại. Nếu một hàng còn lại có `d_i_remaining=0`, bài toán đã infeasible và phải dừng trước khi tạo QUBO. Lưu cả kích thước trước/sau, mapping và offset của objective; không báo số cấu hình như số qubit thực dùng.
-
-Ví dụ tự tính **trước reduction**: 6 cấu hình và 4 constraint, mỗi constraint có 6 lựa chọn, cần 18 bits; 8 cấu hình và 8 constraint, mỗi constraint có 8 lựa chọn, cần 32 bits. Các hàng trong hai ví dụ này trùng nhau nên reduction sẽ giảm mạnh kích thước; chúng chỉ minh họa chi phí encoding thô, không phải instance khó hoặc số đo dataset. Statevector complex128 cần ít nhất `16·2^q` bytes: lần lượt 4 MiB và 64 GiB chỉ cho vector trạng thái, chưa tính buffers.
-
-**Ngưỡng pilot đề xuất là `q ≤ 20` cho mô phỏng statevector**, có kiểm tra RAM và backend trước chạy. Đây là giới hạn tài nguyên do dự án chọn, không phải giới hạn vật lý của quantum computing. Không giả định 200–300 cặp development sẽ tự giảm đủ nhỏ. Nếu reduction vẫn lớn, chỉ dùng một cohort development nhỏ được chọn trước để kiểm tra encoding/solver, rồi đánh giá catalogue trên toàn validation. Cohort đó không thay thế thực nghiệm full development và không chứng minh scalability.
-
-Nếu instance nhỏ đủ mô phỏng nhưng exhaustive search trên các biến catalogue cũng giải rất nhanh, phải báo kết quả đó. Không tăng kích thước nhân tạo hoặc bỏ exact baseline để tạo lợi thế quantum.
-
-### 5.4. Solver và đường triển khai
-
-Pilot dùng **QAOA depth nhỏ `p=1,2`**, X mixer và phép đổi `x=(1−Z)/2` sang Ising. Đây là cấu hình khởi đầu để đo, không phải lựa chọn tối ưu đã được chứng minh. Khóa ngân sách evaluations/shots, seed, số restarts và tiêu chí lấy nghiệm trước lượt so sánh cuối. Khởi tạo từ heuristic/parameter transfer chỉ là ablation sau khi có baseline chuẩn.
-
-Ngoài `q` và `p`, ghi số quadratic couplings khác zero, gate count/depth sau transpilation, đặc biệt two-qubit gates, số parameter evaluations và tổng shots. Vừa RAM để mô phỏng chưa chứng minh circuit có độ sâu hoặc ngân sách chạy phù hợp.
-
-Không gộp quantum annealing, simulated annealing và gate-based QAOA dưới cùng một nhãn kết quả. Nếu thử D-Wave về sau, phải báo logical/physical qubits, minor embedding, chain breaks, precision, số reads và toàn bộ overhead tương ứng. Không mặc định có tài khoản, quota hoặc ngân sách QPU.
-
-```mermaid
-flowchart LR
-    D["Development pairs"] --> G["CUDA sweep + QoR evaluator"]
-    G --> M["Latency / feasibility matrix"]
-    M --> C["Set-cover model + exact reductions"]
-    C --> B["Exhaustive / MIP / greedy / SA"]
-    C --> Q["QAOA: simulator; QPU nếu có"]
-    B --> V["Kiểm nghiệm trên bài toán gốc + validation"]
-    Q --> V
-    V --> P["Catalogue và selector đã khóa"]
-    P --> R["CPU/GPU controller + escalation / reuse"]
-    R --> S["S1-S6 CUDA trên final pairs"]
+```text
+pair_id,scene_id,split,config_id,S,K,R,B_fixed,latency_median_ms,
+latency_p95_repeat_ms,qor_pass,overlap_coverage,reference_status,status,
+n_measured,policy_version,run_id
 ```
 
-Controller chỉ đọc feature sẵn có tại thời điểm quyết định. Không dùng `a_ic`, `t_i*`, output Oracle hoặc feature S5 để đưa ra quyết định trước S5 khi chưa chạy stage đó. Chi phí tạo feature, chạy probe và escalation phải tính vào end-to-end latency. Catalogue không thay thế dependency graph và luật cache/reuse của Nhóm.
+QoR pass gọi lại evaluator/report hiện có, không nhập tay hoặc tự thêm threshold. Metadata kèm revision/dirty/source hashes, GPU/clock/driver/CUDA, seeds, grid, split/policy/input hashes, timestamp, units và timing boundary. Không sửa schema common. Join thiếu/trùng, repeat trùng, config thiếu hoặc policy lẫn nhau phải báo lỗi; không nội suy cost.
 
-Giữ fallback cổ điển do controller quy định. Nếu fallback nằm ngoài catalogue thì báo cả `|P|` và số cấu hình triển khai thực tế, cùng fallback rate; không ghi rằng hệ thống chỉ cần `|P|` cấu hình. Fixed-High cũng có thể fail, nên fallback không phải bảo đảm thành công.
+`latency_p95_repeat_ms` chỉ là chẩn đoán nhiễu 10 repeat, ghi quantile method. Theo conventions, p95 chính của hệ thống tính trên **phân phối pair medians**, không xem repeat là scene độc lập. Oracle chính dùng median. Không đủ 10 repeat thành công thì ghi incomplete/runtime failure, giữ ledger và rerun theo protocol; không nhận median từ phần repeat còn sống như đủ dữ liệu.
 
-## 6. Protocol thực nghiệm và tiêu chí phản bác
+`t_ic=median(t_e2e)` đo từ RGB đã trên device đến panorama sẵn sàng trên device, gồm host/controller/sync, loại decode/H2D/D2H theo conventions. Sweep fixed-config không có retry; adaptive phải đo lại toàn đường chạy. S6-only timing không thay thế t_e2e.
 
-### 6.1. Tách dữ liệu và khóa quyết định
+### 4.2. Split và policy
 
-- Dùng development từ train UDIS-D theo [conventions.md](conventions.md#9-chia-development-và-final); tách fit/validation trong development để chọn `ρ`, controller và ngân sách solver. Không dùng final để chọn catalogue hoặc feature.
-- Lưu `pair_id`, seed, manifest, code revision, config grid, policy version và cách xử lý reference failure. Nếu dùng fallback split từ test theo quy ước, phần đã dùng development phải bị loại khỏi final.
-- Fit mọi solver trên cùng bảng và cùng split. Tránh leakage giữa các cặp từ cùng cảnh/sequence khi có metadata; nếu không kiểm soát được thì công bố giới hạn.
-- Quality thresholds hiện là pilot và phải được Đế/Chương chốt. Không thay chúng giữa các solver hoặc nới theo kết quả quantum.
-- Chọn controller bằng development; final chỉ đánh giá một protocol đã khóa. Nếu chạy lại final sau thay đổi, báo đó là exploratory và cần tập đánh giá độc lập cho kết luận xác nhận.
+UDIS-D là benchmark chính theo Đế. Giữ final set đã có; đề xuất chia phần development được phép dùng thành development-fit và validation theo **scene/sequence/source-image group**, seed/hash manifest khóa trước fit. Nếu dùng fallback hash split của conventions, validation chỉ tách từ development đó, không lấy thêm final. Thiếu scene metadata phải ghi hạn chế và kiểm tra ảnh chung/duplicate; không tạo scene labels giả. Tỉ lệ/danh sách cần Đế/Tuấn duyệt.
 
-### 6.2. Ba lớp đánh giá riêng
+Policy hiện là `qor-pilot-v1`, `pilot-not-team-approved`: coverage 0.95, SSIM drop 0.02, PSNR drop 0.5 dB. Chưa phải threshold chính thức. Policy sensitivity phải được Đế duyệt trước final; không nới để quantum trông tốt hơn. Metric hiện đo alignment từ H trên miền reference cố định, chưa đo composition; giữ B_fixed.
 
-| Lớp | Baselines bắt buộc | Chỉ số và cách đọc |
+Gọi a_ic=1 khi run hợp lệ, đủ repeats, reference đáng tin và evaluator xác nhận pass. C là configuration space hữu hạn đã đăng ký và đo đầy đủ:
+
+$$
+I_f=\{i:\mathrm{reference\_status}_i=\mathrm{ok},\ \exists c\in C:a_{ic}=1\},\qquad
+t_i^*=\min_{c\in C:a_{ic}=1}t_{ic}.
+$$
+
+Oracle chỉ là cận offline trên C. Fixed-High quality reference khác Fixed-Best latency baseline. Nếu Fixed-High nằm trong C và reference hợp lệ, nó tự pass policy tương đối; không loại reference chỉ để tạo unachievable. Nếu candidate-space loại reference thì công khai, fallback-space riêng.
+
+Reference failure/unreliable không vào cover constraints, nhưng giữ denominator toàn tập. Reference hợp lệ mà không cấu hình pass là unachievable_in_C; thiếu measurements là incomplete. I_f rỗng thì dừng instance generation, không trả catalogue rỗng như thành công.
+
+### 4.3. Catalogue dưới regret constraint
+
+Với rho >= 0:
+
+$$
+U_i(\rho)=\{c\in C:a_{ic}=1,\ t_{ic}\le(1+\rho)t_i^*\},\qquad
+\min_{y\in\{0,1\}^{|C|}}\sum_c y_c\quad\mathrm{s.t.}\quad
+\sum_{c\in U_i(\rho)}y_c\ge1\quad(i\in I_f).
+$$
+
+Catalogue P={c:y_c=1}. Khi P có cấu hình pass cho pair i, regret là `r_i(P)=min_{c in P:a_ic=1}t_ic/t_i* - 1`; không có thì regret +∞ và covered=false. Dùng token rõ cho infinity, không JSON NaN. Báo QoR coverage và near-Oracle coverage (`r_i<=rho`) riêng trên I_f và toàn tập; không chỉ báo mean regret của survivors.
+
+Objective chính là cardinality, regret là constraint. Tie-break config_id cố định, không dùng final latency. Fixed-Best chọn trên development/validation theo protocol Nhóm, không chọn lại trên final. Thứ tự escalation/reuse, memory và margin chưa nằm trong cover objective. Cover guarantee chỉ đúng trên bảng fit; không bảo đảm online selector chọn đúng hoặc QoR trên ảnh mới.
+
+## 5. QUBO, reduction và validator
+
+### 5.1. Encoding và điều kiện đủ
+
+Đặt A_ic=1[c in U_i], d_i=|U_i|>=1, b_i=ceil(log2 d_i), slack s_i=sum_k 2^k z_ik. d_i=1 không cần slack. Các mã slack lớn hơn d_i−1 không thể tạo residual zero với y không hợp lệ, nên không cần constraint phụ để cấm chúng.
+
+$$
+E(y,z)=\lambda\sum_c y_c+\alpha\sum_i\left(\sum_c A_{ic}y_c-1-s_i\right)^2,\qquad \lambda>0.
+$$
+
+Đây là cụ thể hóa penalty/slack đã biết [R1,R2,D2]. Suy dẫn dự án: cover toàn C có cost lambda|C|; assignment vi phạm equality có residual nguyên với bình phương >=1. Vì vậy **alpha > lambda|C|** đủ để mọi ground state là cover tối thiểu trong số học chính xác. Sau reduction có thể dùng `alpha>lambda k_ub`, k_ub là số biến chưa cố định của một cover đã được validator xác nhận; fixed-variable offset giữ riêng. Mặc định đề xuất lambda=1, alpha=k_ub+1, không claim penalty tối thiểu hoặc QAOA tìm được ground state.
+
+Với x=(y,z), m là số constraint đang encode và v_i chứa A cùng hệ số slack âm, dùng upper-triangular convention:
+
+$$
+E(x)=e_0+\sum_jQ_{jj}x_j+\sum_{j<k}Q_{jk}x_jx_k,
+$$
+$$
+e_0=\alpha m,\quad Q_{jj}=\lambda\mathbf1_{j\in y}+\alpha\sum_i(v_{ij}^2-2v_{ij}),\quad
+Q_{jk}=2\alpha\sum_i v_{ij}v_{ik}.
+$$
+
+Không double-count off-diagonal khi dùng API dạng matrix. Đổi x_j=(1−Z_j)/2 cho Ising: J_jk=Q_jk/4; h_j=−Q_jj/2−sum_{k!=j}Q_min(j,k),max(j,k)/4. Giữ constant để test energy. Duyệt basis states so residual/QUBO/Ising, bit-order/endian và factor 2 trước khi chạy circuit.
+
+### 5.2. Reduction với mapping phục hồi
+
+Lặp đến fixed point: gộp hàng trùng; U_i subset U_j thì bỏ hàng j; singleton buộc cột bằng 1 rồi bỏ hàng đã phủ; bỏ cột không phủ hàng còn lại; incidence cột trùng giữ đại diện config_id lexicographic. Lưu forced columns, removed rows, representative map, objective offset và hashes. Hàng rỗng phải báo infeasible, không bỏ đi.
+
+Reduction bảo toàn optimum cardinality trên development tại rho đang xét. Gộp cột trùng không giữ mọi catalogue đồng tối ưu hoặc validation performance của từng cột. Primary solvers nhận cùng reduction; thêm unreduced classical và duplicate-column on/off ablation. Không xóa edge/cột để vừa qubit rồi gọi reduction exact. Chưa dùng column dominance trong MVP.
+
+Decode phục hồi forced columns và kiểm tra **toàn bộ original incidence matrix**. Phân biệt equality-feasible QUBO sample; cover-feasible y nhưng slack sai; y không cover. Tái tính slack là canonicalization không sửa membership, báo riêng với repair thêm/bớt cấu hình. Energy thấp chưa chứng nhận feasibility.
+
+### 5.3. Tài nguyên và sensitivity
+
+$$
+q_{before}=|C|+\sum_i\lceil\log_2d_i\rceil,\qquad
+q_{after}=|C_{remaining}|+\sum_{i\in I_{remaining}}\lceil\log_2d'_i\rceil,\qquad d'_i=\sum_{c\in C_{remaining}}A'_{ic}.
+$$
+
+Báo q, nonzero couplings/density/max degree, coefficient min_nonzero/max_abs và ratio. Mỗi residual tạo clique nên ít bits chưa nghĩa ít two-qubit gates. Scale toàn Hamiltonian bằng một hằng dương, lưu scale/energy gốc; không clip coefficients. Scaling giữ optimum nhưng thay góc/landscape và precision hữu hạn.
+
+Pilot đề xuất q_after<=20. Complex128 statevector cần `16*2^q` bytes chỉ cho vector: 20 bits = 16 MiB; 30 bits = 16 GiB, chưa buffers. Đo peak RAM/threads và admission trước chạy. q=0 sau reduction là solved_by_reduction, không tạo circuit giả. Optimum=1 hoặc greedy giải rất nhanh nhưng q_after>0 vẫn phải chạy QAOA trong budget, báo feasibility/control result. Full instance quá lớn: cohort lấy từ development theo manifest/seed khóa trước khi xem solver, ghi restricted_instance và toàn mapping/số pair/config bị loại; đánh giá thêm full development/validation, không claim optimum full grid. Nếu mọi instance đều q_after=0 hoặc vượt tài nguyên thì báo giới hạn ứng dụng; toy circuit chưa hoàn thành workload quantum.
+
+Grid pilot đề xuất rho={0,0.05,0.10,0.20}; alpha/(lambda k_ub)={0.5,1,2,4} cộng mặc định (k_ub+1)/k_ub khi k_ub>0. Mức vi phạm strict bound chỉ là stress test, không có bảo đảm tương đương. Đây là tham số nghiên cứu chờ duyệt; không thay quality policy và không tune trên final.
+
+## 6. Solvers, budget và artifact quantum
+
+### 6.1. Baseline và công bằng
+
+Exhaustive/CP-SAT/greedy giải native cover; SA/QAOA giải cùng QUBO. Không ép exact solver dùng encoding bất lợi. Exhaustive native duyệt y; encoding exhaustive duyệt (y,z) chỉ cho unit-size.
+
+| Solver | Cấu hình pilot đề xuất | Bắt buộc báo |
 |---|---|---|
-| **Encoding/solver** | Exhaustive trên `y` cho instance nhỏ; exact MIP/CP-SAT cho instance lớn; greedy cover; SA trên cùng QUBO; random có cùng budget | Feasibility trên ma trận gốc, catalogue size, gap tới optimum/bound, success probability, wall time, tài nguyên. Tách raw samples và nghiệm sau repair |
-| **Catalogue** | Full grid, Fixed-Best, catalogue greedy/exact/SA/QAOA ở cùng `ρ` | Validation coverage, regret của restricted Oracle, catalogue size, fallback nhu cầu. Restricted Oracle là mốc chọn cấu hình lý tưởng trong catalogue, chưa gồm controller/retry overhead |
-| **Hệ thống** | Fixed-Low/High/Best; Adaptive full-grid; Adaptive với catalogue của từng solver; Oracle offline | Median/p95 latency theo pair, QoR violation, coverage, failure, overhead, retry/fallback, reuse. Cùng CUDA pipeline, evaluator và timing boundary |
+| Exhaustive | n_y=|C_remaining|<=20, timeout 60 s, cardinality tăng | Optimum hoặc incomplete, không giả certificate khi timeout |
+| CP-SAT | Integer cover, 1 thread, seed cố định, timeout chung | OPTIMAL/FEASIBLE/UNKNOWN, incumbent/bound/gap; FEASIBLE không là optimal [D3] |
+| Greedy | Maximum uncovered gain, tie config_id, reverse-delete | Feasible cover và wall time, kể cả khi rất nhanh |
+| SA | QUBO Metropolis, 4 restarts, schedule/beta/proposals được khóa | Raw bits, energy/feasibility, objective/delta-evaluation count |
+| Random | Uniform QUBO bits và random-y với cardinality distribution khóa trước | Draws, raw success, wall time, same-repair controls |
+| QAOA | p=1,2 riêng; uniform initial state, X mixer; expected Ising energy finite shots [R12,D1] | Circuit, angles, optimizer trace, seeds, shots, counts và decode |
 
-Không so catalogue quantum có selector được tuning kỹ với catalogue cổ điển dùng selector yếu. Dùng cùng selector family và tuning budget; khi thay catalogue làm đổi labels/classes, huấn luyện lại bằng cùng protocol. Exact optimum của catalogue size không đồng nghĩa optimum runtime sau selector.
+Hai phép so: (1) anytime/time-to-quality với cùng cap wall-clock đề xuất 60 s/seed/instance/depth sau preprocessing chung; (2) resource audit gồm objective calls, samples, shots, proposals và restarts. Một shot không bằng một SA move hoặc CP-SAT node. SA/random có thêm matched-sample run, nhưng không chuyển phép so đó thành equal-compute claim. Mọi solver dùng cùng host/thread policy; backend CPU simulator được ghi rõ.
 
-Đo trên Colab T4 theo quy ước: 2 warm-up, 10 lần đo cho mỗi pair/config, median theo pair/config rồi thống kê trên các pair. Báo paired differences và confidence intervals bằng resampling theo pair hoặc scene khi xác định được nhóm. Repeats trên cùng một pair không được tính thành các ảnh độc lập. Các thử nghiệm solver ngẫu nhiên cần nhiều seed đã khóa; không chỉ chọn best seed.
+QAOA pilot: 10 seeds [0..9], 4 initializations/seed, tối đa 100 objective evaluations/initialization, 1024 shots/evaluation, 4096 shots xác nhận cho angles được chọn. Tối đa 413696 shots/seed/instance/depth gồm xác nhận; timeout có thể kết thúc sớm. Optimizer đề xuất SPSA; 100 là **objective calls**, không phải 100 SPSA steps. Lưu optimizer/sampler/transpiler seeds. Training, compile/sampling, decode và repair đều tính vào run wall cap khi so equal-wall-time; nếu hết cap trước confirmation thì ghi incomplete, không giấu thời gian. p=1 và p=2 có budget riêng.
 
-### 6.3. Tính đủ chi phí quantum và offline
+Exact statevector expectation chỉ là diagnostic, không tính là finite-shot run. Việc chọn p/optimizer/penalty dùng validation; tính cả hyperparameter search của mọi solver. Warm-start là extension có chi phí tạo seed riêng. Các budget ở đây chưa được đo hoặc khóa chính thức.
 
-Tách ít nhất các khoản:
+### 6.2. Decode, repair và lựa chọn nghiệm
 
-`T_characterization`, `T_encoding`, `T_reduction`, `T_parameter_search`, `T_compile_or_embed`, `T_sampling`, `T_decode_validate`, `T_repair`, cùng backend/resource metadata. Chi phí characterization được chia sẻ khi cùng dùng một bảng, nhưng vẫn công bố vì đây là điều kiện để tái lập.
+Chọn raw cover-feasible P có cardinality nhỏ nhất từ samples trong budget, tie lexicographic. Samples trong optimizer trace được phép đóng góp vào best-found catalogue; distribution gộp đó là adaptive mixture, không phải xác suất của một circuit cố định. Raw cover-feasibility/equality-feasibility probability và xác suất optimum chính dùng riêng 4096 confirmation shots tại angles cuối đã chọn, với số shots thực chạy ghi rõ. Báo pooled best-found và confirmation distribution riêng. Không có feasible sample thì trả no_feasible_sample, không bí mật thay greedy; timeout trước confirmation không được phát probability estimate giả.
 
-`T_online` giữ đúng ranh giới của Nhóm: RGB đã ở GPU đến panorama sẵn sàng ở GPU, gồm controller/synchronization/retry. Quantum chạy offline không được cộng vào mỗi ảnh; đồng thời phải báo `T_offline` và chi phí phân bổ `T_offline/N` cho một số kịch bản số ảnh sử dụng thực tế. Không tuyên bố giảm tổng thời gian chỉ từ việc dời tính toán ra ngoài vùng đo.
+Repair optional: thêm cấu hình phủ nhiều uncovered rows nhất rồi reverse-delete theo thứ tự khóa. Áp dụng giống nhau cho QAOA/SA/random và **empty-start repair-only**. Lưu raw/post-repair size, coverage, added/deleted configs, bit flips, repair rate/time. Không dùng validation/final labels để repair. Nếu repair tạo phần lớn kết quả, gọi hybrid QAOA+classical repair và báo giới hạn đóng góp quantum [R5].
 
-Nếu về sau có QPU online, báo cả queue-inclusive user latency và execution/service components; dữ liệu truyền hoặc đồng bộ phát sinh trong đường xử lý phải được tính. Năng lượng toàn hệ thống chỉ được kết luận khi đo được phạm vi tài nguyên liên quan.
+`solver_runs.jsonl` cần instance/reducer hashes, solver/backend/version, p/angles, seeds, requested/executed shots, evaluations/restarts, timeout/status, raw-counts path, raw/repaired energy/feasibility/objective, optimum/bound nếu có, wall-time breakdown và peak RAM. `catalogue.json` chứa config_id/S/K/R/B, selected/forced/repaired provenance, fallback_id, policy/split/source hashes và full/restricted scope. Catalogue truy ngược được đến sample; solver fail không xuất file mang nhãn quantum thành công.
 
-Với xác suất thành công độc lập `p_s`, có thể ước lượng số runs để đạt xác suất mục tiêu 0,99 bằng `ceil(log(0.01)/log(1−p_s))`, cho `0<p_s<1`. Xử lý riêng `p_s=0,1` và nêu giả định độc lập; thời gian setup chia sẻ không được nhân lặp một cách máy móc. Đây là chỉ số bổ sung, không thay thế wall-time budget thực.
+## 7. Protocol đánh giá hệ thống
 
-### 6.4. Ablation cần thiết
+1. Khóa split trước fit. Development-fit tạo catalogue/selector; validation chọn rho, penalty, solver budget và controller thresholds. Final chỉ mở sau protocol lock, không dùng chọn seed đẹp hoặc fit lại.
+2. Group theo scene/source ảnh; report số groups/pairs, duplicate/missing/failure mỗi split. Khóa C, reference, B và policy; Đế xác nhận reference đáng tin.
+3. So Fixed-High, Fixed-Best, Oracle-C, Adaptive-full-grid, Adaptive-classical-catalogue, Adaptive-QAOA-catalogue và Oracle-P. Oracle-P tách catalogue loss khỏi controller loss. Giữ cùng selector family/data/tuning budget, self-check/reuse/fallback; thêm matched-size comparison khi có, không xóa nghiệm khác size khỏi bảng chính.
+4. Initial selector chỉ dùng shape/features rẻ có trước quyết định, tính extraction cost; sau chạy mới dùng tín hiệu S5. Cấm pair_id lookup, H_ref, Oracle/Pass labels hoặc features của cấu hình chưa chạy. Offline labels chỉ dùng train/evaluate. Fixed-High fallback có thể ngoài P: báo |P|, |P union fallback|, retry/fallback rate, quality và latency sau fallback.
+5. P là tập, chưa phải ladder đơn điệu. Đế xác định thứ tự classical theo development cost, khóa retry cap/termination; không suy ra tăng S/K/R luôn tăng quality. Chỉ tăng R mới có thể giữ matches/hypothesis state theo S5 contract; đổi S/K invalidate dependencies; đổi H làm lại S6. Reuse on/off cần đối chiếu cả output/failure.
+6. `t_e2e` gồm controller, sync, retry và cache bookkeeping; giữ cả latency run thất bại. False acceptance = accepted-but-offline-fail/accepted-evaluable; false rejection = rejected-but-offline-pass/rejected-evaluable. Ghi counts và denominator, reference failure riêng; tín hiệu S5 không bảo đảm QoR.
+7. Report median/p95 pair latency, QoR violations, coverage và regret distribution. Paired difference cùng pairs, scene-cluster bootstrap 95% CI; đề xuất 2000 resamples/seed khóa. Thiếu group dùng pair bootstrap và ghi hạn chế. Solver seeds không là image pairs; uncertainty solver báo riêng. Ít instance chỉ là descriptive case study.
+8. Final là một campaign protocol đã khóa, gồm repeats định trước. Crash có thể resume với manifest/log; không tune theo final feedback. Thay đổi phương pháp sau xem final phải ghi contamination và cần holdout mới được nhóm duyệt.
 
-1. **Giá trị của catalogue:** full grid so với catalogue cổ điển tốt nhất, trước khi xét quantum.
-2. **Giá trị của solver:** cùng mô hình, cùng preprocessing, QAOA so với exact/greedy/SA/random.
-3. **Giá trị của reduction:** kích thước và thời gian trước/sau; xác nhận mapping phục hồi.
-4. **Noise và penalty:** ideal sampling, finite-shot và noise model công bố rõ; không gọi noise simulation là hardware measurement.
-5. **Controller và reuse:** bật/tắt catalogue, escalation và reuse từng yếu tố để tránh gán speedup CUDA cho quantum.
-6. **Generalization:** fit cohort nhỏ so với full development, kiểm trên toàn validation; sensitivity theo `ρ` và quality policy đã định trước.
+### 7.1. Chi phí offline và online
 
-## 7. Novelty dự kiến, phản biện và hướng tới venue mạnh
+Ghi riêng T_characterization, T_reduction, T_encoding, T_parameter_search, T_compile_or_embed, T_sampling, T_decode_validate, T_repair, T_online_controller, T_end_to_end. Optimizer loop có thể bao gồm compile/sampling/decode: dùng exclusive timers để tính tổng, inclusive timer chỉ tham khảo, không cộng đôi. QPU thêm queue/network/programming/readout/access time; anneal duration không là wall time.
 
-**Claim có thể kiểm chứng:** một cách xây catalogue theo latency regret và QoR cho adaptive GPU stitching; một benchmark có native cover model, QUBO và nhiều solver; phân tích xem compression, selector hay solver tạo ra lợi ích.
+Quantum offline không cộng vào từng ảnh. Công bố tổng offline thực; với N pairs, cost phân bổ `T_offline/N + mean(T_e2e)`. Characterization chung báo một lần, solver-specific marginal cost riêng. So với pipeline không cần sweep phải tính toàn characterization khi xét break-even. Nếu tiết kiệm online delta_t>0, hòa vốn chi phí bổ sung tại `N>DeltaT_offline/delta_t`; delta_t<=0 không có hòa vốn theo mô hình này.
 
-**Chưa có căn cứ để claim:** phương pháp đầu tiên kết hợp quantum với stitching; quantum advantage; exponential speedup; SOTA panorama quality; bảo đảm QoR cho ảnh chưa thấy; hoặc kết quả từ simulator đại diện tốc độ QPU.
+### 7.2. Ablation bắt buộc
 
-| Phản biện có thể gặp | Cách thiết kế nghiên cứu để trả lời |
+| Ablation | Nội dung kiểm tra |
 |---|---|
-| “Đây chỉ là set cover đã biết” | Thừa nhận phép biến đổi; chỉ giữ đóng góp nếu có vấn đề runtime thực, cấu trúc workload và evidence mới. Nếu chỉ có mapping, chưa đủ đóng góp mạnh |
-| “Exact/greedy đã giải tức thì” | Công bố thời gian đó; dùng kết quả làm No-Go cho claim tăng tốc quantum. Không bỏ baseline |
-| “Catalogue nhỏ đâu cần QPU” | Đo chất lượng/tài nguyên ở nhiều kích thước thật. Phân biệt technical feasibility với usefulness |
-| “Speedup do CUDA/reuse, không do quantum” | So với catalogue cổ điển có cùng selector và reuse; báo chi phí offline và online riêng |
-| “QoR chỉ là alignment proxy” | Giữ phạm vi claim phù hợp; nếu nghiên cứu blend phải có composition evaluation được xác nhận |
-| “Subset nhỏ được chọn để quantum thắng” | Khóa cohort/seed trước, công bố mọi instance và thất bại; kiểm lại toàn validation |
-| “S5 đã có quantum papers” | Trích đúng các tiền lệ và phân biệt estimator/mô hình/backend; cần ablation homography riêng nếu chuyển hướng |
+| Full grid vs classical catalogue | Giá trị nén với cùng selector/reuse |
+| Classical vs quantum catalogue | Cùng instance/policy/controller; thêm matched-size |
+| QAOA vs SA/random/exact/greedy | Same-QUBO QAOA/SA, native cover exact/greedy |
+| Reduction on/off | Optimum/mapping, bits/couplings/time; resource-limit ghi rõ |
+| Penalty/rho sensitivity | Raw feasibility, dynamic range và validation regret |
+| Raw vs repaired vs repair-only | Đóng góp quantum tách greedy hậu xử lý |
+| Reuse on/off; escalation on/off | Retry cost, false acceptance/rejection, termination |
+| Policy sensitivity | Chỉ policy versions được Đế duyệt trước final |
+| Ideal finite-shot vs noise model | Model/version rõ, noise simulation chưa là QPU |
+| Simulator vs hardware | Chỉ khi có hardware thực; cùng instance/decode |
 
-Đối với **workshop hiện tại**, đóng góp hợp lý nhất là một case study có giới hạn rõ, nếu có kết quả thực. Với **CVPR/ECCV**, cần một đóng góp geometric vision hoặc robust estimation có ý nghĩa và thực nghiệm mạnh hơn việc gắn solver vào catalogue. Với **nghiên cứu systems/quantum optimization ở quy mô lớn hơn**, cần nhiều workload/instance, classical baselines hiện hành, scaling, chi phí chuyển đổi và kết quả tái lập. Đây là đánh giá của đề xuất, không phải tiêu chuẩn chính thức hay dự báo acceptance.
+Quantum selector không thuộc primary: classical-vs-quantum selector ablation là N/A có lý do. B ngoài MVP; nếu mở rộng phải có Pareto/weight sensitivity, không chỉ một scalar score.
 
-Nếu tiếp tục S5 cho nghiên cứu sau, câu hỏi nên xoay quanh trade-off robustness–latency của quantum-assisted outlier selection dưới cùng dữ liệu/mô hình H. Bắt đầu bằng correspondence nhỏ, so với GPU RANSAC/MSAC cùng seed/policy, rồi đo toàn bộ CPU/GPU/QPU bridge. Không giả định thuật toán fundamental matrix trong [R2] áp dụng nguyên trạng cho homography.
+## 8. Môi trường và ranh giới ownership
 
-## 8. Điều kiện triển khai, dừng và đưa vào paper
+Không thêm/cài dependency trong lượt viết. Đề xuất môi trường riêng Python 3.12 CPU, tách `tools/requirements.txt`. Task môi trường thử compatibility, pin versions/hashes vào `tools/quantum/requirements-lock.txt`, lưu OS/CPU/RAM/threads và license/NOTICE trực tiếp/transitive.
 
-| Gate | Điều kiện xem xét đi tiếp | Nếu không đạt |
+- Qiskit và Qiskit Aer: Apache-2.0 theo LICENSE chính thức [D4,D5]. QAOAAnsatz hoặc circuit tương đương cần test với oracle NumPy; CPU simulator đủ cho pilot, không cần account [D1].
+- OR-Tools CP-SAT: Apache-2.0 [D6]; native integer cover và status handling theo [D3].
+- NumPy có sẵn ở tooling; validator/exhaustive/greedy/SA/random có thể dựa NumPy/stdlib. SPSA nhỏ có thể cài riêng với test, chưa thêm optimizer package mặc định.
+- Ocean/QPU ngoài install plan MVP. Trước dùng cần xác minh version/license/API, quyền truy cập, chi phí, embedding/chain strength/break handling/reads. Backend chỉ cần instance được phép chia sẻ, không cần RGB/manuscript.
+
+CLI dự kiến, **chưa tồn tại**: `tools.quantum.characterize`, `build_instance`, `solve_classical`, `solve_qaoa`, `evaluate_catalogue`. Tests dự kiến `tests/python/test_quantum_*.py`; data/results/build theo gitignore. Catalogue schema riêng, không sửa common ABI. Đế giữ controller/S4–S5/QoR; Tuấn harness/S1/common và merge; Thành S2–S3; Chương được đề xuất quantum tooling và giữ S6. Chi tiết ở [quantum-integration-tasks.md](quantum-integration-tasks.md).
+
+## 9. Rủi ro và tiêu chí phản bác
+
+| Rủi ro lớn | Giảm thiểu / bằng chứng |
+|---|---|
+| Chưa có sweep, gần mốc nhóm | Q00 prerequisite; toy chỉ kiểm tooling, không gọi workload thật |
+| Exact/greedy giải tức thì hoặc optimum=1 | Báo kết quả; không tạo độ khó giả để cứu quantum |
+| Slack/couplings vượt RAM | Exact reduction, admission, cohort khóa trước; báo restriction/full-validation |
+| Penalty/encoding sai | Proof, exhaustive energy/basis tests, sensitivity, original validator |
+| Repair tạo lợi ích | Raw/post-repair/empty-start controls và charge repair time |
+| Leakage/reduction chọn cột đại diện có lợi giả | Scene split/final lock, duplicate-column ablation |
+| Cover đúng nhưng selector sai | Oracle-P vs adaptive-P, false acceptance/retry/fallback cost |
+| B và QoR không tương thích | B_fixed; seam claim cần composition evaluator được duyệt |
+| Speedup CUDA/reuse gán cho quantum | Cùng controller/reuse giữa catalogues, cost offline/online tách |
+| QPU chưa có hoặc noise cao | Simulator evidence ghi rõ; hardware là optional, không trì hoãn MVP |
+
+Nếu quantum không tốt hơn greedy cùng size hoặc exact giải rất nhanh, bác bỏ lợi ích solver trên workload đã xét; không suy ra mọi quantum algorithm vô dụng. Nếu catalogue cổ điển cũng không giúp sau overhead, báo negative result hệ thống. Nếu chỉ training cover tốt mà validation xấu, kết luận không generalize. Không đổi objective/metric sau kết quả để cứu giả thuyết.
+
+## 10. Go/No-Go và claim
+
+| Gate | Go | No-Go và đầu ra bắt buộc |
 |---|---|---|
-| **G0 — nền workshop** | Pipeline GPU, evaluator và bảng đo có thể tái lập; Go/No-Go của Nhóm có dữ liệu thật | Giữ quantum ở mức đề xuất; ưu tiên Phase 1 |
-| **G1 — catalogue hữu ích** | Catalogue cổ điển giảm không gian quyết định và có trade-off thực trên validation, dưới QoR đã khóa | Không cần triển khai QAOA chỉ để thêm quantum |
-| **G2 — encoding đúng và vừa tài nguyên** | Kiểm tra exhaustive đúng; đếm đủ bits/coefficients; pilot phù hợp ngân sách | Dùng solver cổ điển; cohort nhỏ chỉ làm minh họa có gắn nhãn |
-| **G3 — solver có giá trị nghiên cứu** | So sánh đủ exact/greedy/SA/random, có budget và raw failures, kết luận từ ứng dụng gốc | Báo feasibility/negative result; không claim advantage |
-| **G4 — paper đủ bằng chứng** | Controller thật, final split và chi phí đầy đủ; kết quả quantum bổ sung cho RQ chính | Chỉ ghi Future Work; không đổi title/abstract để quảng bá quantum |
+| G0 — dữ liệu | CUDA sweep complete, policy/split/grid có owner/hash | Chặn ứng dụng; tooling tests và missing-data ledger, quantum chưa hoàn tất |
+| G1 — encoding/tài nguyên | Native/QUBO/Ising/reduction tests đúng, instance thật phù hợp | Sửa lỗi trước solver; triviality/resource negative report nếu không có instance |
+| G2 — quantum tối thiểu | QAOA p=1,2 trên instance thật, raw samples/logs, controls đủ | Không feasible vẫn giữ kết quả; crash/no circuit chưa là prototype hoàn tất |
+| G3 — giá trị | Trade-off validation có ích theo criterion nhóm khóa trước | Dừng mở depth/QPU/B–F, giữ feasibility/negative result và artifacts |
+| G4 — paper/hệ thống | Controller thật cho system claims; final protocol lock; số liệu truy vết | Giới hạn claim offline; thiếu minimum evidence thì ghi chưa hoàn thành |
 
-Không đặt một ngưỡng speedup mới tùy ý thay cho Go/No-Go của Nhóm. Các ngưỡng liên quan hệ thống phải được chốt trước kết quả final. Một negative result vẫn có thể hữu ích cho hiểu biết nội bộ, nhưng không mặc nhiên đủ thành contribution của full paper.
+Khuyến nghị Go cho A ở quy mô simulator có budget, bắt đầu bằng sweep CUDA/native cover. Dù classical mạnh, vẫn thực hiện prototype quantum tối thiểu trên instance thật đủ nhỏ và báo đối chứng. Dừng mở rộng khi hết budget, instances không phù hợp hoặc classical/repair chi phối. Không đổi S5/S6 hoặc mở QPU trả phí để kéo dài hướng đã thất bại. Quantum gates không thay Go/No-Go runtime trong plan. Mọi threshold hệ thống mới cần Nhóm duyệt trước final.
 
-Trong bản workshop tối đa 10 trang nội dung [W1], chỉ cân nhắc một subsection và bảng/plot gọn nếu vượt G4. Nếu mới có simulator nhỏ, mô tả đúng mức proof of concept hoặc Future Work; không tách thành một câu chuyện quantum lớn làm loãng RQ chính.
+| Claim có thể viết khi đủ evidence | Evidence cần |
+|---|---|
+| Encoding đúng cover tại rho | Proof, exhaustive tests, decode validation |
+| QAOA simulator tạo catalogue cụ thể | Circuit/counts và instance/sample/catalogue hashes |
+| Cardinality/coverage/regret đã đo | Split-aware tables và failure denominator |
+| Case study feasibility/negative result | Classical controls, raw/repair metrics và timers |
+| Runtime nhanh hơn trên tập đã đo | Actual e2e dưới cùng policy, CI/ablation; không tự quy cho quantum |
 
-### 8.1. Phối hợp đề xuất, chưa phải giao task
+| Claim chưa được phép | Lý do |
+|---|---|
+| Quantum advantage / exponential speedup | Thiếu scaling và so tài nguyên tương ứng |
+| QAOA vượt mọi classical methods | Chỉ có baseline/configurations thực sự chạy |
+| SOTA panorama quality / quantum cải thiện ảnh | Alignment policy chưa đánh giá đầy đủ composition |
+| Quantum guarantees QoR | Training cover không bảo đảm selector/ảnh mới |
+| Simulator dự báo QPU performance | Noise/connectivity/cost khác |
+| Realtime quantum stitching | Quantum offline, chưa có benchmark realtime |
 
-- **Tuấn:** xác nhận harness/CSV, tính tái lập và thời gian offline/online.
-- **Đế:** xác nhận quality policy, development/final, controller và baseline S5.
-- **Chương:** giữ ranh giới S6/B, tích hợp mô tả và thảo luận vào paper khi có bằng chứng.
-- **Thành:** xác nhận feature/descriptor và feature availability nếu controller sử dụng tín hiệu S2/S3.
+## 11. Trạng thái và quyết định còn chờ
 
-Việc đọc, viết và commit tài liệu này đã được người dùng yêu cầu; không đồng nghĩa Nhóm đã chọn phương pháp quantum. Chưa thêm dependency, tạo tài khoản QPU, chạy dịch vụ trả phí, sửa common headers hoặc đổi stage của thành viên khác.
+Đã cập nhật snapshot S6/QoR, đọc attachment, đối chiếu nguồn sơ cấp và thiết kế protocol có thể phản bác. Chưa chạy QAOA/QPU hoặc tạo sweep CUDA mới. Kết quả 441 ma trận cover trong bản cũ là lịch sử kiểm tra nhỏ, không thay tests của implementation mới hay chứng nhận mọi reduction.
 
-## 9. Kiểm chứng tài liệu và phần còn thiếu
+Ngày 24/10 (Thứ 7) đã chạy lại kiểm tra thiết kế độc lập bằng Python/stdlib: **441 ma trận có 1–3 hàng và 1–3 cột, mọi hàng khác zero, tổng 19.374 assignments (y,z)**, lambda=1 và alpha=|C|+1. Residual energy, upper-triangular QUBO và Ising có offset khớp trên mọi assignment; mọi ground state cover ma trận gốc với cardinality bằng native optimum. Receipt và hash script ở `results/quantum-design-check-20261024.json`, script cục bộ `build/verify_quantum_formulation.py`. Đây chưa kiểm tra code reducer/QAOA, noise hoặc performance; không tính là prototype quantum hoàn tất.
 
-- Metadata và claim quan trọng đã đối chiếu với nguồn gốc; phạm vi đọc và phân biệt simulator/hardware ghi ở mục 3.
-- Đã chạy kiểm tra exhaustive bằng Python cho **441 ma trận coverage**: mọi ma trận có 1–3 cột và 1–3 hàng, mỗi hàng khác zero, gồm cả hàng lặp. Với `λ=1`, `α=|C|+1`, duyệt toàn bộ assignments `y,z`: mọi ground state đều feasible và có cardinality bằng optimum của bài toán cover gốc. Đồng thời kiểm tra mọi assignment `y` giữ nguyên feasibility sau gộp hàng trùng/bỏ constraint superset. Tất cả trường hợp pass. Kiểm tra này chạy local, chỉ xác minh encoding nhỏ; chưa kiểm tra triển khai QAOA, noise, mọi reduction hoặc performance T4/QPU.
-- Đã kiểm tra UTF-8, reference IDs, liên kết file nội bộ, code/math fences và whitespace. Không dùng kết quả kiểm tra cấu trúc tài liệu để suy ra kết quả nghiên cứu.
-- Chưa có bảng latency/QoR của Nhóm, catalogue thật, kết quả QAOA, Colab T4 hoặc QPU cho đề xuất này. Không có số thực nghiệm tổng hợp để suy ra improvement.
-- Novelty còn cần đối chiếu sâu với algorithm configuration/selection và các nghiên cứu cover-based portfolio design. QAOA feasibility không đủ để giải quyết khoảng trống này.
-- Tài liệu S6 đang có snapshot cũ về cấu trúc repo; cần cập nhật bằng task riêng. Đề xuất này không tự sửa quyết định S6 hoặc conventions.
+Cần review phương án cụ thể: C/B_fixed, split/grouping, policy/Fixed-High, rho/sensitivity, budget/seeds, threshold hệ thống và người nhận task quantum. Tài liệu không tự ghi các đề xuất thành quyết định của Nhóm. Có agent riêng tra nguồn optimization; tổng hợp/phản biện cùng ngữ cảnh, không phải hội đồng độc lập hoặc cross-model review. Không đánh dấu nguồn như người dùng đã đọc.
 
-## 10. Tài liệu tham khảo và nguồn truy cập
+## 12. Nguồn đã kiểm tra và phạm vi đọc
 
-Tất cả URL dưới đây được truy cập trong ngày khảo sát ghi đầu tài liệu. Các bản arXiv dùng đọc nội dung được chỉ rõ; trạng thái venue dựa trên trang xuất bản hoặc trang tác giả chính thức. Không trích các chỉ số cải thiện của paper ngoài thành số liệu dự án.
+Bảng tiếp theo ghi nguồn gốc, formulation/backend, baseline/metric, kết quả và giới hạn thực sự được kiểm tra. Không dùng số citation hoặc impact factor làm bằng chứng. Các suy dẫn QUBO và khuyến nghị architecture trong tài liệu là thiết kế của dự án, không phải kết luận paper ngoài.
 
-**[R1]** Doan, A.-D., Sasdelli, M., Suter, D., & Chin, T.-J. (2022). *A hybrid quantum-classical algorithm for robust fitting*. CVPR, 417–427. [Metadata CVF](https://openaccess.thecvf.com/content/CVPR2022/html/Doan_A_Hybrid_Quantum-Classical_Algorithm_for_Robust_Fitting_CVPR_2022_paper.html); [full text arXiv v4](https://arxiv.org/html/2201.10110v4).
+| ID / nguồn gốc | Phạm vi thực sự đọc hoặc kiểm tra | Bài toán, backend, baseline/metric, kết quả và giới hạn chuyển giao |
+|---|---|---|
+| **R1 — Lucas, A. (2014). Ising formulations of many NP problems. Frontiers in Physics 2:5.** [DOI/full text](https://www.frontiersin.org/journals/physics/articles/10.3389/fphy.2014.00005/full) — 10.3389/fphy.2014.00005 | Metadata và §5.1 Set cover trong HTML publisher | Chọn tập nhị phân, biến phụ và penalty cardinality/coverage. Nguồn lý thuyết, không QAOA/QPU benchmark hay runtime baseline. Connectivity/biến phụ gây chi phí embedding. Chuyển giao: mapping là kỹ thuật đã biết; proof/encoding cụ thể của repo phải kiểm riêng. |
+| **R2 — Djidjev, H. N. (2023). Quantum Annealing with Inequality Constraints: The Set Cover Problem. Advanced Quantum Technologies 6(11):2300104.** [DOI](https://doi.org/10.1002/qute.202300104), [publisher full text](https://advanced.onlinelibrary.wiley.com/doi/full/10.1002/qute.202300104), [preprint](https://arxiv.org/abs/2302.11185) | Agent tra nguồn đọc §§1.2–1.3, 3.1–3.3, 4.1–4.3 và conclusion; tổng hợp đối chiếu publisher passages. URL Wiley không có subdomain advanced trả 403; không tính lần lỗi là đọc thành công | Weighted SCP; slack-QUBO, augmented Lagrangian và HUBO, D-Wave Advantage cùng SA. So quality/embedding; AL/HUBO tốt hơn slack trong các instance đã xét, không có strong native exact/MIP comparison để suy rộng. Slack tăng qubit, penalty normalization ảnh hưởng precision. Chuyển giao cao cho resource audit, chưa chứng minh lợi ích catalogue stitching. |
+| **R3 — Ammermann, J., Brenneisen, F. J., Bittner, T., & Schaefer, I. (2024). Quantum Solution for Configuration Selection and Prioritization. Q-SE 2024.** [DOI](https://doi.org/10.1145/3643667.3648221), [author PDF tại KIT](https://publikationen.bibliothek.kit.edu/1000173454/154123677) | Abstract/metadata, formulation và execution §§4.3–4.4, evaluation/discussion §5, đặc biệt ideal-simulator và width/depth passages | Attributed feature-model constraints thành PUBO/QUBO/Ising; QAOA ideal simulator. So encoding, validity/cost quality, rank-biased overlap và circuit width/depth; prioritization kém hơn khi scale. Không phải strong classical cover benchmark. Tiền lệ configuration optimization, khác chọn catalogue dùng chung nhiều scene; không nhập claim speedup trong introduction của nguồn vào dự án. |
+| **R4 — Kotil, A., et al. (2025). Quantum approximate multi-objective optimization. Nature Computational Science 5:1168–1177.** [DOI/full text](https://www.nature.com/articles/s43588-025-00873-y) — 10.1038/s43588-025-00873-y | Main, Results, parameter transfer, classical comparisons và MPS/hardware sampling; chưa đọc supplementary | MO-MAXCUT, scalarization theo trọng số, IBM ibm_fez thật và MPS; hardware p=3–6, sparse heavy-hex 42-node. Baseline DPA-a/DCM/epsilon-constraint, metric hypervolume. Có kết quả hứa hẹn trong phạm vi bài; MPS timing dùng giả định sampling QPU, hardware sampling loại compile. Không suy ra p=1,2 constrained-cover advantage; dùng làm căn cứ sensitivity của B. |
+| **R5 — Koch, T., et al. (2026). The Quantum Optimization Benchmarking Library. Nature Computational Science 6:653–671.** [DOI](https://doi.org/10.1038/s43588-026-00991-1), [full text](https://pmc.ncbi.nlm.nih.gov/articles/PMC13293884/), [official library](https://zib-aopt.github.io/QOBLIB/) | Benchmark rationale, independent-set example/Tables 2–3; Methods metrics, solution quality, computational resources và quantum runtimes | Native optimization/QUBO benchmark framework, feasibility/objective/bounds và runtime breakdown. Ví dụ p=1 ibm_fez 52 biến không có raw feasible sample, greedy postprocessing tạo nghiệm tốt; circuit chỉ thực thi một phần constraints. Không phải proof quantum hơn exact/greedy. Chuyển giao: original-problem validator, raw/repaired control, training/compile/sampling/repair timers; không gọi sample tốt là optimal certificate. |
+| **R6 — Doan, A.-D., Sasdelli, M., Suter, D., & Chin, T.-J. (2022). A Hybrid Quantum-Classical Algorithm for Robust Fitting. CVPR.** [CVF](https://openaccess.thecvf.com/content/CVPR2022/html/Doan_A_Hybrid_Quantum-Classical_Algorithm_for_Robust_Fitting_CVPR_2022_paper.html), [full text v4](https://arxiv.org/html/2201.10110v4) | Introduction, §§4.2–4.3, 6.2 và weaknesses | Hypergraph vertex-cover/QUBO subproblems cho consensus maximization. D-Wave trên synthetic nhỏ; real-data fundamental matrix/triangulation dùng SA CPU. So RANSAC/LO-RANSAC, deterministic methods; metric consensus/error bound/runtime. Không chứng minh quantum thay GPU homography nhanh hơn. Chuyển giao sang D đòi estimator/evaluator/reuse mới. |
+| **R7 — Yang, F. F., Sasdelli, M., & Chin, T.-J. (2024). Robust Fitting on a Gate Quantum Computer. ECCV.** [DOI](https://doi.org/10.1007/978-3-031-73232-4_7), [ECVA](https://www.ecva.net/papers/eccv_2024/papers_ECCV/html/37_ECCV_2024_paper.php), [full text v1](https://arxiv.org/html/2409.02006v1) | §§1.3–1.4, 4.2 và 6–7; IonQ/SV1 và fundamental-matrix experiment passages | Boolean influence/Bernstein–Vazirani với feasibility circuit 1D, không phải QUBO catalogue. IonQ Aria minh họa nhỏ, SV1 simulator; real fundamental-matrix method dùng classical influence. Metric influence/robust estimation; noise/qubit limits. Không chứng minh thay RANSAC homography toàn pipeline; không chọn làm primary. |
+| **R8 — Farina, M., et al. (2023). Quantum Multi-Model Fitting. CVPR.** [CVF PDF](https://openaccess.thecvf.com/content/CVPR2023/papers/Farina_Quantum_Multi-Model_Fitting_CVPR_2023_paper.pdf), [full text v1](https://arxiv.org/html/2303.15444v1), [official code](https://github.com/FarinaMatteo/qmmf) | §§3, 5, iterative decomposition và implementation/runtime paragraphs; chưa audit code | Preference-matrix set-cover-like selection, QuMF/DeQuMF qua QA và SA; so RanSaCov/HQC-RF, misclassification và runtime. Decomposition xử lý subproblems, không bảo đảm optimum đầy đủ; timing có implementation/hardware khác nhau. Hữu ích cho cảnh báo decomposition, không thay global H của repo bằng nhiều model. |
+| **R9 — Venkatesh, S. M., et al. (2024). Q-Seg: Quantum Annealing-Based Unsupervised Image Segmentation. IEEE Computer Graphics and Applications.** [DOI](https://doi.org/10.1109/MCG.2024.3455012), [author PDF](https://www.dfki.de/fileadmin/user_upload/import/15308_Q-Seg_Quantum_Annealing-Based_Unsupervised_Image_Segmentation.pdf) | Graph/QUBO formulation, experimental setup, runtime analysis và quality passages; author accepted manuscript, không coi placeholder DOI đầu trang là metadata cuối | Signed-edge graph segmentation/QUBO, D-Wave Advantage thật. So Gurobi QUBO, relative cut error, runtime/scalability và imagery examples. Nguồn báo nhanh hơn Gurobi ở các phép thử, Gurobi có objective tốt hơn; có cả measured remote và hypothetical onsite timing. Không chuyển thành panorama/seam superiority hoặc ưu thế mọi classical solver. |
+| **R10 — Kolmogorov, V., & Zabih, R. (2004). What Energy Functions Can Be Minimized via Graph Cuts? IEEE TPAMI 26(2):147–159.** [Author page](https://pub.ista.ac.at/~vnk/papers/WHAT_ENERGIES.html), [full text](https://pub.ista.ac.at/~vnk/papers/KZ-PAMI-graph_cuts.pdf) | Abstract/metadata, binary-energy characterization và regularity/construction passages; không đọc toàn proofs | Lý thuyết classical graph-representable binary energies, không quantum backend/benchmark. Căn cứ min-cut cho energy phù hợp, không phải mọi signed QUBO đều submodular. Chuyển giao: nếu chọn E, phải kiểm tra class energy và dùng exact classical baseline khi áp dụng được. |
+| **R11 — Bowles, J., Ahmed, S., & Schuld, M. (2024). Better than classical? The subtle art of benchmarking quantum machine learning models. arXiv preprint 2403.07059v2.** [Full text](https://arxiv.org/html/2403.07059v2), [official code](https://github.com/XanaduAI/qml-benchmarks) | §§II.1, II.2.4, II.3–II.4, IV, V.1/V.3; chưa đọc mọi appendix hoặc xác minh journal version | Classical simulation PennyLane/JAX; quantum classifiers đối chiếu SVC/MLP/CNN với tuning. Accuracy/cross-validation trên bộ classification tasks; classical và non-entangling variants mạnh trong các phép thử. Không suy ra mọi QML bất khả thi. Chuyển giao F: matched tuning/features/resources, inference cost và separable ablation. |
+| **R12 — Farhi, E., Goldstone, J., & Gutmann, S. (2014). A Quantum Approximate Optimization Algorithm. arXiv:1411.4028.** [Metadata](https://arxiv.org/abs/1411.4028), [paper](https://arxiv.org/pdf/1411.4028) | Agent tra nguồn đọc abstract và §§I–đầu II, equations (1)–(14); không toàn paper | QAOA uniform initial state, cost phase/X mixer và 2p angles; lý thuyết, không catalogue hardware benchmark. Kỳ vọng tối ưu có thể cải thiện khi tăng p không bảo đảm optimizer hữu hạn làm được. Chuyển giao: định nghĩa circuit p=1,2, không hứa advantage. |
+| **R13 — Xu, L., Hoos, H. H., & Leyton-Brown, K. (2010). Hydra: Automatically Configuring Algorithms for Portfolio-Based Selection. AAAI 24(1):210–216.** [Proceedings/DOI](https://ojs.aaai.org/index.php/AAAI/article/view/7565) — 10.1609/aaai.v24i1.7565 | Metadata và abstract, chưa full-text review | Classical algorithm configuration/portfolio selection, SAT study; nguồn này chỉ xác nhận tiền lệ portfolio. Chưa dùng chi tiết implementation/results làm evidence cho catalogue stitching. Không claim novelty từ việc có catalogue và selector đơn thuần. |
 
-**[R2]** Yang, F. F., Sasdelli, M., & Chin, T.-J. (2024). *Robust fitting on a gate quantum computer*. ECCV, 120–138. [ECVA](https://www.ecva.net/papers/eccv_2024/papers_ECCV/html/37_ECCV_2024_paper.php); [DOI](https://doi.org/10.1007/978-3-031-73232-4_7); [full text arXiv v1](https://arxiv.org/html/2409.02006v1).
+### Tài liệu triển khai và license
 
-**[R3]** Farina, M., Magri, L., Menapace, W., Ricci, E., Golyanik, V., & Arrigoni, F. (2023). *Quantum multi-model fitting*. CVPR. [CVF paper](https://openaccess.thecvf.com/content/CVPR2023/papers/Farina_Quantum_Multi-Model_Fitting_CVPR_2023_paper.pdf); [full text arXiv v1](https://arxiv.org/html/2303.15444v1); [implementation](https://github.com/FarinaMatteo/qmmf).
+| ID | Nguồn đã kiểm tra | Phạm vi và cách dùng |
+|---|---|---|
+| D1 | [IBM QAOAAnsatz API](https://quantum.cloud.ibm.com/docs/en/api/qiskit/qiskit.circuit.library.QAOAAnsatz), [Qiskit Algorithms QAOA tutorial](https://qiskit-community.github.io/qiskit-algorithms/tutorials/05_qaoa.html) | Cost/mixer/initial-state/reps API và ví dụ; tài liệu không thay compatibility test của phiên bản sẽ pin. |
+| D2 | [D-Wave Penalty Models](https://docs.dwavequantum.com/en/latest/concepts/penalty.html) | Penalty làm infeasible states có energy cao hơn; không tự bảo đảm solver tìm feasible. Không dùng docs thay proof bound của encoding riêng. |
+| D3 | [OR-Tools CP-SAT solver](https://developers.google.com/optimization/cp/cp_solver) | Integer constraints và return statuses; timeout FEASIBLE/UNKNOWN không là optimal certificate. |
+| D4 | [Qiskit LICENSE](https://github.com/Qiskit/qiskit/blob/main/LICENSE.txt) | Apache License 2.0; version/commit license cần lưu lại khi pin. |
+| D5 | [Qiskit Aer LICENSE](https://github.com/Qiskit/qiskit-aer/blob/main/LICENSE.txt) | Apache License 2.0; không giả mọi transitive package cùng license. |
+| D6 | [OR-Tools LICENSE](https://github.com/google/or-tools/blob/stable/LICENSE) | Apache License 2.0; kiểm lại tại phiên bản cài thực tế. |
 
-**[R4]** Pandey, S., Magri, L., Arrigoni, F., & Golyanik, V. (2025). *Outlier-robust multi-model fitting on quantum annealers*. CVPR Workshops, Image Matching Workshop. [Trang tác giả](https://4dqv.mpi-inf.mpg.de/RQMMF/); [full text arXiv v1](https://arxiv.org/html/2504.13836v1).
-
-**[R5]** Kuete Meli, N., Golyanik, V., Seelbach Benkner, M., & Moeller, M. (2025). *QuCOOP: A versatile framework for solving composite and binary-parametrised problems on quantum annealers*. CVPR. [Trang tác giả](https://4dqv.mpi-inf.mpg.de/QuCOOP/); [full text arXiv v1](https://arxiv.org/html/2503.19718v1).
-
-**[R6]** Yu, X., & Chen, C. W. (2026). *HQC-NBV: A hybrid quantum-classical view planning approach*. CVPR, 35091–35100. [Metadata CVF](https://openaccess.thecvf.com/content/CVPR2026/html/Yu_HQC-NBV_A_Hybrid_Quantum-Classical_View_Planning_Approach_CVPR_2026_paper.html); [preprint v1 đọc phương pháp](https://arxiv.org/html/2505.05212v1).
-
-**[R7]** Kotil, A., Pelofske, E., Riedmüller, S., Egger, D. J., Eidenbenz, S., Koch, T., & Woerner, S. (2025). *Quantum approximate multi-objective optimization*. Nature Computational Science, 5, 1168–1177. [Bài xuất bản và DOI](https://www.nature.com/articles/s43588-025-00873-y).
-
-**[R8]** Koch, T., et al. (2026). *The Quantum Optimization Benchmarking Library*. Nature Computational Science, 6, 653–671. [Bài xuất bản, danh sách tác giả đầy đủ và DOI](https://www.nature.com/articles/s43588-026-00991-1); [QOBLIB](https://github.com/ZIB-AOPT/QOBLIB).
-
-**[R9]** Ammermann, J., Brenneisen, F. J., Bittner, T., & Schaefer, I. (2024). *Quantum solution for configuration selection and prioritization*. Q-SE, 8 pages. [DOI](https://doi.org/10.1145/3643667.3648221); [author full text tại KIT](https://publikationen.bibliothek.kit.edu/1000173454/154123677).
-
-**[R10]** Xu, L., Hoos, H. H., & Leyton-Brown, K. (2010). *Hydra: Automatically configuring algorithms for portfolio-based selection*. AAAI, 24(1), 210–216. [Proceedings và DOI](https://ojs.aaai.org/index.php/AAAI/article/view/7565).
-
-**[R11]** Huang, H.-Y., Broughton, M., Mohseni, M., Babbush, R., Boixo, S., Neven, H., & McClean, J. R. (2021). *Power of data in quantum machine learning*. Nature Communications, 12, 2631. [DOI](https://doi.org/10.1038/s41467-021-22539-9); [full text arXiv v2](https://arxiv.org/html/2011.01938v2).
-
-**[R12]** Jerbi, S., Gyurik, C., Marshall, S. C., Molteni, R., & Dunjko, V. (2024). *Shadows of quantum machine learning*. Nature Communications, 15, 5676. [Bài xuất bản và DOI](https://www.nature.com/articles/s41467-024-49877-8).
-
-**[R13]** Lucas, A. (2014). *Ising formulations of many NP problems*. Frontiers in Physics, 2, Article 5, §5.1 Set cover. [Full text và DOI](https://www.frontiersin.org/journals/physics/articles/10.3389/fphy.2014.00005/full).
-
-**[R14]** Kolmogorov, V., & Zabih, R. (2004). *What energy functions can be minimized via graph cuts?* IEEE TPAMI, 26(2), 147–159. [Trang tác giả](https://pub.ista.ac.at/~vnk/papers/WHAT_ENERGIES.html); [full text](https://pub.ista.ac.at/~vnk/papers/KZ-PAMI-graph_cuts.pdf).
-
-**[R15]** Bowles, J., Ahmed, S., & Schuld, M. (2024). *Better than classical? The subtle art of benchmarking quantum machine learning models*. Preprint, arXiv:2403.07059v2. [Metadata](https://arxiv.org/abs/2403.07059); [full text v2](https://arxiv.org/html/2403.07059v2).
-
-**[W1]** PARMA-DITAM 2027. *Call for papers; information for authors*. [CfP chính thức](https://parma-ditam-workshop.github.io/parma_ditam_2027_CfP.pdf); [website](https://parma-ditam-workshop.github.io/). Phạm vi workshop và giới hạn review được đối chiếu với kế hoạch Nhóm; camera-ready là giai đoạn riêng.
+Các nguồn R1–R13 và D1–D6 được kiểm tra trong phiên nghiên cứu kết thúc 24/10 (Thứ 7), năm 2026; phạm vi đọc ở trên bao gồm phần được agent tra nguồn bàn giao có phân biệt rõ. Không nguồn nào là số đo quantum của dự án. Những mục chỉ abstract/metadata không dùng để bảo vệ claim phương pháp chi tiết.

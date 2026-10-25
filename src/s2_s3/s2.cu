@@ -36,6 +36,16 @@ __constant__ int kCircleY[16] = {3, 3, 2, 1, 0, -1, -2, -3, -3, -3, -2, -1, 0, 1
 // zero when no arc exceeds the threshold.
 __device__ int fast_score(const std::uint8_t* image, int pitch, int x, int y, int threshold) {
     const int v = image[y * pitch + x];
+    // Any 9-pixel arc contains at least two of the compass pixels 0, 4, 8, 12,
+    // so fewer than two brighter (or darker) compass pixels rules out a corner.
+    int brighter = 0, darker = 0;
+#pragma unroll
+    for (int k = 0; k < 16; k += 4) {
+        const int p = image[(y + kCircleY[k]) * pitch + x + kCircleX[k]];
+        brighter += p > v + threshold;
+        darker += p < v - threshold;
+    }
+    if (brighter < 2 && darker < 2) return 0;
     int d[16];
 #pragma unroll
     for (int k = 0; k < 16; ++k) d[k] = v - image[(y + kCircleY[k]) * pitch + x + kCircleX[k]];
@@ -93,29 +103,35 @@ __global__ void nms_kernel(const std::uint8_t* scores, int width, int height,
     if (local[t]) atomicAdd(&histogram[t], local[t]);
 }
 
-// Chooses the FAST score threshold of the 2K pre-selection and writes *count.
+// One block of 256 threads. suffix[s] = number of maxima with score >= s. The
+// threshold is the largest s with suffix[s] >= 2K (unique, as suffix is
+// non-increasing); with fewer maxima than 2K every maximum is kept. Writes *count.
 __global__ void select_kernel(const std::uint32_t* histogram, int candidates,
                               int max_keypoints, SelectParams* params, int* count) {
-    const auto cap = static_cast<std::uint32_t>(candidates);
-    std::uint32_t above = 0, total = 0;
-    for (int s = 1; s < 256; ++s) total += histogram[s];
-    SelectParams p{1, 0, 0, 0};
-    if (total <= cap) {
-        p.threshold = 1;
-        p.ties = histogram[1];
-        p.above = total - p.ties;
-    } else {
-        for (int s = 255; s >= 1; --s) {
-            if (above + histogram[s] >= cap) {
-                p.threshold = static_cast<std::uint32_t>(s);
-                p.above = above;
-                p.ties = cap - above;
-                break;
-            }
-            above += histogram[s];
-        }
+    __shared__ std::uint32_t suffix[257];
+    const int s = threadIdx.x;
+    const std::uint32_t own = s ? histogram[s] : 0;
+    suffix[s] = own;
+    if (s == 0) suffix[256] = 0;
+    __syncthreads();
+    for (int offset = 1; offset < 256; offset <<= 1) {
+        const std::uint32_t add = s + offset < 256 ? suffix[s + offset] : 0;
+        __syncthreads();
+        suffix[s] += add;
+        __syncthreads();
     }
-    p.selected = p.above + p.ties;
+    const auto cap = static_cast<std::uint32_t>(candidates);
+    const std::uint32_t total = suffix[1];
+    SelectParams p{};
+    bool writer = false;
+    if (total <= cap) {
+        writer = s == 1;
+        p = {1, total - own, own, total};
+    } else if (s >= 1 && suffix[s] >= cap && suffix[s + 1] < cap) {
+        writer = true;
+        p = {static_cast<std::uint32_t>(s), suffix[s + 1], cap - suffix[s + 1], cap};
+    }
+    if (!writer) return;
     *params = p;
     *count = static_cast<int>(min(p.selected, static_cast<std::uint32_t>(max_keypoints)));
 }
@@ -267,17 +283,20 @@ __global__ void harris_kernel(ImageView image, float harris_k, int candidates,
 }
 
 // Rank selection over the (unique) candidate keys: rank = #keys greater.
-__global__ void rank_kernel(const std::uint64_t* keys, int candidates, int max_keypoints,
-                            int width, Keypoints output) {
+// Only slots [0, selected) hold keys, so blocks past them exit immediately.
+__global__ void rank_kernel(const std::uint64_t* keys, const SelectParams* params,
+                            int max_keypoints, int width, Keypoints output) {
     __shared__ std::uint64_t tile[kRankThreads];
+    const int selected = static_cast<int>(params->selected);
+    if (static_cast<int>(blockIdx.x) * kRankThreads >= selected) return;
     const int slot = blockIdx.x * kRankThreads + threadIdx.x;
-    const std::uint64_t key = slot < candidates ? keys[slot] : 0;
+    const std::uint64_t key = slot < selected ? keys[slot] : 0;
     int rank = 0;
-    for (int base = 0; base < candidates; base += kRankThreads) {
+    for (int base = 0; base < selected; base += kRankThreads) {
         const int j = base + threadIdx.x;
-        tile[threadIdx.x] = j < candidates ? keys[j] : 0;
+        tile[threadIdx.x] = j < selected ? keys[j] : 0;
         __syncthreads();
-        const int n = min(kRankThreads, candidates - base);
+        const int n = min(kRankThreads, selected - base);
         for (int i = 0; i < n; ++i) rank += tile[i] > key;
         __syncthreads();
     }
@@ -338,8 +357,8 @@ Status s2_detect(const ImageView& image, const Config& config, Keypoints output,
     }
     fast_kernel<<<grid, tile, 0, stream>>>(image, config.fast_threshold, scores);
     nms_kernel<<<grid, tile, 0, stream>>>(scores, image.width, image.height, maxima, histogram);
-    select_kernel<<<1, 1, 0, stream>>>(histogram, layout.candidates, config.max_keypoints,
-                                       params, output.d_count);
+    select_kernel<<<1, 256, 0, stream>>>(histogram, layout.candidates, config.max_keypoints,
+                                         params, output.d_count);
     count_kernel<<<layout.blocks, kScanThreads, 0, stream>>>(maxima, layout.pixels, params,
                                                              block_counts);
     block_scan_kernel<<<1, kScanThreads, 0, stream>>>(block_counts, layout.blocks, block_offsets);
@@ -348,7 +367,7 @@ Status s2_detect(const ImageView& image, const Config& config, Keypoints output,
     harris_kernel<<<blocks_for(layout.candidates, 128), 128, 0, stream>>>(
         image, config.harris_k, layout.candidates, params, keys);
     rank_kernel<<<blocks_for(layout.candidates, kRankThreads), kRankThreads, 0, stream>>>(
-        keys, layout.candidates, config.max_keypoints, image.width, output);
+        keys, params, config.max_keypoints, image.width, output);
     return launch_status();
 }
 

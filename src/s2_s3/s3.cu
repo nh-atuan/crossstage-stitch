@@ -131,10 +131,16 @@ __global__ void describe_kernel(ImageView image, const std::uint8_t* blurred, Ke
     }
     m10 = warp_sum(m10);
     m01 = warp_sum(m01);
-    const float angle = __fmul_rn(fast_atan2(static_cast<float>(m01), static_cast<float>(m10)),
-                                  kDegToRad);
-    const float a = static_cast<float>(cos(static_cast<double>(angle)));
-    const float b = static_cast<float>(sin(static_cast<double>(angle)));
+    // FP64 is slow on T4: lane 0 alone evaluates the angle and broadcasts it.
+    float a = 0.0f, b = 0.0f;
+    if (lane == 0) {
+        const float angle = __fmul_rn(fast_atan2(static_cast<float>(m01), static_cast<float>(m10)),
+                                      kDegToRad);
+        a = static_cast<float>(cos(static_cast<double>(angle)));
+        b = static_cast<float>(sin(static_cast<double>(angle)));
+    }
+    a = __shfl_sync(0xffffffffu, a, 0);
+    b = __shfl_sync(0xffffffffu, b, 0);
     // Lane l packs pattern pairs 8l .. 8l+7 into byte l (bit j = pair 8l+j).
     const std::uint8_t* smooth = blurred + static_cast<std::size_t>(y) * image.width + x;
     int value = 0;

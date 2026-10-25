@@ -1,0 +1,28 @@
+cmake_minimum_required(VERSION 3.18)
+project(crossstage_s4_s5_tests LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+enable_testing()
+
+include(CheckLanguage)
+check_language(CUDA)
+if(CMAKE_CUDA_COMPILER)
+  if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES 75)
+  endif()
+  enable_language(CUDA)
+endif()
+
+get_filename_component(STITCH_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+add_subdirectory("${STITCH_REPO_ROOT}/src/s4" s4)
+add_subdirectory("${STITCH_REPO_ROOT}/src/s5" s5)
+
+if(TARGET stitch_s4 AND TARGET stitch_s5)
+  add_executable(s4_s5_mock_driver "${STITCH_REPO_ROOT}/tests/s4_s5_mock_driver.cu")
+  target_include_directories(s4_s5_mock_driver PRIVATE "${STITCH_REPO_ROOT}/tests")
+  target_link_libraries(s4_s5_mock_driver PRIVATE stitch_s4 stitch_s5)
+  set_target_properties(s4_s5_mock_driver PROPERTIES CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED YES)
+endif()

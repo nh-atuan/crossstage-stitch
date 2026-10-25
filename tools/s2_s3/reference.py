@@ -37,7 +37,7 @@ PATTERN_HEADER = Path(__file__).resolve().parents[2] / "src" / "s2_s3" / "orb_pa
 def load_pattern(path: Path = PATTERN_HEADER) -> np.ndarray:
     """Reads the (256, 4) int32 pattern from the C++ header (single source of truth)."""
     text = path.read_text(encoding="utf-8")
-    body = text[text.index("kOrbPattern31"):]
+    body = text[text.index("#define STITCH_S3_ORB_PATTERN_31"):text.index("namespace stitch::s3")]
     rows = re.findall(r"\{\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\}", body)
     pattern = np.array(rows, dtype=np.int32)
     if pattern.shape != (256, 4):

@@ -4,7 +4,7 @@
 - **Người quyết định:** Thành.
 - **Ngày ghi nhận:** 25/10 (Chủ nhật), năm 2026.
 - **Phase:** Phase 1.
-- **Trạng thái:** Đã chọn phương pháp. Bản tham chiếu NumPy đã được so với `cv2.ORB` của `opencv-python` 5.0.0.93 trên ảnh tổng hợp (mục 5). Kernel CUDA chưa được kiểm chứng trên Colab T4.
+- **Trạng thái:** Đã chọn phương pháp. Bản tham chiếu NumPy đã được so với `cv2.ORB` của `opencv-python` 5.0.0.93 trên ảnh tổng hợp (mục 5). Kernel CUDA khớp bản tham chiếu từng bit trên Colab T4 ngày 25/10 (Chủ nhật). Trên 16 cặp Oxford, 13 cặp đạt và 3 cặp có thay đổi scale lớn không đạt; xem [bằng chứng T4](../s2-s3-t4-validation.md). Chưa chạy trên UDIS-D.
 
 ## 1. Bối cảnh
 
@@ -103,12 +103,10 @@ Khác biệt có chủ ý so với OpenCV: `KeyPointsFilter::retainBest` giữ m
 
 Test tự động của bản tham chiếu nằm trong `tests/python/test_s2_s3_reference.py`.
 
-Chưa kiểm chứng:
+Kernel CUDA, sanitizer, thời gian chạy trên T4 và lần nối đầu tiên với S4/S5 trên 16 cặp Oxford được ghi trong [bằng chứng T4](../s2-s3-t4-validation.md). Phần chưa kiểm chứng gồm:
 
-- kernel CUDA và việc CUDA khớp bản tham chiếu;
-- sanitizer;
-- thời gian chạy trên T4;
-- chất lượng H khi nối với S4/S5 trên HPatches hoặc UDIS-D.
+- chất lượng H trên UDIS-D và tập development;
+- thời gian theo ranh giới đo chung của harness.
 
 ## 6. Fallback
 

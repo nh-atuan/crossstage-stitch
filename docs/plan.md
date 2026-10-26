@@ -67,7 +67,7 @@ flowchart LR
 |---|---|---|
 | 0 | Khởi động | 19/10 (Thứ 2) |
 | 1 | Pipeline và Pareto (Go/No-Go) | 25/10 (Chủ nhật) |
-| 2 | Controller, thí nghiệm, viết phương pháp | |
+| 2 | Controller, thí nghiệm, viết phương pháp | 31/10 (Thứ 7) |
 | 3 | Viết kết quả và hoàn thiện | |
 | | **Nộp bài** | **13/11 (Thứ 6)** |
 
@@ -138,10 +138,30 @@ Quy định riêng của Phase 1:
 
 Ngày review: Đế ghép 6 stage GPU và chạy script quét trên 20-30 cặp ảnh của tập development; cả Nhóm phân tích Go/No-Go (mục 7); lập task Phase 2.
 
-### Các phase sau (ý chính)
+### Phase 2: Controller, thí nghiệm và viết phương pháp
 
-- **Phase 2, controller, thí nghiệm và viết phương pháp:** làm controller và ghép vào pipeline; chạy thí nghiệm với các baseline, Oracle, ablation; đo overhead của controller và năng lượng nếu kịp. Viết Introduction, Related Work và các mục về phương pháp, hệ thống đã cài đặt ở Phase 1.
-- **Phase 3, viết kết quả và hoàn thiện:** viết Results, Abstract, Conclusion; cả Nhóm review toàn bộ paper và sửa; kiểm tra ẩn danh, định dạng OASIcs và số trang trước khi nộp. Thời gian còn lại tới 13/11 dùng làm dự phòng.
+Deadline chung cho các task: 31/10 (Thứ 7).
+
+Điều kiện bắt đầu: Phase 1 kết luận GO (đã nghiệm thu vào 26/10 (Thứ 2), xem [Báo cáo Go/No-Go](phase-1-gonogo-report.md)).
+
+| Thành viên | Task | Tiêu chí nghiệm thu |
+|---|---|---|
+| Đế | 1. Thiết kế và cài đặt module Controller điều khiển các núm S, K, R và cơ chế escalation khi ghép ảnh khó<br>2. Xuất đầy đủ tín hiệu tự kiểm tra từ S5 và đảm bảo tái sử dụng match khi chỉ tăng R<br>3. Chủ trì soạn thảo Section 4 (Adaptive Runtime Controller) cho paper; ghi quyết định kỹ thuật vào `docs/decisions/` | - Controller chọn được cấu hình ban đầu và kích hoạt escalation khi S5 thiếu inliers<br>- Overhead của Controller đủ nhỏ để duy trì lợi thế speedup so với Fixed-Best<br>- Chạy thử nghiệm được trên tập dữ liệu pilot |
+| Thành | 1. Đảm bảo S2 và S3 nhận tham số K động từ Controller mà không bị giảm hiệu năng hoặc rò rỉ bộ nhớ<br>2. Viết draft phần S2 và S3 trong Section 3 cho paper | - Thay đổi K qua các lần chạy không làm crash kernel và không gây overhead cấp phát lại bộ nhớ không cần thiết<br>- Đạt độ chính xác tương đương Phase 1 |
+| Chương | 1. Dựng khung LaTeX template OASIcs trong `paper/`, kiểm tra compile PDF ở chế độ ẩn danh (double-blind)<br>2. Rà soát núm B của S6 phục vụ thí nghiệm đo QoR<br>3. Chủ trì khung Section 1 (Introduction) và Section 2 (Related Work) cho paper; viết phần S6 trong Section 3 | - Khung LaTeX compile ra PDF chuẩn không lỗi trên môi trường chung<br>- Đo được PSNR/SSIM ổn định cho các cấu hình thí nghiệm |
+| Tuấn | 1. Tích hợp trích xuất đặc trưng ảnh thô từ S1 (texture/gradient) đưa cho Controller với overhead dưới 0.1 ms<br>2. Nâng cấp Harness để kết nối Controller vào luồng chạy thích nghi (hỗ trợ đo cả 3 chế độ: Fixed-Best, Oracle, Controller)<br>3. Viết draft phần S1 trong Section 3; review các PR và điều phối chạy benchmark trên Colab T4 | - Tín hiệu S1 sinh ra đồng thời với tiền xử lý ảnh, overhead không đáng kể<br>- Harness chạy tự động được cả 3 chế độ đo lường |
+
+Quy định riêng của Phase 2:
+
+- **Tôn trọng quyền tự quyết kỹ thuật:** Mỗi thành viên toàn quyền quyết định phương pháp kỹ thuật, thuật toán và cách cài đặt bên trong module của mình (theo mục 4, điều 5), miễn sao đáp ứng tiêu chí nghiệm thu và đúng contract dữ liệu.
+- **Chốt contract dữ liệu sớm:** Thống nhất giao diện (struct truyền tín hiệu giữa S1, S5 và Controller) vào đầu phase để các thành viên triển khai độc lập, không phải chờ nhau.
+- **Viết paper song song:** Tận dụng Phase 2 để viết ngay các mục đã kiểm chứng (Introduction, Related Work, và toàn bộ phần phương pháp của 6 stage S1–S6 cùng Controller trong Section 3 và Section 4) để giảm áp lực cho Phase 3.
+
+Ngày review: 01/11 (Chủ nhật). Ghép Controller vào harness, chạy thử nghiệm pilot trên Colab T4, đánh giá speedup thực tế so với Fixed-Best và Oracle; lập task chi tiết cho Phase 3.
+
+### Phase 3: Viết kết quả và hoàn thiện (ý chính)
+
+Viết Results, Abstract, Conclusion; cả Nhóm review toàn bộ paper và sửa; kiểm tra ẩn danh, định dạng OASIcs và số trang trước khi nộp. Thời gian còn lại tới 13/11 (Thứ 6) dùng làm dự phòng.
 
 ## 9. Dataset và benchmark
 

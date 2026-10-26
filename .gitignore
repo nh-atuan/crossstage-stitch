@@ -14,7 +14,9 @@ GEMINI.md
 # Datasets and run outputs (shared through Google Drive instead)
 data/
 dataset/
-results/
+results/*
+!results/**/
+!results/**/gonogo_report.json
 *.zip
 
 # Build outputs

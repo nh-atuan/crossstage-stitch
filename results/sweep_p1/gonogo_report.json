@@ -1,0 +1,283 @@
+{
+  "num_pairs": 25,
+  "num_configs": 48,
+  "fixed_best_config": "S1.00_K1000_R128_Bfeather",
+  "fixed_best_pass_rate": 1.0,
+  "fixed_best_median_e2e_ms": 3.3360000000000003,
+  "oracle_median_e2e_ms": 2.0525,
+  "speedup": 1.625334957369062,
+  "median_tunable_ratio": 0.6886990407673861,
+  "cond1_passed": true,
+  "cond2_passed": true,
+  "decision": "GO",
+  "recommendation": "Proceed with cross-stage adaptive runtime controller.",
+  "ranked_configs_top5": [
+    {
+      "config_id": "S1.00_K1000_R128_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 3.3360000000000003
+    },
+    {
+      "config_id": "S1.00_K500_R128_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 3.339
+    },
+    {
+      "config_id": "S1.00_K2000_R128_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 3.34
+    },
+    {
+      "config_id": "S1.00_K500_R256_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 3.551
+    },
+    {
+      "config_id": "S1.00_K2000_R256_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 3.551
+    }
+  ],
+  "pareto_points": [
+    {
+      "config_id": "S1.00_K1000_R128_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 3.3360000000000003
+    },
+    {
+      "config_id": "S1.00_K500_R128_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 3.339
+    },
+    {
+      "config_id": "S1.00_K2000_R128_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 3.34
+    },
+    {
+      "config_id": "S1.00_K500_R256_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 3.551
+    },
+    {
+      "config_id": "S1.00_K2000_R256_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 3.551
+    },
+    {
+      "config_id": "S1.00_K1000_R256_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 3.551
+    },
+    {
+      "config_id": "S1.00_K500_R512_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 3.9775
+    },
+    {
+      "config_id": "S1.00_K1000_R512_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 3.9785000000000004
+    },
+    {
+      "config_id": "S1.00_K2000_R512_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 3.9795
+    },
+    {
+      "config_id": "S1.00_K500_R1024_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 4.8285
+    },
+    {
+      "config_id": "S1.00_K2000_R1024_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 4.830500000000001
+    },
+    {
+      "config_id": "S1.00_K1000_R1024_Bfeather",
+      "pass_rate": 1.0,
+      "median_e2e_ms": 4.8385
+    },
+    {
+      "config_id": "S0.75_K1000_R256_Bfeather",
+      "pass_rate": 0.96,
+      "median_e2e_ms": 3.166
+    },
+    {
+      "config_id": "S0.75_K2000_R256_Bfeather",
+      "pass_rate": 0.96,
+      "median_e2e_ms": 3.171
+    },
+    {
+      "config_id": "S0.75_K2000_R512_Bfeather",
+      "pass_rate": 0.96,
+      "median_e2e_ms": 3.5475000000000003
+    },
+    {
+      "config_id": "S0.75_K1000_R512_Bfeather",
+      "pass_rate": 0.96,
+      "median_e2e_ms": 3.5534999999999997
+    },
+    {
+      "config_id": "S0.75_K2000_R1024_Bfeather",
+      "pass_rate": 0.96,
+      "median_e2e_ms": 4.311999999999999
+    },
+    {
+      "config_id": "S0.75_K1000_R1024_Bfeather",
+      "pass_rate": 0.96,
+      "median_e2e_ms": 4.316
+    },
+    {
+      "config_id": "S0.75_K500_R128_Bfeather",
+      "pass_rate": 0.92,
+      "median_e2e_ms": 2.53
+    },
+    {
+      "config_id": "S0.75_K500_R256_Bfeather",
+      "pass_rate": 0.92,
+      "median_e2e_ms": 2.7264999999999997
+    },
+    {
+      "config_id": "S0.75_K2000_R128_Bfeather",
+      "pass_rate": 0.92,
+      "median_e2e_ms": 2.9825
+    },
+    {
+      "config_id": "S0.75_K500_R512_Bfeather",
+      "pass_rate": 0.92,
+      "median_e2e_ms": 3.123
+    },
+    {
+      "config_id": "S0.75_K500_R1024_Bfeather",
+      "pass_rate": 0.92,
+      "median_e2e_ms": 3.939
+    },
+    {
+      "config_id": "S0.75_K1000_R128_Bfeather",
+      "pass_rate": 0.88,
+      "median_e2e_ms": 2.9745
+    },
+    {
+      "config_id": "S0.50_K1000_R256_Bfeather",
+      "pass_rate": 0.8,
+      "median_e2e_ms": 2.345
+    },
+    {
+      "config_id": "S0.50_K2000_R256_Bfeather",
+      "pass_rate": 0.8,
+      "median_e2e_ms": 2.3455000000000004
+    },
+    {
+      "config_id": "S0.50_K500_R256_Bfeather",
+      "pass_rate": 0.8,
+      "median_e2e_ms": 2.369
+    },
+    {
+      "config_id": "S0.50_K1000_R512_Bfeather",
+      "pass_rate": 0.8,
+      "median_e2e_ms": 2.7264999999999997
+    },
+    {
+      "config_id": "S0.50_K2000_R512_Bfeather",
+      "pass_rate": 0.8,
+      "median_e2e_ms": 2.728
+    },
+    {
+      "config_id": "S0.50_K500_R512_Bfeather",
+      "pass_rate": 0.8,
+      "median_e2e_ms": 2.7625
+    },
+    {
+      "config_id": "S0.50_K2000_R1024_Bfeather",
+      "pass_rate": 0.8,
+      "median_e2e_ms": 3.49
+    },
+    {
+      "config_id": "S0.50_K1000_R1024_Bfeather",
+      "pass_rate": 0.8,
+      "median_e2e_ms": 3.4975
+    },
+    {
+      "config_id": "S0.50_K500_R1024_Bfeather",
+      "pass_rate": 0.8,
+      "median_e2e_ms": 3.5475000000000003
+    },
+    {
+      "config_id": "S0.50_K1000_R128_Bfeather",
+      "pass_rate": 0.76,
+      "median_e2e_ms": 2.1544999999999996
+    },
+    {
+      "config_id": "S0.50_K2000_R128_Bfeather",
+      "pass_rate": 0.76,
+      "median_e2e_ms": 2.1574999999999998
+    },
+    {
+      "config_id": "S0.50_K500_R128_Bfeather",
+      "pass_rate": 0.72,
+      "median_e2e_ms": 2.1654999999999998
+    },
+    {
+      "config_id": "S0.25_K1000_R128_Bfeather",
+      "pass_rate": 0.28,
+      "median_e2e_ms": 0.5515000000000001
+    },
+    {
+      "config_id": "S0.25_K500_R128_Bfeather",
+      "pass_rate": 0.28,
+      "median_e2e_ms": 0.552
+    },
+    {
+      "config_id": "S0.25_K2000_R128_Bfeather",
+      "pass_rate": 0.28,
+      "median_e2e_ms": 0.554
+    },
+    {
+      "config_id": "S0.25_K1000_R256_Bfeather",
+      "pass_rate": 0.28,
+      "median_e2e_ms": 0.8745
+    },
+    {
+      "config_id": "S0.25_K2000_R256_Bfeather",
+      "pass_rate": 0.28,
+      "median_e2e_ms": 0.875
+    },
+    {
+      "config_id": "S0.25_K500_R256_Bfeather",
+      "pass_rate": 0.28,
+      "median_e2e_ms": 0.878
+    },
+    {
+      "config_id": "S0.25_K1000_R512_Bfeather",
+      "pass_rate": 0.28,
+      "median_e2e_ms": 2.12
+    },
+    {
+      "config_id": "S0.25_K2000_R512_Bfeather",
+      "pass_rate": 0.28,
+      "median_e2e_ms": 2.1245000000000003
+    },
+    {
+      "config_id": "S0.25_K500_R512_Bfeather",
+      "pass_rate": 0.28,
+      "median_e2e_ms": 2.1254999999999997
+    },
+    {
+      "config_id": "S0.25_K2000_R1024_Bfeather",
+      "pass_rate": 0.28,
+      "median_e2e_ms": 2.877
+    },
+    {
+      "config_id": "S0.25_K500_R1024_Bfeather",
+      "pass_rate": 0.28,
+      "median_e2e_ms": 2.8785
+    },
+    {
+      "config_id": "S0.25_K1000_R1024_Bfeather",
+      "pass_rate": 0.28,
+      "median_e2e_ms": 2.88
+    }
+  ]
+}

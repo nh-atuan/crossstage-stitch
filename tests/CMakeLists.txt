@@ -3,6 +3,11 @@ target_link_libraries(test_common PRIVATE stitch_common)
 target_include_directories(test_common PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME test_common COMMAND test_common)
 
+add_executable(test_harness_config test_harness_config.cpp)
+target_link_libraries(test_harness_config PRIVATE stitch_common stitch_s6_geometry)
+target_include_directories(test_harness_config PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+add_test(NAME test_harness_config COMMAND test_harness_config)
+
 # Compile the shared headers with nvcc (sm_75) when CUDA is available.
 if(CMAKE_CUDA_COMPILER)
   add_executable(test_common_cuda test_common_cuda.cu)

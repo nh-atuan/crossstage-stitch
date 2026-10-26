@@ -24,4 +24,14 @@ enable_testing()
 add_library(stitch_common INTERFACE)
 target_include_directories(stitch_common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
+add_subdirectory(src/s1)
+add_subdirectory(src/s2_s3)
+add_subdirectory(src/s4)
+add_subdirectory(src/s5)
+add_subdirectory(src/s6)
+
+if(CMAKE_CUDA_COMPILER)
+  add_subdirectory(harness)
+endif()
+
 add_subdirectory(tests)

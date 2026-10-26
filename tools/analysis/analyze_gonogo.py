@@ -74,6 +74,16 @@ def load_runs_data(runs_path: Path) -> Dict[Tuple[str, str], Dict[str, Any]]:
 
 def load_qor_data(qor_path: Path) -> Dict[Tuple[str, str], Dict[str, Any]]:
     """Loads qor.csv."""
+    def safe_float(val, default=0.0):
+        if not val or val in ("None", "none", "nan", ""):
+            return default
+        if val == "inf":
+            return float("inf")
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return default
+
     qor_map = {}
     with qor_path.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
@@ -81,10 +91,9 @@ def load_qor_data(qor_path: Path) -> Dict[Tuple[str, str], Dict[str, Any]]:
             pair_id = row["pair_id"]
             config_id = row["config_id"]
             valid = row.get("valid_stitch", "0") in ("1", "true", "True")
-            cov = float(row["overlap_coverage"]) if row.get("overlap_coverage") and row["overlap_coverage"] != "None" else 0.0
-            ssim = float(row["ssim_overlap"]) if row.get("ssim_overlap") and row["ssim_overlap"] != "None" else 0.0
-            psnr_str = row.get("psnr_overlap", "0")
-            psnr = float("inf") if psnr_str == "inf" else (float(psnr_str) if psnr_str != "None" else 0.0)
+            cov = safe_float(row.get("overlap_coverage"))
+            ssim = safe_float(row.get("ssim_overlap"))
+            psnr = safe_float(row.get("psnr_overlap"))
 
             qor_map[(pair_id, config_id)] = {
                 "valid_stitch": valid,

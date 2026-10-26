@@ -212,6 +212,15 @@ void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r) {
     s6::Geometry max_geom{};
     max_geom.width = kMaxCanvasDim;
     max_geom.height = kMaxCanvasDim;
+    max_geom.width_a = max_w;
+    max_geom.height_a = max_h;
+    max_geom.width_b = max_w;
+    max_geom.height_b = max_h;
+    max_geom.origin_x = 0;
+    max_geom.origin_y = 0;
+    max_geom.inverse = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
+    max_geom.denominator_tolerance = 1e-6;
+    max_geom.snap_tolerance = 0.01;
     CUDA_CHECK(s6::s6_workspace_bytes(max_geom, s6::BlendMode::Multiband5, &ws_bytes_s6_) == Status::OK ? cudaSuccess : cudaErrorUnknown);
     if (ws_bytes_s6_) CUDA_CHECK(cudaMalloc(&ws_s6_, ws_bytes_s6_ + 256));
 

@@ -42,10 +42,20 @@ Script sweep nhận đầu vào là file JSON mô tả danh sách các cặp ả
 }
 ```
 
-### Nguồn ảnh
-- Lấy 20–30 cặp ảnh từ tập development UDIS-D (bao gồm đa dạng cảnh: normal, low-texture, parallax).
-- Định dạng ảnh hỗ trợ: PPM, PNG, JPG (PPM được khuyến khích vì load nhanh nhất).
-- **Lưu ý fallback:** Nếu chưa kịp tải bộ ảnh UDIS-D, khi chạy lệnh sweep mà bỏ trống tham số `--manifest`, script sẽ tự động sinh cặp ảnh pilot có texture hình học phong phú tại `data/pilot/pairs.json` để chạy thử nghiệm pipeline trước.
+### Lệnh chuẩn bị dataset tự động (Chạy trực tiếp trên Colab)
+Chạy script tự động để chuẩn bị 25 cặp ảnh development dưới định dạng PPM (P6):
+
+```bash
+# Tự động tải/chuẩn bị 25 cặp ảnh development và tạo manifest
+python -m tools.data_prep.prepare_dev_dataset \
+    --num-pairs 25 \
+    --out-dir data/dev_pairs \
+    --manifest data/dev_pairs/pairs.json
+```
+
+*Ghi chú:*
+- Script tự động quét thư mục ảnh UDIS-D (nếu đã mount Drive hoặc tải về).
+- Nếu chạy trong môi trường mới hoàn toàn chưa có dataset, script tự động sinh 25 cặp ảnh development đa dạng (hình học, texture, noise, độ lệch góc nhìn) với seed cố định `42` theo quy ước của Nhóm để kiểm nghiệm pipeline.
 
 ---
 

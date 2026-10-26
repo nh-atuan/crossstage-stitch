@@ -52,6 +52,7 @@ Cách chia stage giữ giống đồ án môn học để mỗi người làm ti
 6. **Ghép code chỉ khi các module liên quan đã xong:** dự kiến cuối Phase 1 (lần đầu đủ 6 stage) và cuối Phase 2 (đưa controller vào pipeline). Đế phụ trách. Trước đó mỗi người tự chạy toàn pipeline bằng các bản giả để phát hiện lỗi sớm.
 7. **Review:** Tuấn review pull request của từng task/stage và merge. Ở Phase 3, cả Nhóm cùng review toàn bộ paper.
 8. **Viết paper:** ai cài đặt phần nào thì viết phần đó, nhưng viết ở phase sau phase cài đặt, khi cách cài đặt đã được kiểm chứng.
+9. **Quy tắc AI agent:** Thành viên dùng AI agent phải tuân thủ [AGENTS_TEMPLATE.md](../AGENTS_TEMPLATE.md). Trước khi để agent đọc codebase repo, lên kế hoạch hay thực thi bất cứ điều gì, bắt buộc phải sao chép template thành file cấu hình cá nhân (`AGENTS.md`, `CLAUDE.md`...) và cập nhật lại mỗi khi `git pull`.
 
 ## 5. Lịch các phase
 

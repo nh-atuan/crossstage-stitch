@@ -152,7 +152,20 @@ Fallback nếu tập train quá nặng để tải: lấy development từ tập
 - Pull request vào `main`; Tuấn review và merge. Pull request của một stage chỉ được merge khi output khớp bản giả OpenCV trên mock data, trong sai số do người phụ trách stage ghi rõ trong pull request.
 - Không commit dataset, output, file build, file hướng dẫn agent cá nhân.
 
-## 11. Điểm còn mở
+## 11. Quy ước làm việc với AI agent
+
+1. **Bắt buộc đọc và sao chép template trước khi cho agent làm việc:**
+   - Trước khi để AI agent (Cursor, Claude Code, Antigravity, Copilot...) đọc codebase, lên kế hoạch hoặc thực thi bất kỳ task nào, thành viên **bắt buộc phải sao chép** [AGENTS_TEMPLATE.md](../AGENTS_TEMPLATE.md) thành file cấu hình tương ứng ở thư mục gốc repo:
+     - `AGENTS.md` (cho Antigravity, Codex, và các agent đọc `AGENTS.md`);
+     - `CLAUDE.md` (cho Claude Code);
+     - `.cursorrules` hoặc file tương đương tùy công cụ.
+   - Tuyệt đối không để agent đọc codebase, lên kế hoạch hay thực thi khi chưa nạp bộ quy tắc tối thiểu từ template này.
+2. **Đồng bộ khi kéo code mới (`git pull`):**
+   - Mỗi lần kéo code mới về từ nhánh `main`, thành viên phải kiểm tra xem [AGENTS_TEMPLATE.md](../AGENTS_TEMPLATE.md) có thay đổi không (ví dụ bằng lệnh `git log -p -1 -- AGENTS_TEMPLATE.md`). Nếu có, phải cập nhật file agent cá nhân tương ứng trước khi giao việc tiếp.
+3. **Tuyệt đối không commit file cấu hình agent cá nhân:**
+   - Các file `AGENTS.md`, `CLAUDE.md`, `.cursorrules` đã nằm trong `.gitignore` để tránh xung đột môi trường cá nhân và không làm bẩn repo chung.
+
+## 12. Điểm còn mở
 
 | Điểm | Người xác nhận |
 |---|---|

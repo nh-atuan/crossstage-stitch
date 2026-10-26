@@ -26,4 +26,4 @@ Cấu trúc thư mục đầy đủ của mã nguồn nằm trong [docs/conventi
 
 1. Đọc [docs/plan.md](docs/plan.md) để biết hướng đi, phân vai và task của phase hiện tại.
 2. Đọc [docs/stages.md](docs/stages.md) để nắm pipeline và stage mình phụ trách.
-3. Nếu dùng AI agent, sao chép [AGENTS_TEMPLATE.md](AGENTS_TEMPLATE.md) thành `AGENTS.md` hoặc `CLAUDE.md` ở thư mục gốc repo. Mỗi lần `git pull`, kiểm tra template có thay đổi không để cập nhật lại file của mình.
+3. **Nếu dùng AI agent (Bắt buộc thực hiện trước khi giao việc cho agent):** Sao chép [AGENTS_TEMPLATE.md](AGENTS_TEMPLATE.md) thành `AGENTS.md` hoặc `CLAUDE.md` ở thư mục gốc repo. Tuyệt đối không để agent đọc codebase, lên kế hoạch hay thực thi bất cứ điều gì khi chưa nạp bộ quy tắc này. Mỗi lần `git pull`, kiểm tra template có thay đổi không để cập nhật lại file của mình.

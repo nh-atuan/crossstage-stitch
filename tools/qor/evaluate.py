@@ -244,6 +244,8 @@ def _read_runs(path, pair_ids):
         for line, row in enumerate(reader, 2):
             if None in row or any(v is None for v in row.values()):
                 raise ValueError(f"malformed CSV row {line}")
+            if row.get("is_warmup", "0") in ("1", "true", "True"):
+                continue
             pair_id, config_id = row["pair_id"], row["config_id"]
             if pair_id not in pair_ids or not config_id:
                 raise ValueError(f"unknown pair or empty config on row {line}")

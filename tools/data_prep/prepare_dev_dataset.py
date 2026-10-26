@@ -263,10 +263,22 @@ def main() -> int:
         print(f"Generating {args.num_pairs} diverse synthetic development pairs (seed={args.seed})...")
         manifest_dict = generate_synthetic_dev_set(args.out_dir, num_pairs=args.num_pairs, seed=args.seed)
 
-    args.manifest.parent.mkdir(parents=True, exist_ok=True)
-    args.manifest.write_text(json.dumps(manifest_dict, indent=2), encoding="utf-8")
+    # Ensure paths in manifest are relative to manifest parent directory
+    # so that both stitch_harness and tools.qor.evaluate resolve them correctly
+    manifest_parent = args.manifest.parent.resolve()
+    rel_manifest_dict = {}
+    for pair_id, paths in manifest_dict.items():
+        pa = Path(paths["a"]).resolve()
+        pb = Path(paths["b"]).resolve()
+        rel_manifest_dict[pair_id] = {
+            "a": os.path.relpath(pa, manifest_parent).replace("\\", "/"),
+            "b": os.path.relpath(pb, manifest_parent).replace("\\", "/")
+        }
 
-    print(f"Successfully prepared {len(manifest_dict)} development pairs.")
+    args.manifest.parent.mkdir(parents=True, exist_ok=True)
+    args.manifest.write_text(json.dumps(rel_manifest_dict, indent=2), encoding="utf-8")
+
+    print(f"Successfully prepared {len(rel_manifest_dict)} development pairs.")
     print(f"Manifest written to: {args.manifest}")
     return 0
 

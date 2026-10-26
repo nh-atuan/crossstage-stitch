@@ -40,12 +40,58 @@ def generate_grid_configs(scales: list[float] = None,
     return configs
 
 
+def generate_pilot_pairs(output_dir: Path) -> Path:
+    """Generates a small pilot dataset with 1 pair containing rich geometric features."""
+    import numpy as np
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = output_dir / "pairs.json"
+    if manifest_path.exists():
+        return manifest_path
+
+    h, w = 480, 640
+    img1 = np.zeros((h, w, 3), dtype=np.uint8)
+    for y in range(0, h, 30):
+        for x in range(0, w, 30):
+            if (x // 30 + y // 30) % 2 == 0:
+                img1[y:y+30, x:x+30] = [210, 210, 210]
+            else:
+                img1[y:y+30, x:x+30] = [40, 70, 160]
+
+    for cy in range(60, h - 60, 80):
+        for cx in range(60, w - 60, 80):
+            img1[cy-15:cy+15, cx-15:cx+15] = [255, 230, 20]
+            img1[cy-5:cy+5, cx-5:cx+5] = [20, 20, 20]
+
+    img2 = np.zeros_like(img1)
+    img2[10:, 20:] = img1[:h-10, :w-20]
+
+    path_a = output_dir / "pair01_a.ppm"
+    path_b = output_dir / "pair01_b.ppm"
+    with path_a.open("wb") as f:
+        f.write(f"P6\n{w} {h}\n255\n".encode("ascii"))
+        f.write(img1.tobytes())
+    with path_b.open("wb") as f:
+        f.write(f"P6\n{w} {h}\n255\n".encode("ascii"))
+        f.write(img2.tobytes())
+
+    manifest = {
+        "pilot_01": {
+            "a": "pair01_a.ppm",
+            "b": "pair01_b.ppm"
+        }
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    print(f"Generated pilot dataset at {manifest_path}")
+    return manifest_path
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run S x K x R grid sweep and QoR evaluation")
     parser.add_argument("--harness", type=Path, default=Path("build/harness/stitch_harness"),
                         help="Path to stitch_harness binary")
-    parser.add_argument("--manifest", type=Path, required=True,
-                        help="Path to pairs.json manifest")
+    parser.add_argument("--manifest", type=Path, default=None,
+                        help="Path to pairs.json manifest (auto-generated if omitted)")
     parser.add_argument("--policy", type=Path, default=Path("tools/qor/policy-pilot.json"),
                         help="Path to QoR policy JSON")
     parser.add_argument("--ref-config", type=str, default="S1.00_K2000_R1024_Bfeather",
@@ -55,6 +101,9 @@ def main():
     parser.add_argument("--dry-run", action="store_true",
                         help="Generate configs and print command without executing harness")
     args = parser.parse_args()
+
+    if args.manifest is None or not args.manifest.exists():
+        args.manifest = generate_pilot_pairs(Path("data/pilot"))
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     configs_path = args.out_dir / "configs.json"

@@ -260,20 +260,35 @@ def print_report(res: Dict[str, Any]):
 
 def main():
     parser = argparse.ArgumentParser(description="Analyze runs.csv and qor.csv for Go/No-Go decision")
-    parser.add_argument("--runs", type=Path, required=True, help="Path to runs.csv")
-    parser.add_argument("--qor", type=Path, required=True, help="Path to qor.csv")
+    parser.add_argument("--runs", type=Path, default=Path("results/sweep/runs.csv"), help="Path to runs.csv")
+    parser.add_argument("--qor", type=Path, default=Path("results/sweep/qor.csv"), help="Path to qor.csv")
+    parser.add_argument("--out-dir", type=Path, default=Path("results"), help="Directory to save output files")
     parser.add_argument("--out-json", type=Path, default=None, help="Optional output JSON summary path")
     parser.add_argument("--min-coverage", type=float, default=0.95, help="Minimum overlap coverage threshold")
     parser.add_argument("--max-ssim-drop", type=float, default=0.05, help="Maximum SSIM drop allowed")
     args = parser.parse_args()
 
+    # Fallbacks if default paths in results/sweep not found
+    if not args.runs.exists() and Path("runs.csv").exists():
+        args.runs = Path("runs.csv")
+    if not args.qor.exists() and Path("qor.csv").exists():
+        args.qor = Path("qor.csv")
+
+    if not args.runs.exists():
+        print(f"Error: runs file not found at {args.runs}", file=sys.stderr)
+        return 1
+    if not args.qor.exists():
+        print(f"Error: qor file not found at {args.qor}", file=sys.stderr)
+        return 1
+
     results = analyze_gonogo(args.runs, args.qor, args.min_coverage, args.max_ssim_drop)
     print_report(results)
 
-    if args.out_json:
-        args.out_json.parent.mkdir(parents=True, exist_ok=True)
-        args.out_json.write_text(json.dumps(results, indent=2), encoding="utf-8")
-        print(f"Saved analysis JSON summary to {args.out_json}")
+    out_json = args.out_json or (args.out_dir / "gonogo_summary.json")
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+    out_json.write_text(json.dumps(results, indent=2), encoding="utf-8")
+    print(f"Saved analysis JSON summary to {out_json}")
+    return 0
 
 
 if __name__ == "__main__":

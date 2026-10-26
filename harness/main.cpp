@@ -1,6 +1,5 @@
 // Benchmark Harness entry point (stitch_harness).
 // Supports both batch manifest mode and single-pair debugging/profiling mode.
-#include <cuda_runtime.h>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -10,7 +9,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <filesystem>
 
 #include "harness/harness_types.hpp"
 #include "harness/json_parser.hpp"
@@ -64,6 +62,24 @@ std::string generate_run_id() {
     std::stringstream ss;
     ss << "run_" << std::put_time(std::localtime(&in_time_t), "%Y%m%d_%H%M%S");
     return ss.str();
+}
+
+std::string get_parent_dir(const std::string& path) {
+    auto pos = path.find_last_of("/\\");
+    if (pos == std::string::npos) return "";
+    return path.substr(0, pos);
+}
+
+std::string join_paths(const std::string& dir, const std::string& rel) {
+    if (dir.empty()) return rel;
+    if (rel.empty()) return dir;
+    if (rel.front() == '/' || rel.front() == '\\' || (rel.size() > 1 && rel[1] == ':')) {
+        return rel;
+    }
+    if (dir.back() == '/' || dir.back() == '\\') {
+        return dir + rel;
+    }
+    return dir + "/" + rel;
 }
 
 }  // namespace stitch::harness
@@ -193,12 +209,12 @@ int main(int argc, char** argv) {
               << "  Warmup: " << num_warmup << ", Repeats: " << num_repeats << "\n"
               << "  Output: " << out_path << "\n";
 
-    std::filesystem::path manifest_dir = manifest_path.empty() ? "" : std::filesystem::path(manifest_path).parent_path();
+    std::string manifest_dir = manifest_path.empty() ? "" : get_parent_dir(manifest_path);
 
     int total_runs = 0;
     for (const auto& pair : pairs) {
-        std::string path_a = (manifest_dir / pair.img_a_path).string();
-        std::string path_b = (manifest_dir / pair.img_b_path).string();
+        std::string path_a = join_paths(manifest_dir, pair.img_a_path);
+        std::string path_b = join_paths(manifest_dir, pair.img_b_path);
 
         HostImageRGB img_a, img_b;
         try {

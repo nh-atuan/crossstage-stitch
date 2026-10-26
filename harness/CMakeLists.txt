@@ -23,6 +23,10 @@ target_include_directories(stitch_harness PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../src
 )
 
+if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
+  target_include_directories(stitch_harness PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+endif()
+
 set_target_properties(stitch_harness PROPERTIES
   CUDA_STANDARD 17
   CUDA_STANDARD_REQUIRED YES

@@ -2,7 +2,7 @@
 // and zero-allocation execution of stages S1 through S6.
 #pragma once
 
-#include <cuda_runtime.h>
+#include "common/cuda_fwd.hpp"
 #include <string>
 #include <memory>
 #include <chrono>

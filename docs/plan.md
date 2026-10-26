@@ -48,7 +48,7 @@ Cách chia stage giữ giống đồ án môn học để mỗi người làm ti
 2. **Một deadline chung cho mọi task trong phase**, không có deadline riêng cho từng task.
 3. **Làm song song, không chờ nhau.** Trong một phase, các task không phụ thuộc lẫn nhau. Ai cần đầu vào chưa có thì dùng mock data và bản giả (cài bằng OpenCV) của stage tương ứng.
 4. **Quy ước chung** chỉ đặt cho những gì mọi thành viên cùng dùng, và do một người quyết định (Tuấn).
-5. **Quyết định kỹ thuật** của từng stage, module hay task do người phụ trách tự quyết định. Phương án chọn phải tối ưu trong điều kiện của phần mình phụ trách, hoặc có fallback nếu không tối ưu hay không khả thi. Phase 0 chỉ chốt các quyết định chủ chốt; các quyết định khác làm tới đâu quyết định tới đó và được ghi lại trong `docs/` gồm: bối cảnh, phương án chọn, trade-off hoặc phương án phụ, fallback, người quyết định, ngày.
+5. **Quyết định kỹ thuật** của từng stage, module hay task do người phụ trách tự quyết định. Mọi quyết định hay phương án kỹ thuật đều phải cân nhắc các phương án tương tự, phân tích kỹ trade-off và nhận định rõ lựa chọn có thực sự phù hợp, đảm bảo tính đúng đắn, chính xác trong ngữ cảnh hiện tại hay không. Phương án chọn phải tối ưu trong điều kiện của phần mình phụ trách, hoặc có fallback nếu không tối ưu hay không khả thi. Phase 0 chỉ chốt các quyết định chủ chốt; các quyết định khác làm tới đâu quyết định tới đó và được ghi lại trong `docs/` gồm: bối cảnh, phương án chọn, trade-off hoặc phương án phụ, fallback, người quyết định, ngày.
 6. **Ghép code chỉ khi các module liên quan đã xong:** dự kiến cuối Phase 1 (lần đầu đủ 6 stage) và cuối Phase 2 (đưa controller vào pipeline). Đế phụ trách. Trước đó mỗi người tự chạy toàn pipeline bằng các bản giả để phát hiện lỗi sớm.
 7. **Review:** Tuấn review pull request của từng task/stage và merge. Ở Phase 3, cả Nhóm cùng review toàn bộ paper.
 8. **Viết paper:** ai cài đặt phần nào thì viết phần đó, nhưng viết ở phase sau phase cài đặt, khi cách cài đặt đã được kiểm chứng.
@@ -153,7 +153,7 @@ Deadline chung cho các task: 31/10 (Thứ 7).
 
 Quy định riêng của Phase 2:
 
-- **Tôn trọng quyền tự quyết kỹ thuật:** Mỗi thành viên toàn quyền quyết định phương pháp kỹ thuật, thuật toán và cách cài đặt bên trong module của mình (theo mục 4, điều 5), miễn sao đáp ứng tiêu chí nghiệm thu và đúng contract dữ liệu.
+- **Tôn trọng quyền tự quyết kỹ thuật và phân tích trade-off:** Mỗi thành viên toàn quyền quyết định phương pháp kỹ thuật, thuật toán và cách cài đặt bên trong module của mình (theo mục 4, điều 5), miễn sao đáp ứng tiêu chí nghiệm thu và đúng contract dữ liệu. Mọi quyết định kỹ thuật đều phải cân nhắc các phương án tương tự, phân tích kỹ trade-off và nhận định rõ lựa chọn có thực sự phù hợp, đảm bảo tính đúng đắn, chính xác trong ngữ cảnh hiện tại hay không; ghi lại quyết định vào `docs/decisions/` theo mẫu của Nhóm.
 - **Đế chốt contract giao diện sớm:** Vì Đế phụ trách Controller, Đế chủ trì quyết định và chốt contract giao diện (struct tín hiệu đầu vào từ S1, S5 và struct núm điều khiển) ngay đầu phase (27/10) để Tuấn, Thành, Chương bám theo triển khai độc lập, không phải chờ nhau.
 - **Viết paper song song:** Tận dụng Phase 2 để viết ngay các mục đã kiểm chứng (Introduction, Related Work, và toàn bộ phần phương pháp của 6 stage S1–S6 cùng Controller trong Section 3 và Section 4) để giảm áp lực cho Phase 3.
 

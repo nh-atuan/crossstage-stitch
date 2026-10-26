@@ -50,7 +50,7 @@ Phần dưới đây là nội dung dành cho agent.
 
 1. Chỉ làm đúng phạm vi task. Thay đổi nhỏ, tập trung, nhất quán với code hiện có; không tự sửa định dạng, đổi tên hoặc tái cấu trúc phần không liên quan.
 2. Giữ nguyên các thay đổi sẵn có của người dùng. Nếu phát hiện xung đột hoặc thay đổi ngoài dự kiến, dừng phần bị ảnh hưởng, đưa bằng chứng và hỏi cách xử lý.
-3. Mỗi quyết định kỹ thuật đã được người dùng chốt phải được ghi lại trong `docs/` theo mẫu của Nhóm: bối cảnh, phương án chọn, trade-off hoặc phương án phụ, fallback, người quyết định, ngày.
+3. Mỗi quyết định kỹ thuật đã được người dùng chốt phải được ghi lại trong `docs/` theo mẫu của Nhóm: bối cảnh, phương án chọn, trade-off hoặc phương án phụ, fallback, người quyết định, ngày. Mọi quyết định hay phương án kỹ thuật đều phải cân nhắc các phương án tương tự, phân tích kỹ trade-off và nhận định rõ lựa chọn có thực sự phù hợp, đảm bảo tính đúng đắn, chính xác trong ngữ cảnh hiện tại hay không.
 4. Build CUDA bằng `nvcc -arch=sm_75` (GPU Tesla T4). Mọi yếu tố ngẫu nhiên (ví dụ RANSAC) dùng seed cố định và được in ra cùng kết quả.
 5. Code hoặc ý tưởng lấy từ bên ngoài phải ghi nguồn (URL, ngày truy cập, dùng cho phần nào).
 6. **Chia nhỏ phần việc thành nhiều file, hàm và module**, mỗi đơn vị làm một việc rõ ràng, để dễ đọc, dễ viết test, dễ kiểm chứng riêng và dễ khoanh vùng khi debug.

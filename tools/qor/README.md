@@ -145,3 +145,77 @@ Mask miền cố định, yêu cầu cửa sổ hoàn toàn hợp lệ, cách g�
 pilot là lựa chọn đánh giá được ghi rõ của dự án. Chưa tuyên bố khớp SSIM mặc
 định của thư viện khác hoặc toàn bộ protocol thực nghiệm của paper gốc. **Policy
 vẫn chưa được Nhóm phê duyệt**; cần xác nhận trước khi dùng cho final evaluation.
+
+## P2 — Quyết định QoR chuẩn hóa
+
+Cập nhật 26/10 (Thứ 2), năm 2026. `quality_decision(report, policy,
+execution_status="OK", fail_stage="")` được export từ `tools.qor.evaluate`.
+Lõi `tools/qor/decision.py` là Python thuần, không chạy ảnh/GPU; hàm export kiểm
+tra policy đúng schema trước khi gọi lõi. Kết quả bất biến có `status`, `passed`
+và tuple `reasons`. `quality_pass(report, policy)` vẫn là API bool tương thích,
+chỉ trả `True` cho `PASS`. Schema tám cột CSV và JSON policy không đổi.
+
+| Status | Ý nghĩa |
+|---|---|
+| `PASS` | Đủ bằng chứng và đạt mọi ràng buộc của policy được truyền vào |
+| `FAIL` | Có pipeline failure, stitch/H không hợp lệ hoặc vi phạm metric |
+| `UNVERIFIED` | Thiếu reference/metric/trạng thái cần thiết, hoặc reference unreliable |
+| `REFERENCE_FAILED` | Reference được xác nhận đã thất bại; không phải candidate QoR violation thông thường |
+| `EVALUATION_ERROR` | Metric/trạng thái sai kiểu, sai miền, NaN/inf không hợp lệ hoặc lỗi evaluator tường minh |
+
+`PASS` chỉ có nghĩa đạt **policy pilot đang truyền vào**, không xác nhận Nhóm đã
+phê duyệt policy. Ngưỡng coverage/SSIM/PSNR không thay đổi. Biên so sánh inclusive:
+coverage >= minimum, SSIM >= reference−drop, PSNR >= reference−drop. PSNR số học
+`+inf` vẫn hợp lệ khi MSE bằng 0; reference `+inf` yêu cầu candidate cũng `+inf`
+với tolerance hữu hạn. SSIM/coverage vô hạn, NaN, PSNR âm hoặc `−inf` đều là lỗi;
+chuỗi CSV `inf` phải qua parser thành số trước khi gọi predicate thuần.
+
+Caller có execution evidence phải truyền `execution_status`/`fail_stage` vào
+hàm mới; hai giá trị mặc định chỉ tương thích với report evaluator đã có. Không
+được suy ra runtime success chỉ từ H hoặc `valid_stitch=1`. Predicate không tự
+chứng minh H đúng hình học; validity do evaluator xác nhận trước đó.
+
+`tools.qor.report` dùng trực tiếp quyết định chuẩn, bổ sung trường JSON
+`decision_status`; giữ `pass`, `reasons` và metric. Khi reference thất bại, lý do
+chính là reference failure; không suy diễn candidate chưa chấm điểm là H sai.
+`pair_disposition` giữ reference failure/unreliable riêng và trả `unverified` hoặc
+`evaluation_error` thay vì `unachievable` khi chưa có đủ bằng chứng. Muốn gọi
+unachievable phải có toàn bộ candidate được đánh giá và đều fail trong tập hữu
+hạn đã công khai.
+
+### Điểm tích hợp Tuấn/Đế cần review
+
+`tools/analysis/analyze_gonogo.py::analyze_gonogo` hiện gán `quality_pass` từ
+status/validity/coverage, chưa dùng SSIM/PSNR/reference status; đối số
+`max_ssim_drop` chưa tham gia predicate. Chương chưa sửa script của owner khác.
+Bản tích hợp tối thiểu cần:
+
+1. Đọc policy bằng `load_policy`, không thêm threshold mặc định khác; tìm dòng
+   reference theo `ref_config_id` cho **cùng pair**.
+2. Gắn `reference_metrics` từ dòng reference vào mỗi candidate, rồi gọi
+   `quality_decision(candidate, policy, execution_status=run_status,
+   fail_stage=run_fail_stage)`.
+3. Chỉ `decision.passed` được vào Fixed-Best/Oracle. Giữ riêng counts cho các
+   status còn lại; thiếu reference không là pass hoặc unachievable đã chứng minh.
+4. Với schema CSV có metric thiếu/sai, dùng parser strict hiện có hoặc validator
+   tương đương; không biến NaN hoặc ô rỗng thành 0 bằng `safe_float`.
+5. Chạy lại raw pilot sau tích hợp; JSON tổng hợp cũ không đủ dựng lại corrected
+   speedup. Oracle fallback và lọc Pareto là vấn đề riêng thuộc Tuấn/Đế.
+
+Ví dụ adapter dùng API hiện có, không phải schema controller tương lai:
+
+```python
+from tools.qor.evaluate import quality_decision
+
+candidate = dict(qor_row, reference_metrics=reference_qor_row)
+decision = quality_decision(candidate, policy,
+                            execution_status=run_row["status"],
+                            fail_stage=run_row["fail_stage"])
+if decision.passed:
+    eligible_for_oracle = True
+```
+
+Tests: `python -m pytest tests/python/test_qor.py
+ tests/python/test_qor_report.py tests/python/test_qor_decisions.py -q` (viết trên
+một dòng khi chạy shell). Fixtures chỉ kiểm logic/serialization; không thay dữ
+liệu pilot, phê duyệt policy hay nghiệm thu controller/T4.

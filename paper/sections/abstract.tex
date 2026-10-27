@@ -1,0 +1,16 @@
+\begin{abstract}
+% Role: scope and evidence status; no adaptive speedup is asserted.
+A GPU panorama-stitching pipeline exposes computational budgets whose cost and
+suitability depend on the input pair. This working manuscript studies whether
+a scene-aware cross-stage runtime can reduce stitching latency while maintaining
+a predefined quality-of-result constraint. The implemented renderer consumes
+original RGB images and a global homography, and supports feather blending and
+Laplacian multi-band blending with three or five reductions. We define separate
+checks for alignment quality, rendering correctness, and composition quality,
+together with a same-homography comparison of blending costs. The intended
+runtime evaluation compares a development-selected fixed configuration,
+adaptive execution, and an offline per-pair oracle under common timing and
+quality definitions. Controller integration and held-out performance measurements
+are still required to answer the research question. This draft therefore reports
+no adaptive speedup or perceptual-quality guarantee.
+\end{abstract}

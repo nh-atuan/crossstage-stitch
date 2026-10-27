@@ -1,0 +1,41 @@
+\section{Related Work}
+\label{sec:related}
+\subsection{Alignment and Panorama Composition}
+% Role: prior methods; establish the global-homography scope.
+Brown and Lowe describe automatic panoramic stitching using invariant features
+and multi-band blending~\cite{brown2007stitching}. Their work supplies the classical
+pipeline context; this study concerns computational budgets within a GPU
+implementation. Their feature matching is followed by RANSAC homography
+estimation and inlier-based image verification. This establishes the distinction
+between descriptor similarity and geometric consistency; it does not imply that
+our implementation uses their SIFT features or nearest-neighbour search.
+More flexible image models address a different limitation:
+UDIS++ combines global homography with local thin-plate-spline warping and
+learned seam-driven composition~\cite{nie2023udispp}. Our global homography
+renderer does not reproduce those local deformations. Increased rendering cost
+cannot be assumed to repair parallax or an incorrect alignment.
+
+\subsection{Blending and GPU Cost--Quality Trade-offs}
+% Role: foundations and evaluation precedent.
+Multi-resolution splines blend band-pass components across spatial scales before
+reconstruction~\cite{burt1983spline}. Our multi-band mode uses the
+Gaussian/Laplacian-pyramid principle while fixing its own ownership, extension,
+border, and sampling conventions. These choices require an explicit reference
+rather than an assumption of bitwise equivalence to a library blender. Zhu et al.
+compare panoramic-video blending algorithms using time, memory, and visual-quality
+measurements, including GPU implementations where
+appropriate~\cite{zhu2018blending}. Their evaluation motivates reporting these
+costs separately. Their video measurements are not performance predictions for
+our two-image workload or GPU platform.
+
+\subsection{Configuration Tuning and Quality-Aware Execution}
+% Role: acknowledge systems precedents without a first-of-kind claim.
+Program autotuning treats implementation and parameter choices as an explicit
+search space. OpenTuner supports domain-specific representations and multiple
+search techniques for that purpose~\cite{ansel2014opentuner}. SAGE combines
+compiler-generated approximate CUDA kernels with runtime selection under a user
+quality target~\cite{samadi2013sage}. These systems establish configuration
+search and quality-aware GPU execution as prior ideas. Our evaluation must
+isolate scene-dependent budget selection, intermediate geometry checks, and
+valid result reuse in the stitching pipeline. A comparison against fixed
+budgets alone does not explain which runtime mechanism produces an improvement.

@@ -167,6 +167,8 @@ struct Runner {
             r.descriptors.insert(r.descriptors.end(), raw.begin() + i * 48, raw.begin() + i * 48 + 32);
             for (int b = 32; b < 48; ++b) CHECK(raw[i * 48 + b] == 0xcd);  // stride padding untouched
         }
+        // With capacity 0, S3 returns before blurring: there is no blur to read.
+        if (keypoints().capacity == 0) return r;
         s2_s3::detail::S3Layout layout;
         CHECK(s2_s3::detail::make_s3_layout(w, h, &layout));
         r.blurred.resize(static_cast<std::size_t>(w) * h);

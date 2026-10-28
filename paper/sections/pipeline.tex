@@ -7,8 +7,77 @@ The repository connects six CUDA stages: preprocessing (S1), keypoint detection
 (S6). S1--S3 process both images before S4 matches their descriptors. S5 returns
 a homography $H$ mapping B to A in original-image coordinates. Upstream scale
 metadata converts an estimate from resized coordinates before rendering.
-Detailed descriptions of S1, S2/S3, and S4/S5 require their respective owners'
-review. The following subsections describe the S6 code checked for this draft.
+Detailed descriptions of S1 and S4/S5 require their respective owners' review.
+The following subsections describe the S2/S3 and S6 code checked for this draft.
+
+\subsection{Keypoint Detection and Description (S2--S3)}
+\label{sec:s2-s3}
+% Role: method choice and the single knob it exposes.
+S2 and S3 implement single-level ORB~\cite{rublee2011orb}: FAST corners ranked
+by the Harris measure, an intensity-centroid orientation, and a rotated BRIEF
+descriptor. Both stages read the same GRAY8 image from S1, which applies no
+smoothing on this path. The keypoint budget $K$ is the only parameter that
+changes between attempts. The FAST threshold (20) and the Harris constant
+($k=0.04$) are fixed at the OpenCV defaults and were not tuned on our data.
+Without a scale pyramid, the detector is not scale invariant.
+
+% Role: detection and the two-step selection that defines the output.
+S2 computes the FAST-9 score~\cite{rosten2006fast} at every pixel at least three
+pixels from the border and keeps strict $3\times3$ maxima at least 31 pixels from
+the border, so that the S3 sampling patch stays inside the image. Selection
+follows ORB in two steps: the $2K$ maxima with the highest FAST score, then the
+$K$ of those with the highest Harris response~\cite{harris1988corner} over a
+$7\times7$ window. Both steps break ties by pixel index, so the output for a
+given image and $K$ is deterministic. Keypoints are returned in decreasing
+Harris order.
+
+% Role: GPU realization; selection without host readback.
+Selection runs on the device and never reads a count back to the host. The NMS
+kernel accumulates a 256-bin histogram of FAST scores, and one block scans it
+for the score threshold that admits exactly $2K$ candidates, taking ties at the
+threshold in pixel order. Per-block counts, a block scan, and a scatter then
+write the candidates to contiguous slots. The Harris kernel builds a 64-bit key
+from the response and the inverted pixel index, and each candidate finds its
+rank by counting larger keys. All keys are distinct, so every rank below $K$
+owns one output slot. This ranking costs $O(K^2)$ comparisons. That is
+acceptable for the budgets considered here ($K\le 4000$); much larger budgets
+would call for a radix-based selection.
+
+% Role: description; mapping of work to warps and numeric choices.
+S3 smooths the image with a separable $7\times7$ Gaussian ($\sigma=2$) computed
+in FP32 and rounded to 8 bits, the same smoothing OpenCV applies before ORB
+description. One warp handles one keypoint. The orientation is the angle of the
+intensity centroid~\cite{rosin1999corner} over a circular patch of radius 15 on
+the unsmoothed image. Lane~0 alone evaluates the angle and its sine and cosine
+and broadcasts them, because FP64 throughput is low on the target GPU. Each lane
+then evaluates eight of the 256 rotated point pairs of the OpenCV pattern on the
+smoothed image and writes one byte. The result is a 32-byte binary
+descriptor~\cite{calonder2010brief} that S4 compares by Hamming distance;
+descriptor row $i$ belongs to keypoint $i$.
+
+% Role: resource contract that makes K a per-attempt knob.
+Neither stage allocates memory or synchronizes. The caller queries workspace
+sizes on the host: $O(WH+K)$ bytes for S2 and $O(WH)$ bytes for S3, for a
+$W\times H$ image. Both sizes are non-decreasing in $W$, $H$, and $K$, so the
+runtime allocates once for the largest scale and budget in its ladder and
+changes $K$ per attempt without reallocation. S3 launches one warp per keypoint
+slot; the caller therefore passes a keypoint view whose capacity equals the
+current $K$ rather than the allocated maximum, which avoids idle warps. Because
+the $2K$ preselection depends on $K$, the keypoints for a smaller budget are not
+necessarily a prefix of those for a larger one. Changing $K$ therefore reruns
+S2 through S5 instead of truncating an earlier result.
+
+% Role: what the verification establishes and what it does not.
+We check both stages against a NumPy reference that performs the same
+operations in the same FP32 order and that is itself compared with OpenCV's
+single-level ORB. FAST, the Harris gradient sums, and the centroid moments use
+integer arithmetic; the remaining floating-point steps use round-to-nearest
+intrinsics so that the compiler cannot contract them into fused multiply-adds.
+On synthetic and real test images, keypoints, responses, smoothed images, and
+descriptors match the reference bit for bit. This establishes implementation
+correctness, not matching quality. On test pairs with a large scale change,
+both our stages and OpenCV's single-level ORB fail to recover an accurate homography,
+which we attribute to the missing pyramid.
 
 \subsection{S6 Geometry, Sampling, and Validity}
 \label{sec:s6-geometry}

@@ -4,7 +4,7 @@
 - **Người quyết định:** Thành.
 - **Ngày ghi nhận:** 28/10 (Thứ 4), năm 2026.
 - **Phase:** Phase 2.
-- **Trạng thái:** Đang thử. Phương án dựa trên việc đọc code S2/S3 hiện có. Chưa có test đổi K liên tiếp, chưa đo trên Colab T4. Mục 5 liệt kê các kiểm chứng sẽ chạy.
+- **Trạng thái:** Đã chọn ngày 28/10 (Thứ 4), sau khi kiểm chứng trên Colab T4. Fallback ở mục 4 là bắt buộc: khi cấp theo K_max, harness phải truyền view `capacity = K`. Bằng chứng ở mục 5 và trong [bằng chứng T4](../s2-s3-t4-validation.md), mục 6.
 
 ## 1. Bối cảnh
 
@@ -38,7 +38,7 @@ Caller cấp phát một lần trước run theo kích thước lớn nhất có
 flowchart LR
     L["Ladder của Controller"] --> M["K_max = max K trong ladder<br/>W_max, H_max = ảnh ở S lớn nhất"]
     M --> A["Cấp phát một lần:<br/>Keypoints capacity K_max<br/>Descriptors K_max hàng<br/>workspace S2 theo W_max, H_max, K_max<br/>workspace S3 theo W_max, H_max"]
-    A --> R["Mỗi attempt:<br/>s2::Config.max_keypoints = K<br/>gọi s2_detect, s3_describe"]
+    A --> R["Mỗi attempt:<br/>s2::Config.max_keypoints = K<br/>view Keypoints capacity = K<br/>gọi s2_detect, s3_describe"]
     R -->|"RETRY đổi K hoặc S"| R
 ```
 
@@ -46,10 +46,10 @@ Cách dùng:
 
 - `K_max` là K lớn nhất trong ladder. `W_max`, `H_max` là kích thước ảnh S1 ở S lớn nhất trong ladder.
 - Workspace S2 lấy từ `s2_workspace_bytes(W_max, H_max, {.., K_max, ..})`, workspace S3 lấy từ `s3_workspace_bytes(W_max, H_max)`.
-- Mỗi attempt chỉ đổi `max_keypoints` và kích thước ảnh. Buffer, workspace và stream giữ nguyên.
+- Mỗi attempt chỉ đổi `max_keypoints`, kích thước ảnh và trường `capacity` của view `Keypoints` (đặt bằng K, xem mục 4). Buffer, workspace và stream giữ nguyên.
 - K lớn hơn `capacity` trả `INVALID_ARGUMENT`. Ảnh lớn hơn kích thước đã dùng để tính workspace trả `INSUFFICIENT_WORKSPACE`. Cả hai đều là lỗi cấu hình của caller, không phải tín hiệu chất lượng.
 
-Phương án này đúng khi số byte workspace không giảm theo K và theo kích thước ảnh. Trong `make_s2_layout`, các vùng score, maxima, bộ đếm block tăng theo số pixel, vùng key tăng theo `2K` và nằm cuối layout. Vì vậy số byte cần cho mọi (S, K) trong ladder không vượt số byte của (W_max, H_max, K_max). Tính chất này sẽ được kiểm tra bằng test host (mục 5).
+Phương án này đúng khi số byte workspace không giảm theo K và theo kích thước ảnh. Trong `make_s2_layout`, các vùng score, maxima, bộ đếm block tăng theo số pixel, vùng key tăng theo `2K` và nằm cuối layout. Vì vậy số byte cần cho mọi (S, K) trong ladder không vượt số byte của (W_max, H_max, K_max). Test host ở mục 5 kiểm tra tính chất này.
 
 Hệ quả cần biết: S2 chọn trước 2K điểm theo FAST score rồi mới chọn K điểm theo Harris. Tập 2K đổi theo K, nên K điểm của lần chạy K nhỏ không nhất thiết là K điểm đầu của lần chạy K lớn. Điều này khớp với contract mục 6.3: đổi K thì chạy lại S2 tới S5.
 
@@ -57,15 +57,17 @@ Hệ quả cần biết: S2 chọn trước 2K điểm theo FAST score rồi m�
 
 | Phương án | Ưu điểm | Nhược điểm | Vì sao không chọn |
 |---|---|---|---|
-| Cấp phát một lần theo K_max (chọn) | Không cấp phát trong vùng đo; không đổi API; code S2/S3 đã hỗ trợ | Bộ nhớ giữ theo K_max cả khi K nhỏ; S3 có thể launch thêm block thừa | |
+| Cấp phát một lần theo K_max, truyền view `capacity = K` (chọn) | Không cấp phát trong vùng đo; không đổi API; code S2/S3 đã hỗ trợ | Bộ nhớ giữ theo K_max cả khi K nhỏ; harness phải nhớ đặt `capacity = K`, nếu quên thì S3 launch thêm block thừa | |
 | Cấp phát lại khi K đổi | Bộ nhớ vừa đúng K | `cudaMalloc`, `cudaFree` nằm giữa các attempt, gây đồng bộ ngầm và cộng latency vào vùng đo; trái quy ước stage không cấp phát | Làm hỏng chính tiêu chí nghiệm thu |
 | Một bộ workspace riêng cho mỗi K trong ladder | Không cần tính kích thước lớn nhất | Tổng bộ nhớ bằng tổng các bộ, trong khi mỗi lúc chỉ dùng một bộ | Tốn bộ nhớ mà không nhanh hơn |
 | `cudaMallocAsync` với memory pool | Bộ nhớ theo đúng K | Vẫn có chi phí cấp phát trên stream; đưa cấp phát vào trong stage | Trái quy ước, khó đo |
 | CUDA Graph riêng cho mỗi K | Giảm chi phí launch | Phải dựng và giữ graph cho từng K và từng kích thước ảnh; S2 chỉ có 8 kernel và 1 memset | Phức tạp hơn lợi ích; chưa có số đo cho thấy launch là nút thắt |
 
-## 4. Fallback
+## 4. Fallback, nay là bắt buộc
 
-Nếu số đo trên T4 cho thấy S3 chậm hơn quá ngưỡng khi `capacity = K_max` (ngưỡng ở mục 5), harness truyền cho S2 và S3 một view `Keypoints` có `capacity = K` của attempt đó. View này trỏ vào cùng buffer đã cấp theo K_max, chỉ đổi trường `capacity`. Cách này:
+Fallback này được chuẩn bị cho trường hợp S3 chậm hơn ngưỡng ở mục 5 khi `capacity = K_max`. Số đo trên T4 cho thấy đúng trường hợp đó xảy ra ở K = 1000, nên Thành chốt dùng fallback ngày 28/10 (Thứ 4).
+
+Harness truyền cho S2 và S3 một view `Keypoints` có `capacity = K` của attempt đó. View này trỏ vào cùng buffer đã cấp theo K_max, chỉ đổi trường `capacity`. Cách này:
 
 - không cấp phát thêm, không đổi code hay API của S2/S3;
 - vẫn đúng contract của S2 (`capacity >= K`);
@@ -78,16 +80,20 @@ Phương án phụ thêm tham số K vào `s3_describe` đã được cân nhắ
 
 Ngưỡng hiệu năng do Thành chốt ngày 28/10 (Thứ 4): với từng ô S×K, median `t_s2` và `t_s3` khi cấp theo K_max được chậm hơn khi cấp vừa đúng K tối đa max(5%, 0.005 ms).
 
-Kế hoạch kiểm chứng (chưa chạy):
+Kết quả chạy ngày 28/10 (Thứ 4), code ở commit `16fbfe7`. Chi tiết, lệnh và bảng số nằm trong [bằng chứng T4](../s2-s3-t4-validation.md), mục 6.
 
-| Kiểm tra | Nơi chạy | Điều kiện đạt |
-|---|---|---|
-| Số byte workspace S2 không giảm theo K, W, H; workspace S3 không giảm theo W, H; mọi (S, K) của dải thử không vượt (W_max, H_max, K_max) | Host, `tests/test_s2_s3_config.cpp` | Pass |
-| Chuỗi attempt đổi cả K và kích thước ảnh trên một bộ buffer cấp theo K_max, so với lần chạy cấp vừa đúng | T4, `tests/test_s2_s3_cuda.cu` | Count, keypoint, response, descriptor, ảnh blur giống từng bit |
-| `cudaMemGetInfo` trước và sau 1000 lần gọi S2 và S3 với K luân phiên | T4 | Bộ nhớ free bằng nhau |
-| compute-sanitizer memcheck (có leak check), racecheck, initcheck, synccheck | T4 | 0 lỗi |
-| Thời gian S2, S3 khi cấp theo K_max so với cấp vừa đúng K, S ∈ {1, 0.75, 0.5, 0.25}, K ∈ {500, 1000, 2000, 4000} | T4 | Đạt ngưỡng trên |
-| 41 golden case và 16 cặp Oxford của Phase 1 | T4 | Kết quả giống [bằng chứng Phase 1](../s2-s3-t4-validation.md) |
+| Kiểm tra | Nơi chạy | Điều kiện đạt | Kết quả |
+|---|---|---|---|
+| Số byte workspace S2 không giảm theo K, W, H; workspace S3 không giảm theo W, H; mọi (S, K) của dải thử không vượt (W_max, H_max, K_max) | Host, `tests/test_s2_s3_config.cpp` | Pass | Pass |
+| Chuỗi 9 attempt đổi cả K và kích thước ảnh trên một bộ buffer cấp theo K_max, với cả `capacity = K_max` và `capacity = K`, so với lần chạy cấp vừa đúng | T4, `tests/test_s2_s3_cuda.cu` | Count, keypoint, response, descriptor, ảnh blur giống từng bit | Pass |
+| `cudaMemGetInfo` trước và sau 1000 lần gọi S2 và S3 với K luân phiên | T4 | Bộ nhớ free bằng nhau | Pass |
+| compute-sanitizer memcheck (có leak check), racecheck, initcheck, synccheck | T4 | 0 lỗi | 0 lỗi, 0 hazard, leak 0 byte |
+| Thời gian S2 khi cấp theo K_max, S ∈ {1, 0.75, 0.5, 0.25}, K ∈ {500, 1000, 2000, 4000}, ảnh `graf` và `wall` | T4 | Đạt ngưỡng trên | Đạt ở cả 32 ô, cả hai lượt đo |
+| Thời gian S3 khi cấp theo K_max, `capacity = K_max` | T4 | Đạt ngưỡng trên | **Không đạt** ở 6 ô (lượt 1) và 7 ô (lượt 2), đều ở K = 1000, chậm thêm 0.0060–0.0093 ms |
+| Thời gian S3 khi cấp theo K_max, view `capacity = K` | T4 | Đạt ngưỡng trên | Đạt ở cả 32 ô, cả hai lượt đo |
+| 41 golden case và 16 cặp Oxford của Phase 1 | T4 | Kết quả giống [bằng chứng Phase 1](../s2-s3-t4-validation.md) | 41/41 khớp từng bit; 16 cặp cho cùng số liệu, 13/16 PASS |
+
+Nguyên nhân chỉ K = 1000 vượt ngưỡng mà K = 500 thì không chưa được giải thích. Với `capacity = K_max`, S3 launch `K_max / 4` block bất kể K, nên block thừa là nguyên nhân hợp lý nhất. Nhưng chưa có profile để xác nhận, và giả thuyết này không giải thích được vì sao K = 500 (nhiều block thừa hơn) vẫn đạt. Fallback loại bỏ block thừa và đạt ở mọi ô, nên việc profile không chặn quyết định.
 
 ## 6. Nguồn
 

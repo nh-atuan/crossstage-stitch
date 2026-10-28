@@ -8,7 +8,7 @@ import json
 import math
 from pathlib import Path
 
-from .evaluate import CSV_FIELDS, load_policy, quality_pass
+from .evaluate import CSV_FIELDS, load_policy, quality_decision
 
 
 def _number(text, name, line, *, optional=False):
@@ -80,24 +80,13 @@ def read_qor(path):
 
 def _classification(row, reference, policy):
     evaluated = dict(row, reference_metrics=reference)
-    passed = bool(quality_pass(evaluated, policy))
-    reasons = []
-    if row["reference_status"] != "ok":
-        reasons.append(row["reference_status"])
-    if not row["valid_stitch"]:
-        reasons.append("invalid_stitch")
-    if row["reference_status"] == "ok" and row["valid_stitch"]:
-        if row["overlap_coverage"] < policy.min_coverage:
-            reasons.append("coverage_below_minimum")
-        if row["ssim_overlap"] < reference["ssim_overlap"] - policy.max_ssim_drop:
-            reasons.append("ssim_drop_exceeded")
-        if row["psnr_overlap"] < reference["psnr_overlap"] - policy.max_psnr_drop_db:
-            reasons.append("psnr_drop_exceeded")
+    decision = quality_decision(evaluated, policy)
     # JSON-standard encoding: positive infinity is a documented string, not Infinity.
     metrics = {name: "inf" if row[name] == math.inf else row[name]
                for name in ("ssim_overlap", "psnr_overlap", "overlap_coverage")}
     return {"config_id": row["config_id"], "is_reference": row["config_id"] == row["ref_config_id"],
-            "valid_stitch": row["valid_stitch"], "pass": passed, "reasons": reasons,
+            "valid_stitch": row["valid_stitch"], "pass": decision.passed,
+            "decision_status": decision.status.value, "reasons": list(decision.reasons),
             "metrics": metrics}
 
 

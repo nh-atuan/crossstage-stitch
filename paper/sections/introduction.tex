@@ -1,0 +1,48 @@
+\section{Introduction}
+\label{sec:introduction}
+% Role: opening; define the workload and the systems question.
+Panorama stitching combines overlapping images into a wider field of view by
+estimating their alignment and composing the warped image
+content~\cite{brown2007stitching}. A GPU implementation parallelizes operations,
+but does not determine how much computation an input pair needs. This work
+studies budget allocation within a feature-based pipeline that produces a
+panorama from two original RGB images.
+
+% Role: challenge; state a testable hypothesis rather than an empirical result.
+The computational budgets of this pipeline interact across stages. Reducing
+alignment resolution changes detected keypoints and descriptors; limiting
+keypoints changes the matching workload; and changing the robust-fitting budget
+changes the hypotheses considered for the homography. A cheaper choice can also
+produce an unusable alignment. The relevant objective is therefore latency
+subject to an explicit quality policy, including the cost of unsuccessful
+attempts, rather than the execution time of an isolated fast kernel.
+
+% Role: method scope; distinguish implemented components from pending runtime work.
+We expose a configuration $c=(s,k,r,b)$ comprising alignment-image scale,
+keypoint limit, robust-fitting hypothesis budget, and blending mode. Rendering
+uses the original RGB images and a homography in their coordinate systems.
+The proposed runtime selects a configuration from information available at
+decision time and can increase budgets after inspecting intermediate signals.
+Selection, checks, synchronization, retries, and reuse bookkeeping must be
+included in end-to-end latency. An offline oracle that already knows which
+configurations satisfy the quality policy is a reference bound, not an online
+selection algorithm.
+
+% Role: research question and evidence obligations.
+The research question is: \emph{Can a scene-aware cross-stage runtime reduce GPU
+panorama-stitching latency by dynamically allocating computational budgets while
+maintaining a predefined quality-of-result constraint?} The implementation
+provides a CUDA pipeline and rendering policies with explicit geometry, sampling,
+and buffer contracts. This draft specifies the evaluation boundary and documents
+the implemented renderer. Evidence for the adaptive-runtime hypothesis requires
+an owner-reviewed controller and held-out comparisons. An unaudited pilot oracle
+gap does not establish that hypothesis.
+
+% Role: positioning and organization; avoid unsupported novelty claims.
+The intended systems contribution is an evaluated policy for coordinating
+budgets and valid result reuse, rather than a new stitching or blending algorithm.
+Section~\ref{sec:related} positions the study against stitching, composition,
+and configuration tuning. Section~\ref{sec:pipeline} describes the checked pipeline
+interface and renderer. Section~\ref{sec:controller} reserves the controller method
+for implementation-backed integration; Section~\ref{sec:experiments} defines
+the evidence required to answer the research question.

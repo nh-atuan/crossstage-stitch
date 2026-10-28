@@ -11,6 +11,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from .decision import QualityDecision, QualityStatus, decide_quality
+
 CSV_FIELDS = ("pair_id", "config_id", "ref_config_id", "valid_stitch",
               "ssim_overlap", "psnr_overlap", "overlap_coverage", "reference_status")
 _REL_EPS = 1e-12
@@ -180,15 +182,14 @@ def evaluate_pair(a, b, h_candidate, h_reference, policy):
     return result
 
 
+def quality_decision(report, policy, *, execution_status="OK", fail_stage=""):
+    """Canonical offline decision; policy validation remains explicit and strict."""
+    return decide_quality(report, _policy(policy), execution_status=execution_status, fail_stage=fail_stage)
+
+
 def quality_pass(report, policy):
-    """Pilot Pass_i(c); intentionally separate from the locked qor.csv schema."""
-    policy = _policy(policy)
-    reference = report.get("reference_metrics")
-    if report["reference_status"] != "ok" or not report["valid_stitch"] or reference is None:
-        return False
-    return (report["overlap_coverage"] >= policy.min_coverage and
-            report["ssim_overlap"] >= reference["ssim_overlap"] - policy.max_ssim_drop and
-            report["psnr_overlap"] >= reference["psnr_overlap"] - policy.max_psnr_drop_db)
+    """Backward-compatible bool view of the canonical offline decision."""
+    return quality_decision(report, policy).passed
 
 
 def pair_disposition(reports, policy):
@@ -196,11 +197,18 @@ def pair_disposition(reports, policy):
     reports = list(reports)
     if not reports:
         raise ValueError("cannot classify a pair without configuration reports")
-    if any(r["reference_status"] == "reference_failure" for r in reports):
+    decisions = [quality_decision(r, policy) for r in reports]
+    if any(decision.status is QualityStatus.REFERENCE_FAILED for decision in decisions):
         return "reference_failure"
-    if any(r["reference_status"] != "ok" for r in reports):
+    if any("reference_unreliable" in decision.reasons for decision in decisions):
         return "reference_unreliable"
-    return "achievable" if any(quality_pass(r, policy) for r in reports) else "unachievable"
+    if any(decision.passed for decision in decisions):
+        return "achievable"
+    if any(decision.status is QualityStatus.EVALUATION_ERROR for decision in decisions):
+        return "evaluation_error"
+    if any(decision.status is QualityStatus.UNVERIFIED for decision in decisions):
+        return "unverified"
+    return "unachievable"
 
 
 def _read_image(path):

@@ -1,0 +1,70 @@
+\section{Evaluation Protocol and Evidence Status}
+\label{sec:experiments}
+\subsection{Alignment Quality and Feasible Configurations}
+\label{sec:quality}
+% Role: policy definition; no threshold approval is inferred.
+For each pair, a fixed high-budget reference defines evaluation domain $\Omega$
+in A coordinates. Candidate metrics compare A with B warped using the candidate
+homography on $V=\Omega\cap\mathrm{valid}(H)$. Coverage is $|V|/|\Omega|$.
+PSNR uses RGB samples in $V$. SSIM uses an $11\times11$ Gaussian window with
+standard deviation 1.5 and admits only centres whose full window lies in $V$.
+Missing or unreliable reference evidence cannot pass by default. For tolerances
+$\delta_S,\delta_P$ and coverage minimum $\gamma$, define
+\begin{align}
+\mathcal P_i(c)={}&\mathrm{Valid}_i(c)\land\mathrm{ReferenceOK}_i
+                   \land[\mathrm{Coverage}_i(c)\ge\gamma]\notag\\
+ &{}\land[\mathrm{SSIM}_i(c)\ge\mathrm{SSIM}_{\mathrm{ref},i}-\delta_S]\notag\\
+ &{}\land[\mathrm{PSNR}_i(c)\ge\mathrm{PSNR}_{\mathrm{ref},i}-\delta_P].
+\end{align}
+The working policy is subject to owner review and development calibration;
+its tolerances are not dataset standards. Alignment metrics are computed from
+input images and homography, not the blended panorama. They cannot establish
+that one blend mode has better perceptual composition.
+
+\subsection{Timing and Same-Homography Rendering Comparison}
+% Role: controlled comparison and explicit timing populations.
+The S6 comparison freezes RGB inputs, homography, canvas, origin, and numeric
+conventions while changing only the blender. Geometry, allocation/workspace
+preparation, render execution, synchronization, and host wall time must be
+identified separately where observed. CUDA events around render measure its
+stream interval, not all CPU work. Geometry, allocation, and transfers are
+excluded from a steady-state render interval and must not disappear from a
+separately reported full-invocation cost. Mask equality, output shape,
+source-only preservation, and reference colour error are correctness diagnostics.
+Image inspection can expose seams or ghosting, but an unvalidated diagnostic
+is not a perceptual-quality constraint.
+
+\subsection{Runtime Baselines and Failure Accounting}
+% Role: experimental design; distinguish planned platform from completed runs.
+The intended runtime platform is an NVIDIA Tesla T4 with CUDA targeting
+\texttt{sm\_75}. Each campaign records actual GPU state, toolkit, dependencies,
+code revision, policy hash, input manifest, seeds, and compiler flags. UDIS-D
+is the primary planned real-image benchmark. Development and validation must
+be separated by scene or source where possible. Final data must not be used
+for threshold or configuration selection. Synthetic fixtures test correctness
+and do not replace real-image workload evaluation.
+
+Fixed-Best is selected on development data. For each pair, the offline oracle
+uses the measured finite grid to select
+\begin{equation}
+c_i^\star\in\mathop{\mathrm{arg\,min}}_{c\in\mathcal C:\mathcal P_i(c)}T_i(c).
+\end{equation}
+An empty feasible set is recorded explicitly. Adaptive comparisons
+use the same quality policy and host timing boundary: original RGB images
+already on the device to the completed device panorama. Feature extraction,
+controller decisions, required internal transfers, synchronization, retry, and
+cache bookkeeping belong inside that interval. Decode and initial H2D/final D2H
+transfers are separate. Report failures and unverified cases alongside latency.
+Exclude warmups before taking repeat medians, then compute median and p95 over
+pairs. Retry/fallback analysis requires actual controller traces, which are not
+yet available for this manuscript.
+
+\subsection{Available Evidence and Pending Measurements}
+% Role: evidence status; no unaudited pilot number becomes a paper result.
+The repository contains renderer tests against an independent FP64 reference
+and local GPU correctness evidence. They check the renderer's arithmetic,
+not the adaptive-runtime hypothesis. A preliminary grid-sweep summary is
+insufficient to report a corrected quality-constrained oracle gap without raw
+measurements, manifest, and policy audit. This draft therefore contains no
+final latency--quality result table, controller speedup, or claimed improvement
+from adaptive blending.

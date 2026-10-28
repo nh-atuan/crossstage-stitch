@@ -106,7 +106,7 @@ def _fixture_contract(path):
     return header, rgb, mask
 
 
-def inspect_outputs(fixtures, artifacts, timings, require_t4=False):
+def inspect_outputs(fixtures, artifacts, timings, require_t4=False, warmups=2, repeats=10):
     """Check machine-readable correctness and profiling handoff contracts."""
     metadata = []
     contracts = {}
@@ -151,14 +151,14 @@ def inspect_outputs(fixtures, artifacts, timings, require_t4=False):
                 raise ValueError("timing must be finite and nonnegative")
         identity = (int(row["is_warmup"]), int(row["repeat_idx"]))
         by_fixture.setdefault(row["fixture"], []).append(identity)
-    identities = {(1, 0), (1, 1)} | {(0, index) for index in range(10)}
+    identities = {(1, index) for index in range(warmups)} | {(0, index) for index in range(repeats)}
     for fixture in expected:
-        repeats = by_fixture.get(fixture, [])
-        if len(repeats) != 12 or set(repeats) != identities:
-            raise ValueError("timings need exactly two warmups and ten unique measured repeats per fixture")
+        recorded = by_fixture.get(fixture, [])
+        if len(recorded) != len(identities) or set(recorded) != identities:
+            raise ValueError("timings need exactly the requested unique warmup and measured repeats per fixture")
         measured = [row for row in rows if row["fixture"] == fixture and row["is_warmup"] == "0"]
         contracts[fixture]["timing_summary"] = {
-            "measured_repeats": len(measured), "warmup_repeats": 2,
+            "measured_repeats": len(measured), "warmup_repeats": warmups,
             "median_gpu_ms": statistics.median(float(row["gpu_ms"]) for row in measured),
             "median_host_ms": statistics.median(float(row["host_ms"]) for row in measured)}
     return metadata, len(rows)

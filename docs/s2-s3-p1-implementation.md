@@ -100,3 +100,30 @@ Output không đổi: 41/41 golden vẫn khớp từng bit. Thời gian S2 + S3 
 - **Tuấn:** S1 dùng σ = 0 khi chạy với S2/S3 này. `tools/mock/stages.py` hiện mặc định σ = 1, còn `check_mock_pipeline.py` truyền `sigma=0` mà không sửa file mock. Ngoài ra cần đưa `src/s2_s3` vào root build và harness. `t_s2` tính từ trước `s2_detect` của ảnh A tới sau `s2_detect` của ảnh B, `t_s3` tương tự.
 - **Đế:** `num_kp_a`, `num_kp_b` đọc từ `d_count` sau điểm đồng bộ 1. Descriptor dùng Hamming, giống ca ORB đã test ở S4. Dải K đề xuất cho sweep là {500, 1000, 2000, 4000}.
 - **Cả Nhóm:** quyết định cách xử lý ba cặp Oxford có thay đổi scale lớn mà ORB một level không ghép được ([bằng chứng T4](s2-s3-t4-validation.md), mục 3).
+
+## 7. Gọi với K động (Phase 2)
+
+Phần này bổ sung ngày 28/10 (Thứ 4) cho Phase 2. Lý do chọn nằm trong [quyết định K động](decisions/s2-s3-dynamic-k.md), số đo nằm trong [bằng chứng T4](s2-s3-t4-validation.md), mục 6. Code S2/S3 và API không đổi so với Phase 1.
+
+Cấp phát một lần trước run:
+
+1. `K_max` là K lớn nhất trong ladder của Controller. `W_max`, `H_max` là kích thước ảnh S1 ở S lớn nhất trong ladder.
+2. Cấp `x`, `y`, `response` cho `K_max` phần tử, một `d_count`, và `K_max` hàng descriptor.
+3. Workspace S2 có `s2_workspace_bytes(W_max, H_max, {fast_threshold, K_max, harris_k})` byte. Workspace S3 có `s3_workspace_bytes(W_max, H_max)` byte. Hai số này đủ cho mọi (S, K) nhỏ hơn, vì số byte không giảm theo K, W và H (đã có test host kiểm tra).
+
+Ở mỗi attempt:
+
+```cpp
+stitch::s2::Config c2{20, K, 0.04f};
+stitch::Keypoints view = keypoints_kmax;  // same device pointers
+view.capacity = K;                        // required, see below
+stitch::s2::s2_detect(gray, c2, view, ws2, bytes2_max, stream);
+stitch::s3::s3_describe(gray, view, descriptors_kmax, ws3, bytes3_max, stream);
+```
+
+- **Phải đặt `capacity = K`.** S3 sinh grid theo `capacity`. Nếu để `capacity = K_max`, kết quả vẫn đúng nhưng S3 chậm hơn ngưỡng đã chốt ở K = 1000 trên T4. S4 nhận cùng view này.
+- `workspace_bytes` truyền vào là số byte đã cấp theo kích thước lớn nhất. S2 và S3 chấp nhận workspace lớn hơn mức cần.
+- Không cấp phát, không giải phóng, không đồng bộ thêm giữa các attempt.
+- `INVALID_ARGUMENT` khi K lớn hơn `capacity`, và `INSUFFICIENT_WORKSPACE` khi ảnh lớn hơn kích thước đã dùng để tính workspace. Cả hai là lỗi cấu hình của caller, không phải tín hiệu chất lượng ảnh. Khi gặp hai lỗi này, stage không launch kernel nào và không ghi `d_count`.
+- Khi K đổi, phải chạy lại S2 tới S5. K điểm của lần chạy K nhỏ không nhất thiết là K điểm đầu của lần chạy K lớn, vì S2 chọn trước 2K điểm theo FAST score ([contract Controller](controller-contract.md), mục 6.3).
+- K = 0 hợp lệ: `*d_count = 0`, S3 không launch kernel nào.

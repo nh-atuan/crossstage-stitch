@@ -30,6 +30,51 @@ std::size_t expected_s2(int w, int h, int k) {
     return c;
 }
 
+std::size_t s2_bytes(int w, int h, int k) {
+    std::size_t bytes = 0;
+    CHECK(s2::s2_workspace_bytes(w, h, {20, k, 0.04f}, &bytes) == Status::OK);
+    return bytes;
+}
+
+std::size_t s3_bytes(int w, int h) {
+    std::size_t bytes = 0;
+    CHECK(s3::s3_workspace_bytes(w, h, &bytes) == Status::OK);
+    return bytes;
+}
+
+// Dynamic K (docs/decisions/s2-s3-dynamic-k.md): a caller allocates once for
+// (W_max, H_max, K_max) and then runs any smaller image and K. That is safe
+// only if the queried sizes never decrease in K, width or height.
+void dynamic_k_bounds() {
+    const int sizes[] = {1, 63, 250, 333, 500, 750, 1000, 1023, 1024, 1025, 1921};
+    const int ks[] = {0, 1, 500, 1000, 2000, 4000, 20000};
+    for (int w : sizes) {
+        for (int h : sizes) {
+            for (int i = 0; i + 1 < static_cast<int>(sizeof(ks) / sizeof(ks[0])); ++i) {
+                CHECK(s2_bytes(w, h, ks[i]) <= s2_bytes(w, h, ks[i + 1]));
+            }
+        }
+    }
+    for (int i = 0; i + 1 < static_cast<int>(sizeof(sizes) / sizeof(sizes[0])); ++i) {
+        for (int other : sizes) {
+            for (int k : ks) {
+                CHECK(s2_bytes(sizes[i], other, k) <= s2_bytes(sizes[i + 1], other, k));
+                CHECK(s2_bytes(other, sizes[i], k) <= s2_bytes(other, sizes[i + 1], k));
+            }
+            CHECK(s3_bytes(sizes[i], other) <= s3_bytes(sizes[i + 1], other));
+            CHECK(s3_bytes(other, sizes[i]) <= s3_bytes(other, sizes[i + 1]));
+        }
+    }
+    // The pilot grid: S in {1, 0.75, 0.5, 0.25} of a 1000x700 image, K up to 4000.
+    const std::size_t s2_max = s2_bytes(1000, 700, 4000);
+    const std::size_t s3_max = s3_bytes(1000, 700);
+    for (auto [w, h] : {std::pair{1000, 700}, std::pair{750, 525}, std::pair{500, 350},
+                        std::pair{250, 175}}) {
+        for (int k : {0, 500, 1000, 2000, 4000}) CHECK(s2_bytes(w, h, k) <= s2_max);
+        CHECK(s3_bytes(w, h) <= s3_max);
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -78,5 +123,7 @@ int main() {
     CHECK(!s2_s3::detail::valid_image({&pixel, 1, 1, 1, PixelFormat::RGB8}));
     CHECK(!s2_s3::detail::valid_image({nullptr, 1, 1, 1, PixelFormat::GRAY8}));
     CHECK(!s2_s3::detail::valid_image({&pixel, 4, 1, 3, PixelFormat::GRAY8}));
+
+    dynamic_k_bounds();
     std::puts("S2/S3 host configuration checks passed");
 }

@@ -1,6 +1,9 @@
 // Native S2/S3 checks: argument handling, determinism and golden comparison.
-// Run: test_s2_s3_cuda [--require-t4] [--timings out.csv] [--golden case.bin ...]
-// Golden files come from `python -m tools.s2_s3.export_golden`.
+// Run: test_s2_s3_cuda [--require-t4] [--timings out.csv] [--dynamic-timings out.csv]
+//      [--leak-iterations N] [--golden case.bin ...]
+// Golden files come from `python -m tools.s2_s3.export_golden` and
+// `python -m tools.s2_s3.export_timing_golden`. Dynamic K checks always run;
+// --dynamic-timings compares exact, K_max and capacity = K allocations.
 // Exit 77 means no CUDA device (with --require-t4 that is a failure instead).
 // Tolerances (docs/decisions/s2-s3-orb.md): keypoints and blur exact, response
 // relative error <= 1e-4, >= 99 % descriptor rows exact and the rest <= 2 bits.
@@ -16,8 +19,11 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <fstream>
+#include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace stitch;
@@ -47,18 +53,36 @@ template <class T> struct Device {
     }
 };
 
+// Pitched device image allocated once for max_w x max_h; load() reuses it for
+// any smaller image, keeping the pitch.
 struct Image {
     Device<std::uint8_t> storage;
     ImageView view;
-    Image(const std::vector<std::uint8_t>& gray, int w, int h)
-        : storage(static_cast<std::size_t>(w + kPadding) * h),
-          view{nullptr, w, h, w + kPadding, PixelFormat::GRAY8} {
+    Image(int max_w, int max_h)
+        : storage(static_cast<std::size_t>(max_w + kPadding) * max_h),
+          view{nullptr, max_w, max_h, max_w + kPadding, PixelFormat::GRAY8} {
         view.data = storage.p;
         CUDA_CHECK(cudaMemset(storage.p, 0xa5, storage.n));
+    }
+    void load(const std::vector<std::uint8_t>& gray, int w, int h) {
+        CHECK(w + kPadding <= view.pitch_bytes &&
+              static_cast<std::size_t>(view.pitch_bytes) * h <= storage.n);
+        view.width = w;
+        view.height = h;
         CUDA_CHECK(cudaMemcpy2D(storage.p, view.pitch_bytes, gray.data(), w, w, h,
                                 cudaMemcpyHostToDevice));
     }
 };
+
+// Allocation bounds of a Runner: image size and keypoint capacity.
+struct Sizing {
+    int w, h, k;
+};
+
+// How S2/S3 see the keypoint buffers (docs/decisions/s2-s3-dynamic-k.md):
+// kBounds passes capacity = Sizing::k, kView passes capacity = K of the call
+// on the same buffers (the harness fallback).
+enum class Capacity { kBounds, kView };
 
 struct Result {
     std::vector<float> x, y, response;
@@ -70,9 +94,13 @@ struct Result {
 };
 
 // Runs S2 then S3 on one stream and downloads everything, including the blur.
+// Buffers and workspaces are sized once from `bounds`; load() changes the
+// image and K without allocating, as the harness does between attempts.
 struct Runner {
     int w, h, k;
     s2::Config config;
+    Sizing bounds;
+    Capacity capacity;
     Image image;
     Device<float> x, y, response;
     Device<int> count{1};
@@ -83,20 +111,37 @@ struct Runner {
     cudaStream_t stream{};
 
     Runner(const std::vector<std::uint8_t>& gray, int width, int height, s2::Config c)
-        : w(width), h(height), k(c.max_keypoints), config(c), image(gray, width, height),
-          x(k), y(k), response(k), descriptors(static_cast<std::size_t>(k) * 48) {
-        CHECK(s2::s2_workspace_bytes(w, h, config, &s2_bytes) == Status::OK);
-        CHECK(s3::s3_workspace_bytes(w, h, &s3_bytes) == Status::OK);
+        : Runner(gray, width, height, c, {width, height, c.max_keypoints}) {}
+    Runner(const std::vector<std::uint8_t>& gray, int width, int height, s2::Config c,
+           Sizing b, Capacity cap = Capacity::kBounds)
+        : w(width), h(height), k(c.max_keypoints), config(c), bounds(b), capacity(cap),
+          image(b.w, b.h), x(b.k), y(b.k), response(b.k),
+          descriptors(static_cast<std::size_t>(b.k) * 48) {
+        s2::Config sized = c;
+        sized.max_keypoints = b.k;
+        CHECK(s2::s2_workspace_bytes(b.w, b.h, sized, &s2_bytes) == Status::OK);
+        CHECK(s3::s3_workspace_bytes(b.w, b.h, &s3_bytes) == Status::OK);
         s2_ws = new Device<std::uint8_t>(s2_bytes);
         s3_ws = new Device<std::uint8_t>(s3_bytes);
         CUDA_CHECK(cudaStreamCreate(&stream));
+        load(gray, width, height, c.max_keypoints);
     }
     ~Runner() {
         delete s2_ws;
         delete s3_ws;
         cudaStreamDestroy(stream);
     }
-    Keypoints keypoints() { return {x.p, y.p, response.p, k, count.p}; }
+    void load(const std::vector<std::uint8_t>& gray, int width, int height, int max_keypoints) {
+        CHECK(width <= bounds.w && height <= bounds.h && max_keypoints <= bounds.k);
+        w = width;
+        h = height;
+        k = max_keypoints;
+        config.max_keypoints = max_keypoints;
+        image.load(gray, width, height);
+    }
+    Keypoints keypoints() {
+        return {x.p, y.p, response.p, capacity == Capacity::kView ? k : bounds.k, count.p};
+    }
     Descriptors output() { return {DescriptorType::BINARY_U8, 32, 48, descriptors.p}; }
 
     void launch_s2() {
@@ -122,6 +167,8 @@ struct Runner {
             r.descriptors.insert(r.descriptors.end(), raw.begin() + i * 48, raw.begin() + i * 48 + 32);
             for (int b = 32; b < 48; ++b) CHECK(raw[i * 48 + b] == 0xcd);  // stride padding untouched
         }
+        // With capacity 0, S3 returns before blurring: there is no blur to read.
+        if (keypoints().capacity == 0) return r;
         s2_s3::detail::S3Layout layout;
         CHECK(s2_s3::detail::make_s3_layout(w, h, &layout));
         r.blurred.resize(static_cast<std::size_t>(w) * h);
@@ -300,11 +347,148 @@ void contract_checks() {
     std::puts("S2/S3 contract checks passed");
 }
 
+// Equality of what S2/S3 publish for a call. With K = 0 an exactly sized
+// Runner has capacity 0 and S3 skips the blur, so the blur is compared only
+// when K > 0.
+bool same_output(const Result& a, const Result& b, int k) {
+    return a.x == b.x && a.y == b.y && a.response == b.response &&
+           a.descriptors == b.descriptors && (k == 0 || a.blurred == b.blurred);
+}
+
+std::size_t free_device_bytes() {
+    std::size_t free = 0, total = 0;
+    CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaMemGetInfo(&free, &total));
+    return free;
+}
+
+// One set of buffers sized for (1000 x 700, K = 4000) serves a sequence of
+// attempts that change both the image size (S) and K. Every attempt must match
+// an exactly sized run bit for bit, and repeating the sequence must neither
+// allocate nor leak device memory.
+void dynamic_k_checks(int leak_iterations) {
+    const Sizing bounds{1000, 700, 4000};
+    struct Attempt {
+        int w, h, k;
+    };
+    const Attempt attempts[] = {{1000, 700, 4000}, {1000, 700, 500}, {500, 350, 2000},
+                                {1000, 700, 0},    {250, 175, 1000}, {1000, 700, 4000},
+                                {750, 525, 500},   {40, 30, 1000},   {1000, 700, 1}};
+    std::vector<std::vector<std::uint8_t>> images;
+    for (const auto& a : attempts) images.push_back(pattern_image(a.w, a.h));
+
+    for (Capacity capacity : {Capacity::kBounds, Capacity::kView}) {
+        Runner shared(images[0], bounds.w, bounds.h, {20, bounds.k, 0.04f}, bounds, capacity);
+        for (std::size_t i = 0; i < images.size(); ++i) {
+            const Attempt& a = attempts[i];
+            shared.load(images[i], a.w, a.h, a.k);
+            const Result reused = shared.run();
+            Runner fresh(images[i], a.w, a.h, {20, a.k, 0.04f});
+            const Result expected = fresh.run();
+            if (!same_output(reused, expected, a.k)) {
+                std::fprintf(stderr, "dynamic K: %dx%d K=%d differs from an exact run\n", a.w, a.h, a.k);
+            }
+            CHECK(same_output(reused, expected, a.k));
+            CHECK(a.k > 0 || reused.x.empty());
+        }
+
+        // No allocation and no leak across many attempts on the same buffers.
+        const std::size_t before = free_device_bytes();
+        for (int it = 0; it < leak_iterations; ++it) {
+            const std::size_t i = static_cast<std::size_t>(it) % images.size();
+            shared.load(images[i], attempts[i].w, attempts[i].h, attempts[i].k);
+            shared.launch_s2();
+            shared.launch_s3();
+        }
+        const std::size_t after = free_device_bytes();
+        if (before != after) std::fprintf(stderr, "dynamic K: free bytes %zu -> %zu\n", before, after);
+        CHECK(before == after);
+
+        // Requests beyond the allocation fail before any work is queued.
+        Device<int> count(1);
+        CUDA_CHECK(cudaMemset(count.p, 0x7f, sizeof(int)));
+        shared.load(images[0], bounds.w, bounds.h, bounds.k);
+        auto kp = shared.keypoints();
+        kp.d_count = count.p;
+        auto wide = shared.image.view;
+        wide.width = bounds.w + kPadding;  // fits the pitch, not the workspace
+        CHECK(s2::s2_detect(wide, shared.config, kp, shared.s2_ws->p, shared.s2_bytes,
+                            shared.stream) == Status::INSUFFICIENT_WORKSPACE);
+        CHECK(s3::s3_describe(wide, kp, shared.output(), shared.s3_ws->p, shared.s3_bytes,
+                              shared.stream) == Status::INSUFFICIENT_WORKSPACE);
+        s2::Config over = shared.config;
+        over.max_keypoints = kp.capacity + 1;
+        CHECK(s2::s2_detect(shared.image.view, over, kp, shared.s2_ws->p, shared.s2_bytes,
+                            shared.stream) == Status::INVALID_ARGUMENT);
+        CUDA_CHECK(cudaStreamSynchronize(shared.stream));
+        CHECK(count.download(1)[0] == 0x7f7f7f7f);
+    }
+    std::printf("S2/S3 dynamic K checks passed (%zu attempts, %d repeated launches)\n",
+                std::size(attempts), leak_iterations);
+}
+
+// Times every golden case three ways on the same stream order: buffers sized
+// exactly for the case ("exact"), sized for the largest case with capacity
+// K_max ("max"), and the same buffers with capacity = K ("view"). The three
+// must agree bit for bit before timing.
+void dynamic_timings(const std::vector<Golden>& cases, FILE* out, const std::string& gpu) {
+    Sizing bounds{0, 0, 0};
+    for (const auto& g : cases) {
+        bounds.w = std::max(bounds.w, g.w);
+        bounds.h = std::max(bounds.h, g.h);
+        bounds.k = std::max(bounds.k, g.k);
+    }
+    cudaEvent_t start, mid, stop;
+    CUDA_CHECK(cudaEventCreate(&start));
+    CUDA_CHECK(cudaEventCreate(&mid));
+    CUDA_CHECK(cudaEventCreate(&stop));
+    Runner max_runner(cases.front().gray, cases.front().w, cases.front().h,
+                      {cases.front().threshold, cases.front().k, cases.front().harris_k}, bounds);
+    Runner view_runner(cases.front().gray, cases.front().w, cases.front().h,
+                       {cases.front().threshold, cases.front().k, cases.front().harris_k}, bounds,
+                       Capacity::kView);
+    for (const auto& g : cases) {
+        const s2::Config config{g.threshold, g.k, g.harris_k};
+        Runner exact(g.gray, g.w, g.h, config);
+        for (Runner* r : {&max_runner, &view_runner}) {
+            r->config = config;
+            r->load(g.gray, g.w, g.h, g.k);
+        }
+        const Result expected = exact.run();
+        CHECK(same_output(max_runner.run(), expected, g.k));
+        CHECK(same_output(view_runner.run(), expected, g.k));
+        const std::pair<const char*, Runner*> modes[] = {
+            {"exact", &exact}, {"max", &max_runner}, {"view", &view_runner}};
+        for (int rep = 0; rep < kWarmup + kRepeats; ++rep) {
+            for (const auto& [name, r] : modes) {  // interleaved to share clock drift
+                CUDA_CHECK(cudaEventRecord(start, r->stream));
+                r->launch_s2();
+                CUDA_CHECK(cudaEventRecord(mid, r->stream));
+                r->launch_s3();
+                CUDA_CHECK(cudaEventRecord(stop, r->stream));
+                CUDA_CHECK(cudaEventSynchronize(stop));
+                float s2_ms = 0, s3_ms = 0;
+                CUDA_CHECK(cudaEventElapsedTime(&s2_ms, start, mid));
+                CUDA_CHECK(cudaEventElapsedTime(&s3_ms, mid, stop));
+                std::fprintf(out, "%s,%d,%d,%d,%d,%s,%d,%d,%d,%.6f,%.6f,%zu,%zu,%s\n",
+                             g.name.c_str(), g.w, g.h, g.threshold, g.k, name,
+                             r->keypoints().capacity, rep, rep < kWarmup, s2_ms, s3_ms,
+                             r->s2_bytes, r->s3_bytes, gpu.c_str());
+            }
+        }
+    }
+    cudaEventDestroy(start);
+    cudaEventDestroy(mid);
+    cudaEventDestroy(stop);
+    std::printf("S2/S3 dynamic K timings written (%zu cases)\n", cases.size());
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     bool require_t4 = false;
-    std::string timings_path;
+    std::string timings_path, dynamic_timings_path;
+    int leak_iterations = 1000;
     std::vector<std::string> golden;
     for (int i = 1; i < argc; ++i) {
         const std::string option = argv[i];
@@ -312,12 +496,22 @@ int main(int argc, char** argv) {
             require_t4 = true;
         } else if (option == "--timings" && i + 1 < argc) {
             timings_path = argv[++i];
+        } else if (option == "--dynamic-timings" && i + 1 < argc) {
+            dynamic_timings_path = argv[++i];
+        } else if (option == "--leak-iterations" && i + 1 < argc) {
+            leak_iterations = std::atoi(argv[++i]);
         } else if (option == "--golden") {
             while (i + 1 < argc && std::string(argv[i + 1]).rfind("--", 0) != 0) golden.emplace_back(argv[++i]);
         } else {
-            std::fprintf(stderr, "Usage: test_s2_s3_cuda [--require-t4] [--timings out.csv] [--golden case.bin ...]\n");
+            std::fprintf(stderr, "Usage: test_s2_s3_cuda [--require-t4] [--timings out.csv] "
+                                 "[--dynamic-timings out.csv] [--leak-iterations N] "
+                                 "[--golden case.bin ...]\n");
             return 2;
         }
+    }
+    if (leak_iterations < 0 || (!dynamic_timings_path.empty() && golden.empty())) {
+        std::fprintf(stderr, "--leak-iterations must be >= 0; --dynamic-timings needs --golden\n");
+        return 2;
     }
     int devices = 0;
     if (cudaGetDeviceCount(&devices) != cudaSuccess || devices == 0) {
@@ -336,6 +530,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     contract_checks();
+    dynamic_k_checks(leak_iterations);
     FILE* timings = nullptr;
     if (!timings_path.empty()) {
         timings = std::fopen(timings_path.c_str(), "wx");
@@ -345,5 +540,16 @@ int main(int argc, char** argv) {
     }
     for (const auto& path : golden) check_golden(load_golden(path), timings, prop.name);
     if (timings) std::fclose(timings);
+    if (!dynamic_timings_path.empty()) {
+        FILE* out = std::fopen(dynamic_timings_path.c_str(), "wx");
+        CHECK(out);
+        std::fprintf(out, "case,width,height,fast_threshold,max_keypoints,allocation,capacity,"
+                          "repeat,is_warmup,s2_gpu_ms,s3_gpu_ms,s2_workspace_bytes,"
+                          "s3_workspace_bytes,gpu\n");
+        std::vector<Golden> cases;
+        for (const auto& path : golden) cases.push_back(load_golden(path));
+        dynamic_timings(cases, out, prop.name);
+        std::fclose(out);
+    }
     std::printf("S2/S3 CUDA checks passed (%zu golden cases)\n", golden.size());
 }

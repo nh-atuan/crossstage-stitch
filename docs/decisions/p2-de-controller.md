@@ -46,9 +46,9 @@ Không có policy, probe lỗi hoặc scene không hợp lệ: caller kết thú
 
 Test ở `tests/controller/` kiểm lifecycle, selection ở biên rule, metadata probe, status/payload, thứ tự reason, ladder không đơn điệu về budget, B cố định, budget exhaustion và retry invalidation. Một test chạy 1.000 pair tổng hợp và đếm C++ heap allocations trong các lời gọi per-pair. Trace riêng thể hiện S5 degeneration → R extension → thiếu match → đổi K → ACCEPT. Fixture chỉ có dữ liệu host, không chứng nhận model, cache hoặc QoR GPU.
 
-Sau đó đã bổ sung `test_controller_s5.cu`: nhận pinned output từ S5 CUDA thật, kiểm extension R và equality với full search, rồi từ chối stale reuse. Build integration chạy 5/5 CTest và memcheck/racecheck sạch trên Colab T4. Các fixture host ở trên vẫn chỉ kiểm logic; test CUDA này chưa chứng nhận scene-aware S1–S6 hoặc QoR end-to-end. [Báo cáo T4](../p2-de-t4-validation.md) ghi source/hash, lệnh và số liệu.
+Sau đó đã bổ sung `test_controller_s5.cu`: nhận pinned output từ S5 CUDA thật, kiểm extension R và equality với full search, rồi từ chối stale reuse. Build integration chạy 5/5 CTest và memcheck/racecheck sạch trên Colab T4. Các fixture host ở trên vẫn chỉ kiểm logic; test CUDA này chưa chứng nhận scene-aware S1–S6 hoặc QoR end-to-end. [Bàn giao Controller](../p2-de-controller-implementation.md) ghi kết quả test, lệnh tái kiểm chứng và nơi lưu receipt/log.
 
-Hướng dẫn build, bằng chứng và các phần còn thiếu ở [bàn giao Controller](../p2-de-controller-implementation.md). Chạy sweep theo [hướng dẫn Nhóm](../sweep-gonogo-guide.md), lưu raw mới ngoài Git; ảnh tổng hợp phải được ghi đúng loại bằng chứng. Chỉ khóa policy số sau khi có CSV, scene features, ảnh và kiểm tra trực quan.
+Tuấn tích hợp S1/harness theo contract; Đế hỗ trợ feedback/reuse và cung cấp policy tường minh sau development review. Overhead và speedup end-to-end cần được đo sau tích hợp.
 
 ## 6. Nguồn
 

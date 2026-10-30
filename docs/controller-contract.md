@@ -104,6 +104,8 @@ private:
 
 ### 3.1. Input/output và ownership
 
+Ghi chú triển khai ngày 30/10 (Thứ 6): module ở [controller.hpp](../src/controller/controller.hpp) bổ sung bước setup `configure(const Policy&)` và accessor `probe_scale()`; API per-pair dưới đây giữ nguyên. Caller configure policy tường minh trước `initialize`, không có numerical policy mặc định. Configure thành công xóa binding ladder cũ, nên phải initialize lại; configure/initialize trong lúc đang chờ feedback bị từ chối. Policy chứa rule và self-check array mượn, phải sống và bất biến như ladder. Xem [schema policy](../src/controller/policy.hpp) và [bàn giao triển khai](p2-de-controller-implementation.md) về lifecycle setup, validation và bằng chứng kiểm thử. Khi chưa configure thành công, `initialize` trả `INVALID_ARGUMENT`, `probe_scale()` trả NaN.
+
 | Hàm | Điều kiện gọi và input | Kết quả khi trả `Status::OK` |
 |---|---|---|
 | `initialize(ladder, count)` | Chỉ khi không AwaitingFeedback; ladder khác null, count > 0, không trùng cấu hình, mọi `Knobs` hợp lệ và cùng B | Mượn ladder, đặt state Idle. Caller giữ array bất biến tới lần initialize thành công tiếp theo hoặc khi hủy Controller |

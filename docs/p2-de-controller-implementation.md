@@ -13,7 +13,7 @@
 | Policy và Controller | Đã triển khai rule classifier, kiểm policy/ladder, state machine, threshold checks và bounded escalation; numerical policy chưa khóa vì Oracle chuẩn của pilot dưới ngưỡng Go/No-Go |
 | Feedback/reuse S5 | Host tests và Controller–S5 CUDA test pass trên T4; split/full H/mask/tín hiệu khớp; stale reuse bị từ chối; sanitizer sạch |
 | Ghép S1/harness và pilot | Đã có raw grid 25 pairs tổng hợp; cần review lại gate/QoR trước calibration và adaptive campaign; S1/harness chưa đổi |
-| Paper | Draft Section 4 mô tả code host đã test và phần còn chờ; phần S4–S5 mô tả source có bằng chứng T4 từ Phase 1; chưa nghiệm thu PDF mới |
+| Paper | Đã bổ sung S4–S5 và Section 4 theo code đã test; build 9 trang, metadata ẩn danh và audit PASS trên Colab; chưa có adaptive results |
 | QoR policy | Giữ trạng thái pilot; thêm canonical sweep audit và kiểm reference theo known geometry; chưa dùng final để tune |
 
 [Bằng chứng T4 và raw sweep](p2-de-t4-validation.md) ghi đủ môi trường, source/hash, test, failure ledger và ảnh hưởng tới Go/No-Go. Raw, 50 ảnh và reports ở `results/de_p2_campaign_20261030/`, ngoài Git. Canonical ratio of medians khoảng 1.075×; chưa đạt gate 1.20×, nên chưa khóa policy để triển khai benchmark adaptive.

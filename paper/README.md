@@ -25,14 +25,18 @@ Ba PDF này là tài nguyên nguồn của publisher, không phải PDF manuscri
 | `sections/abstract.tex` | Phạm vi, câu hỏi nghiên cứu, ranh giới bằng chứng | Viết lại sau khi có kết quả adaptive đã kiểm chứng |
 | `sections/introduction.tex` | Workload, tương tác budget, RQ và điều kiện chứng minh đóng góp | Chương điều chỉnh theo kết quả cuối |
 | `sections/related-work.tex` | Stitching/composition, blending, autotuning và quality-aware GPU execution | Chương cập nhật khi method/controller được chốt |
-| `sections/pipeline.tex` | Interface sáu stage; phương pháp S2–S3 (Thành, 28/10 (Thứ 4)) và S6 đã đối chiếu source | Tuấn: S1; Đế: S4–S5; Chương: review S2–S3 và S6 |
-| `sections/controller.tex` | Ranh giới tín hiệu online và chất lượng offline | Đế viết Section 4 từ controller thực tế: policy, retry, fallback, reuse |
+| `sections/pipeline.tex`, `sections/s4-s5.tex` | Interface sáu stage; phương pháp S2–S3, S4–S5 và S6 đã đối chiếu source | Tuấn: S1; Chương: review tích hợp manuscript |
+| `sections/controller.tex` | Logic host đã test: policy tường minh, scene rules, feedback, escalation và retry plan | Đế hiệu chỉnh policy, nghiệm thu adaptive integration và bổ sung evidence T4 |
 | `sections/experiments.tex` | Định nghĩa chất lượng và thiết kế so sánh; trạng thái bằng chứng | Đế review QoR; Tuấn cung cấp harness/T4; cả nhóm kiểm tra raw artifacts |
 | `sections/discussion.tex` | Giới hạn global homography, alignment/composition và điều kiện kết luận | Cập nhật sau thí nghiệm, kể cả negative result |
 
-Phần S1 và S4–S5 hiện chỉ mô tả interface đã kiểm tra, không viết thay phương pháp chi tiết của chủ sở hữu. Section 4 có đoạn nêu trạng thái bằng chứng thay vì dựng một controller chưa được kiểm chứng. Không có bảng kết quả giả hoặc con số speedup lấy từ pilot. Quantum cần artifact và thí nghiệm theo đề xuất riêng trước khi được đưa vào phần đóng góp của paper.
+Phần S1 hiện chỉ mô tả interface đã kiểm tra. Đế bổ sung phương pháp S4–S5 và Controller ngày 30/10 (Thứ 6); Section 4 phân biệt code host/Controller–S5 đã test với calibration và pipeline scene-aware còn thiếu. Bản sửa này đã build 9 trang và pass audit trên Colab. Không có bảng kết quả giả hoặc con số speedup lấy từ pilot. Quantum cần artifact và thí nghiệm theo đề xuất riêng trước khi được đưa vào phần đóng góp của paper.
 
 ## Build và tái kiểm tra
+
+Bản ngày 30/10 (Thứ 6) bổ sung S4–S5 và Controller: `python paper/build.py --output build/paper-de-p2` PASS trên Colab/TeX Live 2023. PDF 9 trang, author `Anonymous Authors`, warnings rỗng, citation/reference resolve và mọi font embed. PDF/receipt/log ở `build/paper-de-p2/`. SHA-256 PDF: `e43cc423abb325cf4180092ba083a70928a3ae5d925cf16ae9a9d63dae0349c7`. Đây là working manuscript; chưa có adaptive campaign hoặc kết quả final.
+
+Môi trường Colab mới cần `texlive-latex-extra`, `texlive-science`, `texlive-fonts-recommended`, `texlive-bibtex-extra`, `texlive-plain-generic`, `texlive-fonts-extra`, `cm-super` và `poppler-utils`. Thiếu `soul`/fontawesome5 hoặc font scalable gây build fail; không tắt microtype hoặc bỏ audit để vượt lỗi môi trường.
 
 Chạy từ gốc repo; WSL kế thừa thư mục hiện tại:
 

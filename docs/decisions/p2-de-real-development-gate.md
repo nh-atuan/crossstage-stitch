@@ -3,7 +3,7 @@
 - Người quyết định: Đế, theo yêu cầu chọn phương án 1.
 - Ngày ghi nhận: 30/10 (Thứ 6), năm 2026.
 - Phase 2; deadline chung 31/10 (Thứ 7).
-- Trạng thái: đã khóa cohort trước khi xem ảnh hoặc chạy pipeline; chờ evidence T4.
+- Trạng thái: đã khóa cohort trước khi xem ảnh hoặc chạy pipeline; evidence T4 và [báo cáo gate](../p2-de-real-development-gate.md) đã hoàn thành. Gate toàn cohort chưa xác lập vì hai reference failures.
 
 ## 1. Bối cảnh
 

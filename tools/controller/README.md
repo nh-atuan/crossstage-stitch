@@ -33,3 +33,21 @@ python -m tools.controller.audit_synthetic --campaign results/de_p2_campaign_202
 Layout campaign gồm `sweep/meta.json`, `sweep/runs.csv`, `images/pairs.json` và ảnh gốc cạnh manifest. Công cụ chỉ nhận synthetic generator seed 42 hiện có. Nó phát lại đầy đủ RNG, kiểm từng pixel A/B khớp ảnh campaign, rồi mới phục hồi affine B → A trước nearest-neighbour sampling. Sai ảnh hoặc thứ tự manifest làm lệnh fail; không gán ground truth cho ảnh không tái tạo được.
 
 Output là `sweep/synthetic-reference-audit.json` và preview bốn reference có mean corner error lớn nhất. Sai số tính bằng mean Euclidean distance ở bốn góc B, đơn vị pixel gốc. Đây là diagnostic geometry trên ảnh tổng hợp, không tự sửa reference status hoặc quality policy và không chứng minh khả năng tổng quát trên UDIS-D. Lệnh từ chối ghi đè artifact có sẵn.
+
+## Pilot development ảnh thật
+
+`real_cohort.py` chọn pair IDs từ metadata của UDIS-D training theo seed cố định và component ảnh trùng byte; manifest đã khóa ở `docs/cohorts/udis-d-development-v1.json`. Script không đọc QoR hoặc latency. [Báo cáo gate](../../docs/p2-de-real-development-gate.md) ghi nguồn ảnh, môi trường T4 và kết quả trên 25 cặp pilot.
+
+Sau khi chạy `audit_sweep.py`, tạo tóm tắt có kiểm SHA raw đầu vào:
+
+```bash
+python -m tools.controller.real_gate_summary \
+  --runs results/udis_train_gate_20261030/sweep/runs.csv \
+  --qor results/udis_train_gate_20261030/sweep/qor.csv \
+  --audit results/udis_train_gate_20261030/sweep/canonical-sweep-audit.json \
+  --output build/real-gate-review.json
+```
+
+Tóm tắt giữ `null` khi canonical speedup toàn cohort không có đủ cặp pass. Tỷ số trên phần cohort có reference hợp lệ được gắn nhãn diagnostic, không thay thế điều kiện Go/No-Go.
+
+`python -m tools.controller.export_previews --campaign results/udis_train_gate_20261030 --output results/udis_train_gate_20261030/gallery-review` tạo gallery HTML offline, PNG đầy đủ, ảnh tổng quan và manifest H/SHA. Thư mục output phải mới. Công cụ dựng S6 CPU FP64 feather từ H đã đo trên T4, ghi rõ nguồn preview và giữ các mẫu thất bại; không đo lại latency hoặc thay canonical audit.

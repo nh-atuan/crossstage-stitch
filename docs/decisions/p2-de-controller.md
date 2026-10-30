@@ -4,7 +4,7 @@
 - **Người yêu cầu:** Đế; triển khai theo yêu cầu thực hiện các task của Đế.
 - **Ngày ghi nhận:** 30/10 (Thứ 6), năm 2026.
 - **Phase:** Phase 2; deadline chung 31/10 (Thứ 7).
-- **Trạng thái:** Đã triển khai logic host; chưa hiệu chỉnh policy trên raw sweep, chưa nghiệm thu integration hoặc latency trên Colab Tesla T4.
+- **Trạng thái:** Đã triển khai logic host và kiểm thử Controller–S5 trên Colab Tesla T4; chưa hiệu chỉnh policy hoặc nghiệm thu scene-aware pipeline/latency.
 
 ## 1. Bối cảnh
 

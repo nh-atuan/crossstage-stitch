@@ -3,18 +3,20 @@
 - Người phụ trách: Đế.
 - Cập nhật 30/10 (Thứ 6), năm 2026; deadline Phase 2 là 31/10 (Thứ 7).
 - Nhánh: `de/p2-controller`.
-- Phạm vi đã kiểm chứng: module Controller host và retry plan; chưa có nghiệm thu adaptive GPU hoặc speedup.
+- Phạm vi đã kiểm chứng: Controller host, retry plan và Controller–S5 trên Colab Tesla T4; đã chạy lại grid, chưa có adaptive end-to-end speedup.
 
 ## 1. Tiến độ theo kế hoạch
 
 | Công việc | Trạng thái và bằng chứng |
 |---|---|
 | Contract Controller v1 | Đã có trước task này; giữ nguyên API per-pair và shared stage types |
-| Policy và Controller | Đã triển khai rule classifier, kiểm policy/ladder, state machine, threshold checks và bounded escalation; giá trị policy dùng trên ảnh thật còn cần calibration |
-| Feedback/reuse S5 | Đã đối chiếu source/API, thêm helper và test host cho invalidation; test CUDA split/full có sẵn từ Phase 1, chưa chạy lại trong campaign này |
-| Ghép S1/harness và pilot | Cần Tuấn tích hợp scene signals và adaptive execution theo contract; chưa có terminal adaptive runs |
+| Policy và Controller | Đã triển khai rule classifier, kiểm policy/ladder, state machine, threshold checks và bounded escalation; numerical policy chưa khóa vì Oracle chuẩn của pilot dưới ngưỡng Go/No-Go |
+| Feedback/reuse S5 | Host tests và Controller–S5 CUDA test pass trên T4; split/full H/mask/tín hiệu khớp; stale reuse bị từ chối; sanitizer sạch |
+| Ghép S1/harness và pilot | Đã có raw grid 25 pairs tổng hợp; cần review lại gate/QoR trước calibration và adaptive campaign; S1/harness chưa đổi |
 | Paper | Draft Section 4 mô tả code host đã test và phần còn chờ; phần S4–S5 mô tả source có bằng chứng T4 từ Phase 1; chưa nghiệm thu PDF mới |
-| QoR policy | Giữ trạng thái pilot; chưa khóa threshold bằng dữ liệu development mới, chưa dùng final để tune |
+| QoR policy | Giữ trạng thái pilot; thêm canonical sweep audit và kiểm reference theo known geometry; chưa dùng final để tune |
+
+[Bằng chứng T4 và raw sweep](p2-de-t4-validation.md) ghi đủ môi trường, source/hash, test, failure ledger và ảnh hưởng tới Go/No-Go. Raw, 50 ảnh và reports ở `results/de_p2_campaign_20261030/`, ngoài Git. Canonical ratio of medians khoảng 1.075×; chưa đạt gate 1.20×, nên chưa khóa policy để triển khai benchmark adaptive.
 
 ## 2. Module và API setup
 
@@ -26,6 +28,8 @@
 | `src/controller/reuse.hpp`, `.cpp` | Phân loại phần pipeline cần chạy lại khi RETRY |
 | `tests/controller/test_controller.cpp` | Contract, failure handling và allocation checks |
 | `tests/controller/controller_trace.cpp` | Trace host tổng hợp, không ghi số đo GPU/QoR |
+| `tests/controller/test_controller_s5.cu` | Controller nhận output S5 CUDA thật; R continuation và invalid reuse |
+| `tools/controller/` | Canonical QoR/Oracle/Pareto audit và sanity check reference của cohort tổng hợp |
 
 Xem [quyết định kỹ thuật](decisions/p2-de-controller.md) về phương án, trade-off, lifetime và calibration. Setup bổ sung của module:
 
@@ -64,6 +68,8 @@ python -m pytest tests/python/test_qor_decisions.py tests/python/test_latency_qo
 
 Tooling chỉ nằm trong `build/`, không thêm dependency runtime hoặc đổi requirements của pipeline. Build đầu tiên của Zig phát cảnh báo nullability từ libc++ đi kèm khi tự tạo runtime; source Controller build với các warning flags trên không báo lỗi. Host tests không thay thế kiểm chứng Colab Tesla T4.
 
+Campaign T4 ngày 30/10 (Thứ 6) đã chạy root CTest 12/12, Controller host 2/2, Controller–S5 build 5/5; không SKIP. Memcheck/racecheck S5 và test Controller–S5 không có errors/hazards. Pytest QoR/report/audit: 110 PASS trên T4 và máy cục bộ. Lệnh build integration nằm trong báo cáo T4.
+
 ## 4. Điểm nối cho Tuấn
 
 Root CMake và harness vẫn thuộc Tuấn. Để tích hợp library, thêm `add_subdirectory(src/controller)` và link `stitch_controller` vào adaptive harness. Có thể build độc lập module khi chưa chỉnh root.
@@ -78,11 +84,11 @@ Chưa có thay đổi S1/harness trong nhánh này. Không sửa shared types ho
 
 Đế yêu cầu chạy lại raw sweep theo [hướng dẫn của Nhóm](sweep-gonogo-guide.md). Lưu raw mới trong một thư mục campaign riêng để không ghi đè báo cáo Phase 1. Dataset preparer ở chế độ auto chỉ quét thư mục raw đã có; nếu không tìm được pairs thì sinh ảnh tổng hợp. Kết quả này phải được ghi đúng là synthetic pilot, không phải UDIS-D hoặc final evaluation.
 
-Các bước còn cần evidence:
+Các bước đã có evidence và phần còn lại:
 
-1. Kết nối Colab, xác nhận `nvidia-smi` là Tesla T4, ghi revision/toolchain, build và chạy CTest/Compute Sanitizer cho S4/S5.
-2. Chuẩn bị 25 pairs, manifest và provenance; chạy đủ 48 cấu hình như guide để có `runs.csv`, `qor.csv`, configs, policy hash và metadata.
-3. Trích scene features bằng đúng S1 probe, ghép labels offline từ raw; chọn rule/ladder/self-check trên development và kiểm tra ảnh/failures. Không suy ngưỡng self-check trực tiếp từ QoR tolerance.
+1. Đã kết nối T4, ghi môi trường/revision, build, CTest và sanitizer.
+2. Đã chuẩn bị 25 pairs tổng hợp, chạy đủ 48 cấu hình, tải raw/metadata về và tái kiểm canonical audit cục bộ. Đã kiểm known geometry và xem preview reference.
+3. Cần Nhóm review gate theo QoR chuẩn; sau khi chốt hướng tiếp tục mới trích scene features bằng đúng S1 probe, chọn rule/ladder/self-check trên development. Không suy ngưỡng self-check từ QoR tolerance hoặc nới QoR để đạt speedup.
 4. Tích hợp adaptive harness; chạy Fixed-Best, Oracle và Controller cùng timing boundary và policy; xuất terminal runs cùng retry/reuse telemetry cho Chương.
 5. Khóa policy sau development review; hoàn thiện Section 4 và kiểm PDF bằng `python paper/build.py`. Chưa có dữ liệu thì giữ trạng thái chưa nghiệm thu, không đưa số speedup vào paper.
 

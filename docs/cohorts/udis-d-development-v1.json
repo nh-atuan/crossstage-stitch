@@ -1,0 +1,1801 @@
+{
+  "schema_version": "udis-train-development-v1",
+  "dataset": "UDIS-D",
+  "source_split": "training",
+  "seed": 20261030,
+  "population_pairs": 10440,
+  "image_sharing_components": 1789,
+  "selection": "SHA-256 ordering of archive CRC32+size image-sharing components; one hash-ranked pair per component",
+  "grouping_limits": "Conservative exact-file proxy from archive metadata, not official scene labels; CRC collisions can merge groups. No testing archive was read; scene disjointness from final cannot be established without publisher scene metadata.",
+  "development_pairs": [
+    {
+      "pair_id": "002429",
+      "group_id": "002427",
+      "group_pair_count": 4,
+      "a": "training/input1/002429.jpg",
+      "b": "training/input2/002429.jpg"
+    },
+    {
+      "pair_id": "006794",
+      "group_id": "006679",
+      "group_pair_count": 32,
+      "a": "training/input1/006794.jpg",
+      "b": "training/input2/006794.jpg"
+    },
+    {
+      "pair_id": "009511",
+      "group_id": "009511",
+      "group_pair_count": 1,
+      "a": "training/input1/009511.jpg",
+      "b": "training/input2/009511.jpg"
+    },
+    {
+      "pair_id": "005291",
+      "group_id": "005291",
+      "group_pair_count": 3,
+      "a": "training/input1/005291.jpg",
+      "b": "training/input2/005291.jpg"
+    },
+    {
+      "pair_id": "003779",
+      "group_id": "003779",
+      "group_pair_count": 2,
+      "a": "training/input1/003779.jpg",
+      "b": "training/input2/003779.jpg"
+    },
+    {
+      "pair_id": "000700",
+      "group_id": "000699",
+      "group_pair_count": 2,
+      "a": "training/input1/000700.jpg",
+      "b": "training/input2/000700.jpg"
+    },
+    {
+      "pair_id": "009125",
+      "group_id": "003221",
+      "group_pair_count": 4,
+      "a": "training/input1/009125.jpg",
+      "b": "training/input2/009125.jpg"
+    },
+    {
+      "pair_id": "010327",
+      "group_id": "010327",
+      "group_pair_count": 3,
+      "a": "training/input1/010327.jpg",
+      "b": "training/input2/010327.jpg"
+    },
+    {
+      "pair_id": "009865",
+      "group_id": "006590",
+      "group_pair_count": 4,
+      "a": "training/input1/009865.jpg",
+      "b": "training/input2/009865.jpg"
+    },
+    {
+      "pair_id": "005655",
+      "group_id": "005655",
+      "group_pair_count": 4,
+      "a": "training/input1/005655.jpg",
+      "b": "training/input2/005655.jpg"
+    },
+    {
+      "pair_id": "001761",
+      "group_id": "001759",
+      "group_pair_count": 3,
+      "a": "training/input1/001761.jpg",
+      "b": "training/input2/001761.jpg"
+    },
+    {
+      "pair_id": "002733",
+      "group_id": "002733",
+      "group_pair_count": 3,
+      "a": "training/input1/002733.jpg",
+      "b": "training/input2/002733.jpg"
+    },
+    {
+      "pair_id": "009413",
+      "group_id": "009413",
+      "group_pair_count": 1,
+      "a": "training/input1/009413.jpg",
+      "b": "training/input2/009413.jpg"
+    },
+    {
+      "pair_id": "006628",
+      "group_id": "006627",
+      "group_pair_count": 4,
+      "a": "training/input1/006628.jpg",
+      "b": "training/input2/006628.jpg"
+    },
+    {
+      "pair_id": "009955",
+      "group_id": "009955",
+      "group_pair_count": 1,
+      "a": "training/input1/009955.jpg",
+      "b": "training/input2/009955.jpg"
+    },
+    {
+      "pair_id": "005389",
+      "group_id": "005387",
+      "group_pair_count": 4,
+      "a": "training/input1/005389.jpg",
+      "b": "training/input2/005389.jpg"
+    },
+    {
+      "pair_id": "002559",
+      "group_id": "002559",
+      "group_pair_count": 3,
+      "a": "training/input1/002559.jpg",
+      "b": "training/input2/002559.jpg"
+    },
+    {
+      "pair_id": "002384",
+      "group_id": "002384",
+      "group_pair_count": 3,
+      "a": "training/input1/002384.jpg",
+      "b": "training/input2/002384.jpg"
+    },
+    {
+      "pair_id": "009601",
+      "group_id": "005374",
+      "group_pair_count": 3,
+      "a": "training/input1/009601.jpg",
+      "b": "training/input2/009601.jpg"
+    },
+    {
+      "pair_id": "005592",
+      "group_id": "005592",
+      "group_pair_count": 3,
+      "a": "training/input1/005592.jpg",
+      "b": "training/input2/005592.jpg"
+    },
+    {
+      "pair_id": "009840",
+      "group_id": "009840",
+      "group_pair_count": 1,
+      "a": "training/input1/009840.jpg",
+      "b": "training/input2/009840.jpg"
+    },
+    {
+      "pair_id": "007749",
+      "group_id": "007747",
+      "group_pair_count": 9,
+      "a": "training/input1/007749.jpg",
+      "b": "training/input2/007749.jpg"
+    },
+    {
+      "pair_id": "010283",
+      "group_id": "010283",
+      "group_pair_count": 1,
+      "a": "training/input1/010283.jpg",
+      "b": "training/input2/010283.jpg"
+    },
+    {
+      "pair_id": "004707",
+      "group_id": "004705",
+      "group_pair_count": 4,
+      "a": "training/input1/004707.jpg",
+      "b": "training/input2/004707.jpg"
+    },
+    {
+      "pair_id": "008718",
+      "group_id": "000586",
+      "group_pair_count": 3,
+      "a": "training/input1/008718.jpg",
+      "b": "training/input2/008718.jpg"
+    },
+    {
+      "pair_id": "002629",
+      "group_id": "002628",
+      "group_pair_count": 3,
+      "a": "training/input1/002629.jpg",
+      "b": "training/input2/002629.jpg"
+    },
+    {
+      "pair_id": "007799",
+      "group_id": "007799",
+      "group_pair_count": 47,
+      "a": "training/input1/007799.jpg",
+      "b": "training/input2/007799.jpg"
+    },
+    {
+      "pair_id": "010049",
+      "group_id": "007280",
+      "group_pair_count": 4,
+      "a": "training/input1/010049.jpg",
+      "b": "training/input2/010049.jpg"
+    },
+    {
+      "pair_id": "005577",
+      "group_id": "005576",
+      "group_pair_count": 4,
+      "a": "training/input1/005577.jpg",
+      "b": "training/input2/005577.jpg"
+    },
+    {
+      "pair_id": "002511",
+      "group_id": "002510",
+      "group_pair_count": 3,
+      "a": "training/input1/002511.jpg",
+      "b": "training/input2/002511.jpg"
+    },
+    {
+      "pair_id": "007334",
+      "group_id": "007333",
+      "group_pair_count": 4,
+      "a": "training/input1/007334.jpg",
+      "b": "training/input2/007334.jpg"
+    },
+    {
+      "pair_id": "009569",
+      "group_id": "009569",
+      "group_pair_count": 1,
+      "a": "training/input1/009569.jpg",
+      "b": "training/input2/009569.jpg"
+    },
+    {
+      "pair_id": "005402",
+      "group_id": "005400",
+      "group_pair_count": 4,
+      "a": "training/input1/005402.jpg",
+      "b": "training/input2/005402.jpg"
+    },
+    {
+      "pair_id": "002403",
+      "group_id": "002403",
+      "group_pair_count": 4,
+      "a": "training/input1/002403.jpg",
+      "b": "training/input2/002403.jpg"
+    },
+    {
+      "pair_id": "009379",
+      "group_id": "009378",
+      "group_pair_count": 2,
+      "a": "training/input1/009379.jpg",
+      "b": "training/input2/009379.jpg"
+    },
+    {
+      "pair_id": "002320",
+      "group_id": "002318",
+      "group_pair_count": 3,
+      "a": "training/input1/002320.jpg",
+      "b": "training/input2/002320.jpg"
+    },
+    {
+      "pair_id": "010074",
+      "group_id": "010073",
+      "group_pair_count": 3,
+      "a": "training/input1/010074.jpg",
+      "b": "training/input2/010074.jpg"
+    },
+    {
+      "pair_id": "010196",
+      "group_id": "007682",
+      "group_pair_count": 15,
+      "a": "training/input1/010196.jpg",
+      "b": "training/input2/010196.jpg"
+    },
+    {
+      "pair_id": "009784",
+      "group_id": "009784",
+      "group_pair_count": 1,
+      "a": "training/input1/009784.jpg",
+      "b": "training/input2/009784.jpg"
+    },
+    {
+      "pair_id": "000297",
+      "group_id": "000296",
+      "group_pair_count": 4,
+      "a": "training/input1/000297.jpg",
+      "b": "training/input2/000297.jpg"
+    },
+    {
+      "pair_id": "003794",
+      "group_id": "003794",
+      "group_pair_count": 25,
+      "a": "training/input1/003794.jpg",
+      "b": "training/input2/003794.jpg"
+    },
+    {
+      "pair_id": "008147",
+      "group_id": "008147",
+      "group_pair_count": 5,
+      "a": "training/input1/008147.jpg",
+      "b": "training/input2/008147.jpg"
+    },
+    {
+      "pair_id": "005057",
+      "group_id": "005056",
+      "group_pair_count": 2,
+      "a": "training/input1/005057.jpg",
+      "b": "training/input2/005057.jpg"
+    },
+    {
+      "pair_id": "007778",
+      "group_id": "007771",
+      "group_pair_count": 10,
+      "a": "training/input1/007778.jpg",
+      "b": "training/input2/007778.jpg"
+    },
+    {
+      "pair_id": "009424",
+      "group_id": "009424",
+      "group_pair_count": 1,
+      "a": "training/input1/009424.jpg",
+      "b": "training/input2/009424.jpg"
+    },
+    {
+      "pair_id": "010276",
+      "group_id": "010276",
+      "group_pair_count": 1,
+      "a": "training/input1/010276.jpg",
+      "b": "training/input2/010276.jpg"
+    },
+    {
+      "pair_id": "002674",
+      "group_id": "002673",
+      "group_pair_count": 4,
+      "a": "training/input1/002674.jpg",
+      "b": "training/input2/002674.jpg"
+    },
+    {
+      "pair_id": "009598",
+      "group_id": "009598",
+      "group_pair_count": 1,
+      "a": "training/input1/009598.jpg",
+      "b": "training/input2/009598.jpg"
+    },
+    {
+      "pair_id": "009839",
+      "group_id": "009839",
+      "group_pair_count": 1,
+      "a": "training/input1/009839.jpg",
+      "b": "training/input2/009839.jpg"
+    },
+    {
+      "pair_id": "009070",
+      "group_id": "009069",
+      "group_pair_count": 2,
+      "a": "training/input1/009070.jpg",
+      "b": "training/input2/009070.jpg"
+    },
+    {
+      "pair_id": "002752",
+      "group_id": "002749",
+      "group_pair_count": 4,
+      "a": "training/input1/002752.jpg",
+      "b": "training/input2/002752.jpg"
+    },
+    {
+      "pair_id": "010068",
+      "group_id": "010068",
+      "group_pair_count": 1,
+      "a": "training/input1/010068.jpg",
+      "b": "training/input2/010068.jpg"
+    },
+    {
+      "pair_id": "007753",
+      "group_id": "007751",
+      "group_pair_count": 8,
+      "a": "training/input1/007753.jpg",
+      "b": "training/input2/007753.jpg"
+    },
+    {
+      "pair_id": "008727",
+      "group_id": "000614",
+      "group_pair_count": 4,
+      "a": "training/input1/008727.jpg",
+      "b": "training/input2/008727.jpg"
+    },
+    {
+      "pair_id": "000105",
+      "group_id": "000105",
+      "group_pair_count": 2,
+      "a": "training/input1/000105.jpg",
+      "b": "training/input2/000105.jpg"
+    },
+    {
+      "pair_id": "006461",
+      "group_id": "006459",
+      "group_pair_count": 4,
+      "a": "training/input1/006461.jpg",
+      "b": "training/input2/006461.jpg"
+    },
+    {
+      "pair_id": "009787",
+      "group_id": "009787",
+      "group_pair_count": 1,
+      "a": "training/input1/009787.jpg",
+      "b": "training/input2/009787.jpg"
+    },
+    {
+      "pair_id": "003331",
+      "group_id": "003329",
+      "group_pair_count": 4,
+      "a": "training/input1/003331.jpg",
+      "b": "training/input2/003331.jpg"
+    },
+    {
+      "pair_id": "009848",
+      "group_id": "009848",
+      "group_pair_count": 1,
+      "a": "training/input1/009848.jpg",
+      "b": "training/input2/009848.jpg"
+    },
+    {
+      "pair_id": "009425",
+      "group_id": "009425",
+      "group_pair_count": 1,
+      "a": "training/input1/009425.jpg",
+      "b": "training/input2/009425.jpg"
+    },
+    {
+      "pair_id": "010382",
+      "group_id": "010382",
+      "group_pair_count": 1,
+      "a": "training/input1/010382.jpg",
+      "b": "training/input2/010382.jpg"
+    },
+    {
+      "pair_id": "009996",
+      "group_id": "009996",
+      "group_pair_count": 1,
+      "a": "training/input1/009996.jpg",
+      "b": "training/input2/009996.jpg"
+    },
+    {
+      "pair_id": "009595",
+      "group_id": "009595",
+      "group_pair_count": 1,
+      "a": "training/input1/009595.jpg",
+      "b": "training/input2/009595.jpg"
+    },
+    {
+      "pair_id": "005182",
+      "group_id": "005181",
+      "group_pair_count": 3,
+      "a": "training/input1/005182.jpg",
+      "b": "training/input2/005182.jpg"
+    },
+    {
+      "pair_id": "004710",
+      "group_id": "004709",
+      "group_pair_count": 4,
+      "a": "training/input1/004710.jpg",
+      "b": "training/input2/004710.jpg"
+    },
+    {
+      "pair_id": "004928",
+      "group_id": "004928",
+      "group_pair_count": 4,
+      "a": "training/input1/004928.jpg",
+      "b": "training/input2/004928.jpg"
+    },
+    {
+      "pair_id": "005258",
+      "group_id": "005258",
+      "group_pair_count": 4,
+      "a": "training/input1/005258.jpg",
+      "b": "training/input2/005258.jpg"
+    },
+    {
+      "pair_id": "009820",
+      "group_id": "009820",
+      "group_pair_count": 1,
+      "a": "training/input1/009820.jpg",
+      "b": "training/input2/009820.jpg"
+    },
+    {
+      "pair_id": "001735",
+      "group_id": "001733",
+      "group_pair_count": 4,
+      "a": "training/input1/001735.jpg",
+      "b": "training/input2/001735.jpg"
+    },
+    {
+      "pair_id": "009876",
+      "group_id": "006668",
+      "group_pair_count": 2,
+      "a": "training/input1/009876.jpg",
+      "b": "training/input2/009876.jpg"
+    },
+    {
+      "pair_id": "004746",
+      "group_id": "004745",
+      "group_pair_count": 4,
+      "a": "training/input1/004746.jpg",
+      "b": "training/input2/004746.jpg"
+    },
+    {
+      "pair_id": "004792",
+      "group_id": "004792",
+      "group_pair_count": 2,
+      "a": "training/input1/004792.jpg",
+      "b": "training/input2/004792.jpg"
+    },
+    {
+      "pair_id": "010221",
+      "group_id": "010221",
+      "group_pair_count": 1,
+      "a": "training/input1/010221.jpg",
+      "b": "training/input2/010221.jpg"
+    },
+    {
+      "pair_id": "009477",
+      "group_id": "009477",
+      "group_pair_count": 1,
+      "a": "training/input1/009477.jpg",
+      "b": "training/input2/009477.jpg"
+    },
+    {
+      "pair_id": "002374",
+      "group_id": "002374",
+      "group_pair_count": 4,
+      "a": "training/input1/002374.jpg",
+      "b": "training/input2/002374.jpg"
+    },
+    {
+      "pair_id": "008214",
+      "group_id": "008214",
+      "group_pair_count": 2,
+      "a": "training/input1/008214.jpg",
+      "b": "training/input2/008214.jpg"
+    },
+    {
+      "pair_id": "002461",
+      "group_id": "002461",
+      "group_pair_count": 4,
+      "a": "training/input1/002461.jpg",
+      "b": "training/input2/002461.jpg"
+    },
+    {
+      "pair_id": "005329",
+      "group_id": "005329",
+      "group_pair_count": 3,
+      "a": "training/input1/005329.jpg",
+      "b": "training/input2/005329.jpg"
+    },
+    {
+      "pair_id": "007265",
+      "group_id": "007263",
+      "group_pair_count": 3,
+      "a": "training/input1/007265.jpg",
+      "b": "training/input2/007265.jpg"
+    },
+    {
+      "pair_id": "006489",
+      "group_id": "006487",
+      "group_pair_count": 3,
+      "a": "training/input1/006489.jpg",
+      "b": "training/input2/006489.jpg"
+    },
+    {
+      "pair_id": "010007",
+      "group_id": "010007",
+      "group_pair_count": 1,
+      "a": "training/input1/010007.jpg",
+      "b": "training/input2/010007.jpg"
+    },
+    {
+      "pair_id": "009486",
+      "group_id": "009486",
+      "group_pair_count": 1,
+      "a": "training/input1/009486.jpg",
+      "b": "training/input2/009486.jpg"
+    },
+    {
+      "pair_id": "005106",
+      "group_id": "005104",
+      "group_pair_count": 3,
+      "a": "training/input1/005106.jpg",
+      "b": "training/input2/005106.jpg"
+    },
+    {
+      "pair_id": "005463",
+      "group_id": "005460",
+      "group_pair_count": 4,
+      "a": "training/input1/005463.jpg",
+      "b": "training/input2/005463.jpg"
+    },
+    {
+      "pair_id": "004609",
+      "group_id": "004606",
+      "group_pair_count": 4,
+      "a": "training/input1/004609.jpg",
+      "b": "training/input2/004609.jpg"
+    },
+    {
+      "pair_id": "004598",
+      "group_id": "004597",
+      "group_pair_count": 4,
+      "a": "training/input1/004598.jpg",
+      "b": "training/input2/004598.jpg"
+    },
+    {
+      "pair_id": "000596",
+      "group_id": "000596",
+      "group_pair_count": 3,
+      "a": "training/input1/000596.jpg",
+      "b": "training/input2/000596.jpg"
+    },
+    {
+      "pair_id": "006399",
+      "group_id": "006399",
+      "group_pair_count": 2,
+      "a": "training/input1/006399.jpg",
+      "b": "training/input2/006399.jpg"
+    },
+    {
+      "pair_id": "003773",
+      "group_id": "003773",
+      "group_pair_count": 1,
+      "a": "training/input1/003773.jpg",
+      "b": "training/input2/003773.jpg"
+    },
+    {
+      "pair_id": "006750",
+      "group_id": "006669",
+      "group_pair_count": 20,
+      "a": "training/input1/006750.jpg",
+      "b": "training/input2/006750.jpg"
+    },
+    {
+      "pair_id": "005843",
+      "group_id": "005842",
+      "group_pair_count": 4,
+      "a": "training/input1/005843.jpg",
+      "b": "training/input2/005843.jpg"
+    },
+    {
+      "pair_id": "010285",
+      "group_id": "010285",
+      "group_pair_count": 3,
+      "a": "training/input1/010285.jpg",
+      "b": "training/input2/010285.jpg"
+    },
+    {
+      "pair_id": "004831",
+      "group_id": "004830",
+      "group_pair_count": 2,
+      "a": "training/input1/004831.jpg",
+      "b": "training/input2/004831.jpg"
+    },
+    {
+      "pair_id": "007202",
+      "group_id": "007200",
+      "group_pair_count": 5,
+      "a": "training/input1/007202.jpg",
+      "b": "training/input2/007202.jpg"
+    },
+    {
+      "pair_id": "009778",
+      "group_id": "009778",
+      "group_pair_count": 1,
+      "a": "training/input1/009778.jpg",
+      "b": "training/input2/009778.jpg"
+    },
+    {
+      "pair_id": "002823",
+      "group_id": "002823",
+      "group_pair_count": 4,
+      "a": "training/input1/002823.jpg",
+      "b": "training/input2/002823.jpg"
+    },
+    {
+      "pair_id": "000302",
+      "group_id": "000300",
+      "group_pair_count": 4,
+      "a": "training/input1/000302.jpg",
+      "b": "training/input2/000302.jpg"
+    },
+    {
+      "pair_id": "009334",
+      "group_id": "004632",
+      "group_pair_count": 4,
+      "a": "training/input1/009334.jpg",
+      "b": "training/input2/009334.jpg"
+    },
+    {
+      "pair_id": "001766",
+      "group_id": "001766",
+      "group_pair_count": 4,
+      "a": "training/input1/001766.jpg",
+      "b": "training/input2/001766.jpg"
+    },
+    {
+      "pair_id": "006445",
+      "group_id": "006443",
+      "group_pair_count": 4,
+      "a": "training/input1/006445.jpg",
+      "b": "training/input2/006445.jpg"
+    },
+    {
+      "pair_id": "007426",
+      "group_id": "007426",
+      "group_pair_count": 1,
+      "a": "training/input1/007426.jpg",
+      "b": "training/input2/007426.jpg"
+    },
+    {
+      "pair_id": "009367",
+      "group_id": "009367",
+      "group_pair_count": 2,
+      "a": "training/input1/009367.jpg",
+      "b": "training/input2/009367.jpg"
+    },
+    {
+      "pair_id": "009438",
+      "group_id": "004863",
+      "group_pair_count": 2,
+      "a": "training/input1/009438.jpg",
+      "b": "training/input2/009438.jpg"
+    },
+    {
+      "pair_id": "007063",
+      "group_id": "007063",
+      "group_pair_count": 4,
+      "a": "training/input1/007063.jpg",
+      "b": "training/input2/007063.jpg"
+    },
+    {
+      "pair_id": "004700",
+      "group_id": "004698",
+      "group_pair_count": 3,
+      "a": "training/input1/004700.jpg",
+      "b": "training/input2/004700.jpg"
+    },
+    {
+      "pair_id": "006664",
+      "group_id": "006664",
+      "group_pair_count": 2,
+      "a": "training/input1/006664.jpg",
+      "b": "training/input2/006664.jpg"
+    },
+    {
+      "pair_id": "007175",
+      "group_id": "007088",
+      "group_pair_count": 29,
+      "a": "training/input1/007175.jpg",
+      "b": "training/input2/007175.jpg"
+    },
+    {
+      "pair_id": "005176",
+      "group_id": "005174",
+      "group_pair_count": 4,
+      "a": "training/input1/005176.jpg",
+      "b": "training/input2/005176.jpg"
+    },
+    {
+      "pair_id": "000127",
+      "group_id": "000126",
+      "group_pair_count": 2,
+      "a": "training/input1/000127.jpg",
+      "b": "training/input2/000127.jpg"
+    },
+    {
+      "pair_id": "005271",
+      "group_id": "005270",
+      "group_pair_count": 2,
+      "a": "training/input1/005271.jpg",
+      "b": "training/input2/005271.jpg"
+    },
+    {
+      "pair_id": "005238",
+      "group_id": "005237",
+      "group_pair_count": 2,
+      "a": "training/input1/005238.jpg",
+      "b": "training/input2/005238.jpg"
+    },
+    {
+      "pair_id": "010200",
+      "group_id": "007743",
+      "group_pair_count": 8,
+      "a": "training/input1/010200.jpg",
+      "b": "training/input2/010200.jpg"
+    },
+    {
+      "pair_id": "007206",
+      "group_id": "007206",
+      "group_pair_count": 1,
+      "a": "training/input1/007206.jpg",
+      "b": "training/input2/007206.jpg"
+    },
+    {
+      "pair_id": "009427",
+      "group_id": "009427",
+      "group_pair_count": 1,
+      "a": "training/input1/009427.jpg",
+      "b": "training/input2/009427.jpg"
+    },
+    {
+      "pair_id": "009566",
+      "group_id": "009566",
+      "group_pair_count": 1,
+      "a": "training/input1/009566.jpg",
+      "b": "training/input2/009566.jpg"
+    },
+    {
+      "pair_id": "005784",
+      "group_id": "005782",
+      "group_pair_count": 4,
+      "a": "training/input1/005784.jpg",
+      "b": "training/input2/005784.jpg"
+    },
+    {
+      "pair_id": "005224",
+      "group_id": "005223",
+      "group_pair_count": 2,
+      "a": "training/input1/005224.jpg",
+      "b": "training/input2/005224.jpg"
+    },
+    {
+      "pair_id": "003214",
+      "group_id": "003214",
+      "group_pair_count": 4,
+      "a": "training/input1/003214.jpg",
+      "b": "training/input2/003214.jpg"
+    },
+    {
+      "pair_id": "005695",
+      "group_id": "005694",
+      "group_pair_count": 4,
+      "a": "training/input1/005695.jpg",
+      "b": "training/input2/005695.jpg"
+    },
+    {
+      "pair_id": "006667",
+      "group_id": "006666",
+      "group_pair_count": 2,
+      "a": "training/input1/006667.jpg",
+      "b": "training/input2/006667.jpg"
+    },
+    {
+      "pair_id": "002555",
+      "group_id": "002553",
+      "group_pair_count": 4,
+      "a": "training/input1/002555.jpg",
+      "b": "training/input2/002555.jpg"
+    },
+    {
+      "pair_id": "005350",
+      "group_id": "005347",
+      "group_pair_count": 4,
+      "a": "training/input1/005350.jpg",
+      "b": "training/input2/005350.jpg"
+    },
+    {
+      "pair_id": "004963",
+      "group_id": "004961",
+      "group_pair_count": 4,
+      "a": "training/input1/004963.jpg",
+      "b": "training/input2/004963.jpg"
+    },
+    {
+      "pair_id": "007039",
+      "group_id": "007032",
+      "group_pair_count": 10,
+      "a": "training/input1/007039.jpg",
+      "b": "training/input2/007039.jpg"
+    },
+    {
+      "pair_id": "002515",
+      "group_id": "002513",
+      "group_pair_count": 4,
+      "a": "training/input1/002515.jpg",
+      "b": "training/input2/002515.jpg"
+    },
+    {
+      "pair_id": "008662",
+      "group_id": "008661",
+      "group_pair_count": 3,
+      "a": "training/input1/008662.jpg",
+      "b": "training/input2/008662.jpg"
+    },
+    {
+      "pair_id": "008212",
+      "group_id": "008212",
+      "group_pair_count": 2,
+      "a": "training/input1/008212.jpg",
+      "b": "training/input2/008212.jpg"
+    },
+    {
+      "pair_id": "002649",
+      "group_id": "002647",
+      "group_pair_count": 3,
+      "a": "training/input1/002649.jpg",
+      "b": "training/input2/002649.jpg"
+    },
+    {
+      "pair_id": "009626",
+      "group_id": "005629",
+      "group_pair_count": 3,
+      "a": "training/input1/009626.jpg",
+      "b": "training/input2/009626.jpg"
+    },
+    {
+      "pair_id": "009729",
+      "group_id": "009729",
+      "group_pair_count": 1,
+      "a": "training/input1/009729.jpg",
+      "b": "training/input2/009729.jpg"
+    },
+    {
+      "pair_id": "009964",
+      "group_id": "009963",
+      "group_pair_count": 2,
+      "a": "training/input1/009964.jpg",
+      "b": "training/input2/009964.jpg"
+    },
+    {
+      "pair_id": "002772",
+      "group_id": "002772",
+      "group_pair_count": 3,
+      "a": "training/input1/002772.jpg",
+      "b": "training/input2/002772.jpg"
+    },
+    {
+      "pair_id": "010298",
+      "group_id": "010297",
+      "group_pair_count": 2,
+      "a": "training/input1/010298.jpg",
+      "b": "training/input2/010298.jpg"
+    },
+    {
+      "pair_id": "007070",
+      "group_id": "007070",
+      "group_pair_count": 6,
+      "a": "training/input1/007070.jpg",
+      "b": "training/input2/007070.jpg"
+    },
+    {
+      "pair_id": "005373",
+      "group_id": "005373",
+      "group_pair_count": 1,
+      "a": "training/input1/005373.jpg",
+      "b": "training/input2/005373.jpg"
+    },
+    {
+      "pair_id": "002341",
+      "group_id": "002340",
+      "group_pair_count": 3,
+      "a": "training/input1/002341.jpg",
+      "b": "training/input2/002341.jpg"
+    },
+    {
+      "pair_id": "000030",
+      "group_id": "000030",
+      "group_pair_count": 2,
+      "a": "training/input1/000030.jpg",
+      "b": "training/input2/000030.jpg"
+    },
+    {
+      "pair_id": "010134",
+      "group_id": "010134",
+      "group_pair_count": 1,
+      "a": "training/input1/010134.jpg",
+      "b": "training/input2/010134.jpg"
+    },
+    {
+      "pair_id": "010047",
+      "group_id": "007278",
+      "group_pair_count": 4,
+      "a": "training/input1/010047.jpg",
+      "b": "training/input2/010047.jpg"
+    },
+    {
+      "pair_id": "009138",
+      "group_id": "009138",
+      "group_pair_count": 1,
+      "a": "training/input1/009138.jpg",
+      "b": "training/input2/009138.jpg"
+    },
+    {
+      "pair_id": "002426",
+      "group_id": "002423",
+      "group_pair_count": 4,
+      "a": "training/input1/002426.jpg",
+      "b": "training/input2/002426.jpg"
+    },
+    {
+      "pair_id": "007325",
+      "group_id": "007322",
+      "group_pair_count": 4,
+      "a": "training/input1/007325.jpg",
+      "b": "training/input2/007325.jpg"
+    },
+    {
+      "pair_id": "006506",
+      "group_id": "006505",
+      "group_pair_count": 4,
+      "a": "training/input1/006506.jpg",
+      "b": "training/input2/006506.jpg"
+    },
+    {
+      "pair_id": "002211",
+      "group_id": "002050",
+      "group_pair_count": 112,
+      "a": "training/input1/002211.jpg",
+      "b": "training/input2/002211.jpg"
+    },
+    {
+      "pair_id": "000628",
+      "group_id": "000628",
+      "group_pair_count": 3,
+      "a": "training/input1/000628.jpg",
+      "b": "training/input2/000628.jpg"
+    },
+    {
+      "pair_id": "006421",
+      "group_id": "006421",
+      "group_pair_count": 4,
+      "a": "training/input1/006421.jpg",
+      "b": "training/input2/006421.jpg"
+    },
+    {
+      "pair_id": "005070",
+      "group_id": "005070",
+      "group_pair_count": 2,
+      "a": "training/input1/005070.jpg",
+      "b": "training/input2/005070.jpg"
+    },
+    {
+      "pair_id": "008729",
+      "group_id": "000623",
+      "group_pair_count": 3,
+      "a": "training/input1/008729.jpg",
+      "b": "training/input2/008729.jpg"
+    },
+    {
+      "pair_id": "005712",
+      "group_id": "005712",
+      "group_pair_count": 4,
+      "a": "training/input1/005712.jpg",
+      "b": "training/input2/005712.jpg"
+    },
+    {
+      "pair_id": "005827",
+      "group_id": "005825",
+      "group_pair_count": 4,
+      "a": "training/input1/005827.jpg",
+      "b": "training/input2/005827.jpg"
+    },
+    {
+      "pair_id": "010080",
+      "group_id": "010080",
+      "group_pair_count": 1,
+      "a": "training/input1/010080.jpg",
+      "b": "training/input2/010080.jpg"
+    },
+    {
+      "pair_id": "009741",
+      "group_id": "009740",
+      "group_pair_count": 2,
+      "a": "training/input1/009741.jpg",
+      "b": "training/input2/009741.jpg"
+    },
+    {
+      "pair_id": "005451",
+      "group_id": "005449",
+      "group_pair_count": 4,
+      "a": "training/input1/005451.jpg",
+      "b": "training/input2/005451.jpg"
+    },
+    {
+      "pair_id": "009139",
+      "group_id": "009139",
+      "group_pair_count": 1,
+      "a": "training/input1/009139.jpg",
+      "b": "training/input2/009139.jpg"
+    },
+    {
+      "pair_id": "004941",
+      "group_id": "004939",
+      "group_pair_count": 4,
+      "a": "training/input1/004941.jpg",
+      "b": "training/input2/004941.jpg"
+    },
+    {
+      "pair_id": "005210",
+      "group_id": "005210",
+      "group_pair_count": 3,
+      "a": "training/input1/005210.jpg",
+      "b": "training/input2/005210.jpg"
+    },
+    {
+      "pair_id": "003339",
+      "group_id": "003339",
+      "group_pair_count": 2,
+      "a": "training/input1/003339.jpg",
+      "b": "training/input2/003339.jpg"
+    },
+    {
+      "pair_id": "007389",
+      "group_id": "007387",
+      "group_pair_count": 4,
+      "a": "training/input1/007389.jpg",
+      "b": "training/input2/007389.jpg"
+    },
+    {
+      "pair_id": "009534",
+      "group_id": "005277",
+      "group_pair_count": 4,
+      "a": "training/input1/009534.jpg",
+      "b": "training/input2/009534.jpg"
+    },
+    {
+      "pair_id": "009352",
+      "group_id": "009352",
+      "group_pair_count": 2,
+      "a": "training/input1/009352.jpg",
+      "b": "training/input2/009352.jpg"
+    },
+    {
+      "pair_id": "002680",
+      "group_id": "002677",
+      "group_pair_count": 4,
+      "a": "training/input1/002680.jpg",
+      "b": "training/input2/002680.jpg"
+    },
+    {
+      "pair_id": "000069",
+      "group_id": "000034",
+      "group_pair_count": 11,
+      "a": "training/input1/000069.jpg",
+      "b": "training/input2/000069.jpg"
+    },
+    {
+      "pair_id": "009583",
+      "group_id": "009583",
+      "group_pair_count": 1,
+      "a": "training/input1/009583.jpg",
+      "b": "training/input2/009583.jpg"
+    },
+    {
+      "pair_id": "002540",
+      "group_id": "002539",
+      "group_pair_count": 2,
+      "a": "training/input1/002540.jpg",
+      "b": "training/input2/002540.jpg"
+    },
+    {
+      "pair_id": "009730",
+      "group_id": "009730",
+      "group_pair_count": 1,
+      "a": "training/input1/009730.jpg",
+      "b": "training/input2/009730.jpg"
+    },
+    {
+      "pair_id": "000743",
+      "group_id": "000731",
+      "group_pair_count": 27,
+      "a": "training/input1/000743.jpg",
+      "b": "training/input2/000743.jpg"
+    },
+    {
+      "pair_id": "003778",
+      "group_id": "003777",
+      "group_pair_count": 2,
+      "a": "training/input1/003778.jpg",
+      "b": "training/input2/003778.jpg"
+    },
+    {
+      "pair_id": "009794",
+      "group_id": "009794",
+      "group_pair_count": 1,
+      "a": "training/input1/009794.jpg",
+      "b": "training/input2/009794.jpg"
+    },
+    {
+      "pair_id": "005889",
+      "group_id": "005888",
+      "group_pair_count": 4,
+      "a": "training/input1/005889.jpg",
+      "b": "training/input2/005889.jpg"
+    },
+    {
+      "pair_id": "006523",
+      "group_id": "006521",
+      "group_pair_count": 4,
+      "a": "training/input1/006523.jpg",
+      "b": "training/input2/006523.jpg"
+    },
+    {
+      "pair_id": "004862",
+      "group_id": "004862",
+      "group_pair_count": 2,
+      "a": "training/input1/004862.jpg",
+      "b": "training/input2/004862.jpg"
+    },
+    {
+      "pair_id": "008069",
+      "group_id": "008068",
+      "group_pair_count": 8,
+      "a": "training/input1/008069.jpg",
+      "b": "training/input2/008069.jpg"
+    },
+    {
+      "pair_id": "005879",
+      "group_id": "005878",
+      "group_pair_count": 4,
+      "a": "training/input1/005879.jpg",
+      "b": "training/input2/005879.jpg"
+    },
+    {
+      "pair_id": "009113",
+      "group_id": "009113",
+      "group_pair_count": 1,
+      "a": "training/input1/009113.jpg",
+      "b": "training/input2/009113.jpg"
+    },
+    {
+      "pair_id": "009726",
+      "group_id": "009726",
+      "group_pair_count": 1,
+      "a": "training/input1/009726.jpg",
+      "b": "training/input2/009726.jpg"
+    },
+    {
+      "pair_id": "003272",
+      "group_id": "003271",
+      "group_pair_count": 4,
+      "a": "training/input1/003272.jpg",
+      "b": "training/input2/003272.jpg"
+    },
+    {
+      "pair_id": "009504",
+      "group_id": "009504",
+      "group_pair_count": 1,
+      "a": "training/input1/009504.jpg",
+      "b": "training/input2/009504.jpg"
+    },
+    {
+      "pair_id": "005431",
+      "group_id": "005430",
+      "group_pair_count": 4,
+      "a": "training/input1/005431.jpg",
+      "b": "training/input2/005431.jpg"
+    },
+    {
+      "pair_id": "007307",
+      "group_id": "007304",
+      "group_pair_count": 4,
+      "a": "training/input1/007307.jpg",
+      "b": "training/input2/007307.jpg"
+    },
+    {
+      "pair_id": "009372",
+      "group_id": "009372",
+      "group_pair_count": 1,
+      "a": "training/input1/009372.jpg",
+      "b": "training/input2/009372.jpg"
+    },
+    {
+      "pair_id": "009959",
+      "group_id": "009959",
+      "group_pair_count": 1,
+      "a": "training/input1/009959.jpg",
+      "b": "training/input2/009959.jpg"
+    },
+    {
+      "pair_id": "006624",
+      "group_id": "006624",
+      "group_pair_count": 3,
+      "a": "training/input1/006624.jpg",
+      "b": "training/input2/006624.jpg"
+    },
+    {
+      "pair_id": "006833",
+      "group_id": "006832",
+      "group_pair_count": 2,
+      "a": "training/input1/006833.jpg",
+      "b": "training/input2/006833.jpg"
+    },
+    {
+      "pair_id": "005267",
+      "group_id": "005266",
+      "group_pair_count": 4,
+      "a": "training/input1/005267.jpg",
+      "b": "training/input2/005267.jpg"
+    },
+    {
+      "pair_id": "006656",
+      "group_id": "006653",
+      "group_pair_count": 4,
+      "a": "training/input1/006656.jpg",
+      "b": "training/input2/006656.jpg"
+    },
+    {
+      "pair_id": "004662",
+      "group_id": "004662",
+      "group_pair_count": 4,
+      "a": "training/input1/004662.jpg",
+      "b": "training/input2/004662.jpg"
+    },
+    {
+      "pair_id": "009586",
+      "group_id": "009586",
+      "group_pair_count": 1,
+      "a": "training/input1/009586.jpg",
+      "b": "training/input2/009586.jpg"
+    },
+    {
+      "pair_id": "000003",
+      "group_id": "000001",
+      "group_pair_count": 8,
+      "a": "training/input1/000003.jpg",
+      "b": "training/input2/000003.jpg"
+    },
+    {
+      "pair_id": "002706",
+      "group_id": "002705",
+      "group_pair_count": 3,
+      "a": "training/input1/002706.jpg",
+      "b": "training/input2/002706.jpg"
+    },
+    {
+      "pair_id": "010034",
+      "group_id": "010034",
+      "group_pair_count": 1,
+      "a": "training/input1/010034.jpg",
+      "b": "training/input2/010034.jpg"
+    },
+    {
+      "pair_id": "005353",
+      "group_id": "005353",
+      "group_pair_count": 3,
+      "a": "training/input1/005353.jpg",
+      "b": "training/input2/005353.jpg"
+    },
+    {
+      "pair_id": "009804",
+      "group_id": "009804",
+      "group_pair_count": 1,
+      "a": "training/input1/009804.jpg",
+      "b": "training/input2/009804.jpg"
+    },
+    {
+      "pair_id": "001771",
+      "group_id": "001769",
+      "group_pair_count": 4,
+      "a": "training/input1/001771.jpg",
+      "b": "training/input2/001771.jpg"
+    },
+    {
+      "pair_id": "009423",
+      "group_id": "009423",
+      "group_pair_count": 1,
+      "a": "training/input1/009423.jpg",
+      "b": "training/input2/009423.jpg"
+    },
+    {
+      "pair_id": "001745",
+      "group_id": "001743",
+      "group_pair_count": 4,
+      "a": "training/input1/001745.jpg",
+      "b": "training/input2/001745.jpg"
+    },
+    {
+      "pair_id": "007261",
+      "group_id": "007259",
+      "group_pair_count": 4,
+      "a": "training/input1/007261.jpg",
+      "b": "training/input2/007261.jpg"
+    },
+    {
+      "pair_id": "003247",
+      "group_id": "003246",
+      "group_pair_count": 2,
+      "a": "training/input1/003247.jpg",
+      "b": "training/input2/003247.jpg"
+    },
+    {
+      "pair_id": "009362",
+      "group_id": "009362",
+      "group_pair_count": 1,
+      "a": "training/input1/009362.jpg",
+      "b": "training/input2/009362.jpg"
+    },
+    {
+      "pair_id": "005275",
+      "group_id": "005275",
+      "group_pair_count": 2,
+      "a": "training/input1/005275.jpg",
+      "b": "training/input2/005275.jpg"
+    },
+    {
+      "pair_id": "010004",
+      "group_id": "010004",
+      "group_pair_count": 1,
+      "a": "training/input1/010004.jpg",
+      "b": "training/input2/010004.jpg"
+    },
+    {
+      "pair_id": "006836",
+      "group_id": "006820",
+      "group_pair_count": 42,
+      "a": "training/input1/006836.jpg",
+      "b": "training/input2/006836.jpg"
+    },
+    {
+      "pair_id": "009008",
+      "group_id": "009008",
+      "group_pair_count": 1,
+      "a": "training/input1/009008.jpg",
+      "b": "training/input2/009008.jpg"
+    },
+    {
+      "pair_id": "002755",
+      "group_id": "002753",
+      "group_pair_count": 3,
+      "a": "training/input1/002755.jpg",
+      "b": "training/input2/002755.jpg"
+    },
+    {
+      "pair_id": "004658",
+      "group_id": "004655",
+      "group_pair_count": 4,
+      "a": "training/input1/004658.jpg",
+      "b": "training/input2/004658.jpg"
+    },
+    {
+      "pair_id": "010367",
+      "group_id": "010367",
+      "group_pair_count": 2,
+      "a": "training/input1/010367.jpg",
+      "b": "training/input2/010367.jpg"
+    },
+    {
+      "pair_id": "009571",
+      "group_id": "009571",
+      "group_pair_count": 1,
+      "a": "training/input1/009571.jpg",
+      "b": "training/input2/009571.jpg"
+    },
+    {
+      "pair_id": "005101",
+      "group_id": "005100",
+      "group_pair_count": 2,
+      "a": "training/input1/005101.jpg",
+      "b": "training/input2/005101.jpg"
+    },
+    {
+      "pair_id": "002743",
+      "group_id": "002742",
+      "group_pair_count": 4,
+      "a": "training/input1/002743.jpg",
+      "b": "training/input2/002743.jpg"
+    },
+    {
+      "pair_id": "004636",
+      "group_id": "004635",
+      "group_pair_count": 4,
+      "a": "training/input1/004636.jpg",
+      "b": "training/input2/004636.jpg"
+    },
+    {
+      "pair_id": "005686",
+      "group_id": "005685",
+      "group_pair_count": 4,
+      "a": "training/input1/005686.jpg",
+      "b": "training/input2/005686.jpg"
+    },
+    {
+      "pair_id": "005281",
+      "group_id": "005280",
+      "group_pair_count": 4,
+      "a": "training/input1/005281.jpg",
+      "b": "training/input2/005281.jpg"
+    },
+    {
+      "pair_id": "002545",
+      "group_id": "002545",
+      "group_pair_count": 4,
+      "a": "training/input1/002545.jpg",
+      "b": "training/input2/002545.jpg"
+    },
+    {
+      "pair_id": "003376",
+      "group_id": "003355",
+      "group_pair_count": 41,
+      "a": "training/input1/003376.jpg",
+      "b": "training/input2/003376.jpg"
+    },
+    {
+      "pair_id": "005216",
+      "group_id": "005216",
+      "group_pair_count": 4,
+      "a": "training/input1/005216.jpg",
+      "b": "training/input2/005216.jpg"
+    },
+    {
+      "pair_id": "007402",
+      "group_id": "007401",
+      "group_pair_count": 3,
+      "a": "training/input1/007402.jpg",
+      "b": "training/input2/007402.jpg"
+    },
+    {
+      "pair_id": "000071",
+      "group_id": "000038",
+      "group_pair_count": 11,
+      "a": "training/input1/000071.jpg",
+      "b": "training/input2/000071.jpg"
+    },
+    {
+      "pair_id": "006404",
+      "group_id": "006404",
+      "group_pair_count": 2,
+      "a": "training/input1/006404.jpg",
+      "b": "training/input2/006404.jpg"
+    },
+    {
+      "pair_id": "000820",
+      "group_id": "000820",
+      "group_pair_count": 1,
+      "a": "training/input1/000820.jpg",
+      "b": "training/input2/000820.jpg"
+    },
+    {
+      "pair_id": "009201",
+      "group_id": "009201",
+      "group_pair_count": 3,
+      "a": "training/input1/009201.jpg",
+      "b": "training/input2/009201.jpg"
+    },
+    {
+      "pair_id": "007984",
+      "group_id": "007795",
+      "group_pair_count": 42,
+      "a": "training/input1/007984.jpg",
+      "b": "training/input2/007984.jpg"
+    },
+    {
+      "pair_id": "005892",
+      "group_id": "005891",
+      "group_pair_count": 4,
+      "a": "training/input1/005892.jpg",
+      "b": "training/input2/005892.jpg"
+    },
+    {
+      "pair_id": "003260",
+      "group_id": "003258",
+      "group_pair_count": 3,
+      "a": "training/input1/003260.jpg",
+      "b": "training/input2/003260.jpg"
+    },
+    {
+      "pair_id": "009788",
+      "group_id": "009788",
+      "group_pair_count": 1,
+      "a": "training/input1/009788.jpg",
+      "b": "training/input2/009788.jpg"
+    },
+    {
+      "pair_id": "002613",
+      "group_id": "002613",
+      "group_pair_count": 4,
+      "a": "training/input1/002613.jpg",
+      "b": "training/input2/002613.jpg"
+    },
+    {
+      "pair_id": "010040",
+      "group_id": "010040",
+      "group_pair_count": 1,
+      "a": "training/input1/010040.jpg",
+      "b": "training/input2/010040.jpg"
+    },
+    {
+      "pair_id": "000806",
+      "group_id": "000806",
+      "group_pair_count": 1,
+      "a": "training/input1/000806.jpg",
+      "b": "training/input2/000806.jpg"
+    },
+    {
+      "pair_id": "009494",
+      "group_id": "009494",
+      "group_pair_count": 1,
+      "a": "training/input1/009494.jpg",
+      "b": "training/input2/009494.jpg"
+    },
+    {
+      "pair_id": "003293",
+      "group_id": "003291",
+      "group_pair_count": 4,
+      "a": "training/input1/003293.jpg",
+      "b": "training/input2/003293.jpg"
+    },
+    {
+      "pair_id": "001854",
+      "group_id": "001853",
+      "group_pair_count": 4,
+      "a": "training/input1/001854.jpg",
+      "b": "training/input2/001854.jpg"
+    },
+    {
+      "pair_id": "005503",
+      "group_id": "005502",
+      "group_pair_count": 4,
+      "a": "training/input1/005503.jpg",
+      "b": "training/input2/005503.jpg"
+    },
+    {
+      "pair_id": "007739",
+      "group_id": "007739",
+      "group_pair_count": 1,
+      "a": "training/input1/007739.jpg",
+      "b": "training/input2/007739.jpg"
+    },
+    {
+      "pair_id": "000308",
+      "group_id": "000308",
+      "group_pair_count": 2,
+      "a": "training/input1/000308.jpg",
+      "b": "training/input2/000308.jpg"
+    },
+    {
+      "pair_id": "010039",
+      "group_id": "010039",
+      "group_pair_count": 1,
+      "a": "training/input1/010039.jpg",
+      "b": "training/input2/010039.jpg"
+    },
+    {
+      "pair_id": "005255",
+      "group_id": "005255",
+      "group_pair_count": 3,
+      "a": "training/input1/005255.jpg",
+      "b": "training/input2/005255.jpg"
+    },
+    {
+      "pair_id": "005870",
+      "group_id": "005868",
+      "group_pair_count": 4,
+      "a": "training/input1/005870.jpg",
+      "b": "training/input2/005870.jpg"
+    },
+    {
+      "pair_id": "010059",
+      "group_id": "010059",
+      "group_pair_count": 1,
+      "a": "training/input1/010059.jpg",
+      "b": "training/input2/010059.jpg"
+    },
+    {
+      "pair_id": "010222",
+      "group_id": "010220",
+      "group_pair_count": 3,
+      "a": "training/input1/010222.jpg",
+      "b": "training/input2/010222.jpg"
+    },
+    {
+      "pair_id": "010030",
+      "group_id": "010030",
+      "group_pair_count": 1,
+      "a": "training/input1/010030.jpg",
+      "b": "training/input2/010030.jpg"
+    },
+    {
+      "pair_id": "005356",
+      "group_id": "005356",
+      "group_pair_count": 3,
+      "a": "training/input1/005356.jpg",
+      "b": "training/input2/005356.jpg"
+    },
+    {
+      "pair_id": "009577",
+      "group_id": "009577",
+      "group_pair_count": 1,
+      "a": "training/input1/009577.jpg",
+      "b": "training/input2/009577.jpg"
+    },
+    {
+      "pair_id": "003336",
+      "group_id": "003336",
+      "group_pair_count": 2,
+      "a": "training/input1/003336.jpg",
+      "b": "training/input2/003336.jpg"
+    },
+    {
+      "pair_id": "002525",
+      "group_id": "002524",
+      "group_pair_count": 2,
+      "a": "training/input1/002525.jpg",
+      "b": "training/input2/002525.jpg"
+    },
+    {
+      "pair_id": "006539",
+      "group_id": "006537",
+      "group_pair_count": 3,
+      "a": "training/input1/006539.jpg",
+      "b": "training/input2/006539.jpg"
+    },
+    {
+      "pair_id": "009502",
+      "group_id": "009502",
+      "group_pair_count": 1,
+      "a": "training/input1/009502.jpg",
+      "b": "training/input2/009502.jpg"
+    },
+    {
+      "pair_id": "005153",
+      "group_id": "005151",
+      "group_pair_count": 3,
+      "a": "training/input1/005153.jpg",
+      "b": "training/input2/005153.jpg"
+    },
+    {
+      "pair_id": "005361",
+      "group_id": "005361",
+      "group_pair_count": 2,
+      "a": "training/input1/005361.jpg",
+      "b": "training/input2/005361.jpg"
+    },
+    {
+      "pair_id": "006923",
+      "group_id": "006844",
+      "group_pair_count": 36,
+      "a": "training/input1/006923.jpg",
+      "b": "training/input2/006923.jpg"
+    },
+    {
+      "pair_id": "008159",
+      "group_id": "008158",
+      "group_pair_count": 8,
+      "a": "training/input1/008159.jpg",
+      "b": "training/input2/008159.jpg"
+    },
+    {
+      "pair_id": "004693",
+      "group_id": "004691",
+      "group_pair_count": 4,
+      "a": "training/input1/004693.jpg",
+      "b": "training/input2/004693.jpg"
+    },
+    {
+      "pair_id": "009756",
+      "group_id": "009755",
+      "group_pair_count": 2,
+      "a": "training/input1/009756.jpg",
+      "b": "training/input2/009756.jpg"
+    }
+  ],
+  "pilot_pair_ids": [
+    "002429",
+    "006794",
+    "009511",
+    "005291",
+    "003779",
+    "000700",
+    "009125",
+    "010327",
+    "009865",
+    "005655",
+    "001761",
+    "002733",
+    "009413",
+    "006628",
+    "009955",
+    "005389",
+    "002559",
+    "002384",
+    "009601",
+    "005592",
+    "009840",
+    "007749",
+    "010283",
+    "004707",
+    "008718"
+  ],
+  "freeze": "Select before image inspection, pipeline execution, or quality/latency results. Keep failures and do not replace pilot pairs.",
+  "source": {
+    "archive_name": "training.zip",
+    "drive_file_id": "1CTKa42BRdXO2vdYSadaQkvgQ8DR6l49a",
+    "official_repository": "https://github.com/nie-lang/UnsupervisedDeepImageStitching",
+    "official_folder": "https://drive.google.com/drive/folders/1kC7KAULd5mZsqaWnY3-rSbQLaZ7LujTY",
+    "archive_bytes": 1945998335,
+    "central_directory_sha256": "1e889aa8a257d1e89f2cf79eb108ee0ba7638279ec87d247a0129b995840cf79",
+    "retrieval": "HTTP byte ranges of official public training archive; no testing images accessed",
+    "access_date": "2026-10-30"
+  },
+  "archive_index_sha256": "291028e1f2f4261aa263785c45269dbc42bf26a85f764346da290c7bbaf9bc16"
+}

@@ -10,7 +10,7 @@
 
 | Mã | Tên bài Ablation | Mục tiêu khoa học | Biến thể đối đầu (Variants) | Chỉ số đo lường chính | Người chủ trì duy nhất |
 |---|---|---|---|---|---|
-| **A1** | **Hiệu quả của Probe Signal (S1 Gradient)** | Đo lường xem chi phí probe (~0.07 ms) có thực sự giúp giảm số lần retry và tiết kiệm latency tổng thể hay không | 1. **Adaptive with Probe** (đề xuất)<br>2. **Blind Escalation** (luôn bắt đầu từ nấc 1 nhẹ nhất, thiếu inliers thì leo thang)<br>3. **Conservative High** (luôn chạy nấc tối đa) | - $t_{\text{probe}}$, $t_{\text{controller}}$, $t_{\text{e2e}}$<br>- Số attempt trung bình/pair<br>- Tỉ lệ retry (%) | **Đế** |
+| **A1** | **Hiệu quả của Probe Signal (S1 Gradient)** | Đo lường xem chi phí probe (~0.07 ms) có thực sự giúp giảm số lần retry và tiết kiệm latency tổng thể hay không | 1. **Adaptive with Probe** (đề xuất)<br>2. **Blind Escalation** (luôn bắt đầu từ nấc 1 nhẹ nhất, thiếu inliers thì leo thang)<br>3. **Conservative High** (luôn chạy nấc tối đa) | - $t_{\text{probe}}$, $t_{\text{controller}}$, $t_{\text{e2e}}$<br>- Số attempt trung bình/pair<br>- Tỉ lệ retry (%) | **Tuấn** |
 | **A2** | **Đóng góp của State/Match Reuse trong S5** | Định lượng thời gian tiết kiệm được khi tăng $R$ nhờ việc tái sử dụng match S4 và inliers S5 cũ | 1. **With Reuse** (đề xuất: giữ nguyên match S4, chỉ mở rộng RANSAC evaluation từ $R_{\text{old}}$ đến $R_{\text{new}}$)<br>2. **No Reuse** (chạy lại toàn bộ S4 matching và S5 RANSAC từ đầu) | - Thời gian chạy lại $t_{\text{retry}}$<br>- Delta latency tiết kiệm được (ms)<br>- Tốc độ cải thiện của attempt 2/3 | **Đế** |
 | **A3** | **Tác động của Ngân sách $K$ động trong S2–S3** | Đo đạc độ co giãn thời gian của FAST/ORB và kiểm chứng tính ổn định bộ nhớ (zero-allocation) | 1. **Fixed pre-allocated buffer** (đề xuất: cấp phát max $K=2000$ một lần, nhận $K$ động)<br>2. **Dynamic re-allocation** (cấp phát lại buffer theo từng $K$)<br>3. Quét $K \in \{500, 1000, 2000\}$ | - Kernel time $t_{s2}$, $t_{s3}$<br>- Memory allocation overhead<br>- Số lượng keypoints hợp lệ | **Thành** |
 | **A4** | **Same-Homography Blending Trade-off (S6)** | Định lượng sự đánh đổi giữa latency render và chất lượng cảm nhận vùng biên (seam quality) | Cố định cùng 1 homography $H$ đã chuẩn hóa:<br>1. **Feather Blending**<br>2. **Multiband 3-level**<br>3. **Multiband 5-level** | - Kernel time $t_{s6}$ (render + pyramid)<br>- VRAM footprint của workspace<br>- Overlap SSIM / PSNR<br>- Hiện tượng seam/ghosting | **Chương** |
@@ -23,7 +23,7 @@
 ```mermaid
 flowchart TD
     subgraph S1_S3["Front-end Stages"]
-        A1["Ablation A1: S1 Probe Signal<br/>(Chủ trì: Đế)"]
+        A1["Ablation A1: S1 Probe Signal<br/>(Chủ trì: Tuấn)"]
         A3["Ablation A3: S2-S3 Dynamic K<br/>(Chủ trì: Thành)"]
     end
     subgraph S4_S5["Matching & Estimation"]
@@ -40,7 +40,7 @@ flowchart TD
     A5 --> Paper
 ```
 
-### 2.1. Ablation A1: Hiệu quả của Probe Signal (S1 Gradient) — Người chủ trì: Đế
+### 2.1. Ablation A1: Hiệu quả của Probe Signal (S1 Gradient) — Người chủ trì: Tuấn
 
 - **Bối cảnh:** Controller đề xuất sử dụng kernel S1 trích xuất độ biến thiên gradient trung bình trên ảnh probe thu nhỏ (scale 0.25, chi phí $<0.1\text{ ms}$) để chọn mức cấu hình ban đầu (initial configuration).
 - **Câu hỏi khoa học:** Chi phí probe $t_{\text{probe}} \approx 0.07\text{ ms}$ có thực sự giúp giảm số vòng lặp retry và tiết kiệm latency tổng hay không so với việc luôn khởi đầu mù (blind) từ nấc nhẹ nhất?

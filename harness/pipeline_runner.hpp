@@ -9,6 +9,8 @@
 
 #include "common/types.hpp"
 #include "common/geometry.hpp"
+#include "controller/controller.hpp"
+#include "controller/reuse.hpp"
 #include "s1/s1.hpp"
 #include "s2_s3/s2.hpp"
 #include "s2_s3/s3.hpp"
@@ -35,7 +37,7 @@ public:
     // Upload image pair A and B to device outside the measurement window
     void upload_pair(const HostImageRGB& img_a, const HostImageRGB& img_b);
 
-    // Execute one run (warmup or measurement) without any cudaMalloc in the measurement window
+    // Execute one fixed/oracle run without any cudaMalloc in the measurement window
     void execute_run(const HarnessConfig& config,
                      const std::string& run_id,
                      const std::string& git_rev,
@@ -45,6 +47,19 @@ public:
                      int repeat_idx,
                      int is_warmup,
                      RunRecord* record);
+
+    // Execute one adaptive run governed by the Controller, including S1 probe,
+    // initial selection, bounded escalation loop with S5 raw state reuse, and S6 rendering.
+    void execute_adaptive_run(controller::Controller& controller,
+                              const std::string& run_id,
+                              const std::string& git_rev,
+                              const std::string& dataset,
+                              const std::string& split,
+                              const std::string& pair_id,
+                              int repeat_idx,
+                              int is_warmup,
+                              std::uint64_t seed,
+                              RunRecord* record);
 
 private:
     cudaStream_t stream_{nullptr};
@@ -110,6 +125,11 @@ private:
 
     void* ws_s6_{nullptr};
     std::size_t ws_bytes_s6_{0};
+
+    // S1 probe gradient reduction workspace (32 bytes) and pinned host outputs
+    void* d_ws_probe_{nullptr};
+    double* pinned_grad_a_{nullptr};
+    double* pinned_grad_b_{nullptr};
 
     bool initialized_{false};
 };

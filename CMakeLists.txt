@@ -31,6 +31,11 @@ add_subdirectory(src/s5)
 add_subdirectory(src/s6)
 
 if(CMAKE_CUDA_COMPILER)
+  set(STITCH_CONTROLLER_GPU_TESTS ON)
+endif()
+add_subdirectory(src/controller)
+
+if(CMAKE_CUDA_COMPILER)
   add_subdirectory(harness)
 endif()
 

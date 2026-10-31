@@ -1,5 +1,5 @@
 // Benchmark Harness entry point (stitch_harness).
-// Supports both batch manifest mode and single-pair debugging/profiling mode.
+// Supports fixed baseline, oracle, and adaptive controller modes.
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include "controller/controller.hpp"
+#include "controller/policy.hpp"
 #include "harness/harness_types.hpp"
 #include "harness/json_parser.hpp"
 #include "harness/image_loader.hpp"
@@ -93,6 +95,7 @@ int main(int argc, char** argv) {
     std::string dataset = "udis_d";
     std::string split = "dev";
     std::string run_id = generate_run_id();
+    std::string mode = "fixed";  // "fixed", "oracle", "adaptive"
 
     // Single run options
     std::string img_a_path, img_b_path;
@@ -114,6 +117,9 @@ int main(int argc, char** argv) {
         else if (arg == "--dataset" && i + 1 < argc) dataset = argv[++i];
         else if (arg == "--split" && i + 1 < argc) split = argv[++i];
         else if (arg == "--run-id" && i + 1 < argc) run_id = argv[++i];
+        else if (arg == "--mode" && i + 1 < argc) mode = argv[++i];
+        else if (arg == "--adaptive") mode = "adaptive";
+        else if (arg == "--oracle") mode = "oracle";
         else if (arg == "--warmup" && i + 1 < argc) num_warmup = std::stoi(argv[++i]);
         else if (arg == "--repeats" && i + 1 < argc) num_repeats = std::stoi(argv[++i]);
         else if (arg == "--seed" && i + 1 < argc) seed = std::stoull(argv[++i]);
@@ -126,17 +132,21 @@ int main(int argc, char** argv) {
         else if (arg == "--blend" && i + 1 < argc) single_blend = argv[++i];
         else if (arg == "--help" || arg == "-h") {
             std::cout << "Usage: stitch_harness [OPTIONS]\n"
-                      << "Batch mode:\n"
-                      << "  --manifest <path>   Pairs JSON manifest\n"
-                      << "  --configs <path>    Configs JSON file\n"
-                      << "  --out <path>        Output CSV file (default: runs.csv)\n"
-                      << "Single mode:\n"
-                      << "  --img-a <path>      Image A path\n"
-                      << "  --img-b <path>      Image B path\n"
-                      << "  -S <double>         Scale S in (0, 1] (default: 0.5)\n"
-                      << "  -K <int>            Keypoints K (default: 1000)\n"
-                      << "  -R <int>            MSAC Hypotheses R (default: 256)\n"
-                      << "  --blend <mode>      Blend mode: feather|multiband3|multiband5\n";
+                      << "Modes:\n"
+                      << "  --mode <fixed|oracle|adaptive>  Execution mode (default: fixed)\n"
+                      << "  --adaptive                      Shortcut for --mode adaptive\n"
+                      << "  --oracle                        Shortcut for --mode oracle\n"
+                      << "Batch options:\n"
+                      << "  --manifest <path>               Pairs JSON manifest\n"
+                      << "  --configs <path>                Configs JSON file (for fixed/oracle)\n"
+                      << "  --out <path>                    Output CSV file (default: runs.csv)\n"
+                      << "Single options:\n"
+                      << "  --img-a <path>                  Image A path\n"
+                      << "  --img-b <path>                  Image B path\n"
+                      << "  -S <double>                     Scale S in (0, 1] (default: 0.5)\n"
+                      << "  -K <int>                        Keypoints K (default: 1000)\n"
+                      << "  -R <int>                        MSAC Hypotheses R (default: 256)\n"
+                      << "  --blend <mode>                  Blend mode: feather|multiband3|multiband5\n";
             return 0;
         }
     }
@@ -162,29 +172,66 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    if (!configs_path.empty()) {
-        try {
-            configs = parse_configs(configs_path);
-        } catch (const std::exception& e) {
-            std::cerr << "Error parsing configs: " << e.what() << "\n";
+    if (mode != "adaptive") {
+        if (!configs_path.empty()) {
+            try {
+                configs = parse_configs(configs_path);
+            } catch (const std::exception& e) {
+                std::cerr << "Error parsing configs: " << e.what() << "\n";
+                return 1;
+            }
+        } else {
+            HarnessConfig cfg;
+            cfg.S = single_s;
+            cfg.K = single_k;
+            cfg.R = single_r;
+            cfg.blend_mode_str = single_blend;
+            if (single_blend == "multiband3") cfg.blend_mode = stitch::s6::BlendMode::Multiband3;
+            else if (single_blend == "multiband5") cfg.blend_mode = stitch::s6::BlendMode::Multiband5;
+            else cfg.blend_mode = stitch::s6::BlendMode::Feather;
+
+            std::stringstream ss;
+            ss << "S" << std::fixed << std::setprecision(2) << cfg.S
+               << "_K" << cfg.K << "_R" << cfg.R << "_B" << cfg.blend_mode_str;
+            cfg.config_id = ss.str();
+            cfg.seed = seed;
+            configs.push_back(cfg);
+        }
+    }
+
+    // Configure Controller if in adaptive mode
+    stitch::controller::Controller controller;
+    const std::vector<stitch::controller::Knobs> default_ladder = {
+        {0.25,  500,  128, stitch::s6::BlendMode::Feather},
+        {0.50, 1000,  128, stitch::s6::BlendMode::Feather},
+        {0.50, 1000,  256, stitch::s6::BlendMode::Feather},
+        {0.75, 2000,  512, stitch::s6::BlendMode::Feather},
+        {1.00, 2000, 1024, stitch::s6::BlendMode::Feather}
+    };
+    const std::vector<stitch::controller::SelfCheck> default_checks = {
+        {15, 0.15, 0.05, 4.0},
+        {20, 0.15, 0.05, 3.5},
+        {25, 0.20, 0.05, 3.0},
+        {30, 0.20, 0.05, 2.5},
+        {35, 0.20, 0.05, 2.0}
+    };
+    const std::vector<stitch::controller::SceneRule> default_rules = {
+        {0.08, 0},
+        {0.04, 1},
+        {0.00, 2}
+    };
+    const stitch::controller::Policy default_policy{
+        0.25,
+        default_rules.data(), default_rules.size(),
+        default_checks.data(), default_checks.size()
+    };
+
+    if (mode == "adaptive") {
+        if (controller.configure(default_policy) != stitch::Status::OK ||
+            controller.initialize(default_ladder.data(), default_ladder.size()) != stitch::Status::OK) {
+            std::cerr << "Error: failed to configure and initialize Controller.\n";
             return 1;
         }
-    } else {
-        HarnessConfig cfg;
-        cfg.S = single_s;
-        cfg.K = single_k;
-        cfg.R = single_r;
-        cfg.blend_mode_str = single_blend;
-        if (single_blend == "multiband3") cfg.blend_mode = stitch::s6::BlendMode::Multiband3;
-        else if (single_blend == "multiband5") cfg.blend_mode = stitch::s6::BlendMode::Multiband5;
-        else cfg.blend_mode = stitch::s6::BlendMode::Feather;
-
-        std::stringstream ss;
-        ss << "S" << std::fixed << std::setprecision(2) << cfg.S
-           << "_K" << cfg.K << "_R" << cfg.R << "_B" << cfg.blend_mode_str;
-        cfg.config_id = ss.str();
-        cfg.seed = seed;
-        configs.push_back(cfg);
     }
 
     // Initialize pipeline runner with maximum bounds
@@ -204,8 +251,9 @@ int main(int argc, char** argv) {
     write_csv_header(csv_out);
 
     std::cout << "Starting benchmark harness:\n"
+              << "  Mode: " << mode << "\n"
               << "  Pairs: " << pairs.size() << "\n"
-              << "  Configs: " << configs.size() << "\n"
+              << "  Configs: " << (mode == "adaptive" ? default_ladder.size() : configs.size()) << "\n"
               << "  Warmup: " << num_warmup << ", Repeats: " << num_repeats << "\n"
               << "  Output: " << out_path << "\n";
 
@@ -228,22 +276,36 @@ int main(int argc, char** argv) {
         // Upload images to GPU outside measurement window
         runner.upload_pair(img_a, img_b);
 
-        for (const auto& cfg : configs) {
-            // Warmup iterations (is_warmup = 1)
+        if (mode == "adaptive") {
+            // Adaptive mode: governed by Controller
             for (int w = 0; w < num_warmup; ++w) {
                 RunRecord rec;
-                runner.execute_run(cfg, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, w, 1, &rec);
+                runner.execute_adaptive_run(controller, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, w, 1, seed, &rec);
                 write_csv_row(csv_out, rec);
             }
-
-            // Measurement iterations (is_warmup = 0)
             for (int r = 0; r < num_repeats; ++r) {
                 RunRecord rec;
-                runner.execute_run(cfg, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, r, 0, &rec);
+                runner.execute_adaptive_run(controller, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, r, 0, seed, &rec);
                 write_csv_row(csv_out, rec);
                 total_runs++;
             }
             csv_out.flush();
+        } else {
+            // Fixed-Best or Oracle mode
+            for (const auto& cfg : configs) {
+                for (int w = 0; w < num_warmup; ++w) {
+                    RunRecord rec;
+                    runner.execute_run(cfg, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, w, 1, &rec);
+                    write_csv_row(csv_out, rec);
+                }
+                for (int r = 0; r < num_repeats; ++r) {
+                    RunRecord rec;
+                    runner.execute_run(cfg, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, r, 0, &rec);
+                    write_csv_row(csv_out, rec);
+                    total_runs++;
+                }
+                csv_out.flush();
+            }
         }
     }
 

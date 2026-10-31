@@ -29,21 +29,21 @@ class ColabBridge:
         port, path = get_devtools_active_port()
         browser_uri = f'ws://127.0.0.1:{port}{path}'
         self.ws = await websockets.connect(browser_uri, max_size=200_000_000)
-        
+
         # 1. Discover Colab target
         self.msg_id += 1
         await self.ws.send(json.dumps({'id': self.msg_id, 'method': 'Target.getTargets'}))
         targets_res = json.loads(await self.ws.recv())
-        
+
         colab_id = None
         for t in targets_res['result']['targetInfos']:
             if t['type'] == 'page' and 'colab.research.google.com' in t.get('url', ''):
                 colab_id = t['targetId']
                 break
-        
+
         if not colab_id:
             raise RuntimeError("Colab page target not found in Chrome!")
-        
+
         # 2. Attach to Colab target
         self.msg_id += 1
         await self.ws.send(json.dumps({
@@ -51,7 +51,7 @@ class ColabBridge:
             'method': 'Target.attachToTarget',
             'params': {'targetId': colab_id, 'flatten': True}
         }))
-        
+
         while not self.session_id:
             msg = json.loads(await self.ws.recv())
             if msg.get('id') == self.msg_id and 'result' in msg and 'sessionId' in msg['result']:
@@ -72,7 +72,7 @@ class ColabBridge:
             'method': 'Runtime.evaluate',
             'params': {'expression': expression, 'returnByValue': return_by_value}
         }))
-        
+
         while True:
             msg = json.loads(await self.ws.recv())
             if msg.get('id') == call_id:
@@ -91,25 +91,25 @@ class ColabBridge:
             btn.click();
             return 'launched';
         }})()"""
-        
+
         await self.evaluate_js(setup_js)
-        
+
         check_js = """(() => {
             const btn = document.querySelector('colab-run-button');
             const shadow = btn ? btn.shadowRoot : null;
             const execDiv = shadow ? shadow.querySelector('.cell-execution') : null;
             const isRunning = execDiv ? (execDiv.classList.contains('running') || execDiv.classList.contains('pending')) : false;
-            
+
             const cell = document.querySelector('.cell');
             const output = cell ? (cell.querySelector('.output') || cell.querySelector('colab-output-area')) : null;
             const text = output ? (output.innerText || output.textContent) : '';
-            
+
             return { isRunning, text };
         })()"""
-        
+
         start_time = time.time()
         await asyncio.sleep(0.5)
-        
+
         last_text = ""
         while time.time() - start_time < timeout_sec:
             res = await self.evaluate_js(check_js)
@@ -121,7 +121,7 @@ class ColabBridge:
                 if not is_running:
                     return text
             await asyncio.sleep(1.0)
-            
+
         raise TimeoutError(f"Colab cell execution timed out after {timeout_sec}s! Output so far:\n{last_text}")
 
 async def sync_repo_to_colab(bridge: ColabBridge):
@@ -144,7 +144,7 @@ async def sync_repo_to_colab(bridge: ColabBridge):
     gz_bytes = buf.getvalue()
     b64_str = base64.b64encode(gz_bytes).decode('ascii')
     print(f"Archive compressed: {len(gz_bytes) / 1024:.1f} KB (b64 length: {len(b64_str)})")
-    
+
     # Send extraction code to Colab
     code = f"""
 import base64, io, os, tarfile, shutil
@@ -165,7 +165,7 @@ async def main():
     bridge = ColabBridge()
     await bridge.connect()
     print("Connected to Colab via Chrome Remote Debugging (port 9222)!")
-    
+
     if len(sys.argv) > 1 and sys.argv[1] == '--sync':
         await sync_repo_to_colab(bridge)
     elif len(sys.argv) > 1 and sys.argv[1] == '--cmd':
@@ -178,9 +178,8 @@ async def main():
         # Default test: query GPU
         out = await bridge.execute_in_colab("!nvidia-smi")
         print(out)
-        
+
     await bridge.close()
 
 if __name__ == '__main__':
     asyncio.run(main())
-

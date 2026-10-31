@@ -1,5 +1,6 @@
 // CUDA tests for S1 (Preprocessing: fused 15-bit RGB2GRAY + Area Resizing).
-// Verifies argument checks, pitch handling, and accuracy for S in {1.0, 0.5, 0.25, 0.75}.
+// Verifies argument checks, pitch handling, accuracy for S in {1.0, 0.5, 0.25, 0.75},
+// and probe gradient computation (mean absolute gradient).
 #include <cuda_runtime.h>
 #include <algorithm>
 #include <cmath>
@@ -78,6 +79,16 @@ struct GpuGrayImage {
         CUDA_CHECK(cudaMemset(buffer.ptr, 0x55, buffer.count));
     }
 
+    GpuGrayImage(int w, int h, const std::vector<uint8_t>& init_data)
+        : buffer(static_cast<std::size_t>(w + kPitchPad) * h),
+          view{nullptr, w, h, w + kPitchPad, PixelFormat::GRAY8} {
+        view.data = buffer.ptr;
+        CUDA_CHECK(cudaMemset(buffer.ptr, 0x55, buffer.count));
+        CUDA_CHECK(cudaMemcpy2D(buffer.ptr, view.pitch_bytes,
+                                init_data.data(), w,
+                                w, h, cudaMemcpyHostToDevice));
+    }
+
     std::vector<uint8_t> download() const {
         std::vector<uint8_t> host(static_cast<std::size_t>(view.width) * view.height);
         CUDA_CHECK(cudaMemcpy2D(host.data(), view.width,
@@ -101,19 +112,19 @@ std::vector<uint8_t> cpu_reference_s1(const std::vector<uint8_t>& rgb, int w, in
         }
     }
 
-    std::vector<uint8_t> out(work_w * work_h);
     if (w == work_w && h == work_h) {
         return gray;
     }
 
+    std::vector<uint8_t> out(work_w * work_h);
     if (w == 2 * work_w && h == 2 * work_h) {
         for (int yd = 0; yd < work_h; ++yd) {
             for (int xd = 0; xd < work_w; ++xd) {
-                const int s_val = gray[(2 * yd) * w + 2 * xd] +
-                                  gray[(2 * yd) * w + 2 * xd + 1] +
-                                  gray[(2 * yd + 1) * w + 2 * xd] +
-                                  gray[(2 * yd + 1) * w + 2 * xd + 1];
-                out[yd * work_w + xd] = static_cast<uint8_t>((s_val + 2) >> 2);
+                const int y00 = gray[(2 * yd) * w + (2 * xd)];
+                const int y01 = gray[(2 * yd) * w + (2 * xd + 1)];
+                const int y10 = gray[(2 * yd + 1) * w + (2 * xd)];
+                const int y11 = gray[(2 * yd + 1) * w + (2 * xd + 1)];
+                out[yd * work_w + xd] = static_cast<uint8_t>((y00 + y01 + y10 + y11 + 2) >> 2);
             }
         }
         return out;
@@ -128,15 +139,14 @@ std::vector<uint8_t> cpu_reference_s1(const std::vector<uint8_t>& rgb, int w, in
                         sum += gray[(4 * yd + dy) * w + (4 * xd + dx)];
                     }
                 }
-                out[yd * work_w + xd] = static_cast<uint8_t>(std::lround(sum / 16.0));
+                out[yd * work_w + xd] = static_cast<uint8_t>(std::lround(static_cast<double>(sum) * 0.0625));
             }
         }
         return out;
     }
 
-    // General area box filter
-    const double inv_sx = static_cast<double>(w) / work_w;
-    const double inv_sy = static_cast<double>(h) / work_h;
+    const double inv_sx = static_cast<double>(w) / static_cast<double>(work_w);
+    const double inv_sy = static_cast<double>(h) / static_cast<double>(work_h);
     const double scale_area = 1.0 / (inv_sx * inv_sy);
 
     for (int yd = 0; yd < work_h; ++yd) {
@@ -173,6 +183,22 @@ std::vector<uint8_t> cpu_reference_s1(const std::vector<uint8_t>& rgb, int w, in
     return out;
 }
 
+double cpu_ref_mean_abs_gradient(const std::vector<uint8_t>& gray, int w, int h) {
+    uint64_t sum = 0;
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w - 1; ++x) {
+            sum += std::abs(static_cast<int>(gray[y * w + x + 1]) - static_cast<int>(gray[y * w + x]));
+        }
+    }
+    for (int y = 0; y < h - 1; ++y) {
+        for (int x = 0; x < w; ++x) {
+            sum += std::abs(static_cast<int>(gray[(y + 1) * w + x]) - static_cast<int>(gray[y * w + x]));
+        }
+    }
+    uint64_t edges = static_cast<uint64_t>(h) * (w - 1) + static_cast<uint64_t>(w) * (h - 1);
+    return (edges > 0) ? (static_cast<double>(sum) / (255.0 * static_cast<double>(edges))) : 0.0;
+}
+
 void test_invalid_arguments() {
     std::size_t ws_bytes = 100;
     CHECK(s1::s1_workspace_bytes(100, 100, 0.5, &ws_bytes) == Status::OK);
@@ -186,6 +212,16 @@ void test_invalid_arguments() {
     ScaleInfo si{};
     CHECK(s1::s1_preprocess_single(invalid_view, 0.5, nullptr, &si, nullptr) == Status::INVALID_ARGUMENT);
     CHECK(s1::s1_preprocess(invalid_view, invalid_view, 0.5, nullptr, nullptr, &si, &si, nullptr) == Status::INVALID_ARGUMENT);
+
+    CHECK(s1::s1_gradient_workspace_bytes(nullptr) == Status::INVALID_ARGUMENT);
+    std::size_t grad_ws = 0;
+    CHECK(s1::s1_gradient_workspace_bytes(&grad_ws) == Status::OK);
+    CHECK(grad_ws == 32);
+
+    double dummy_g = 0.0;
+    uint8_t dummy_ws[32];
+    CHECK(s1::s1_compute_gradient(invalid_view, invalid_view, dummy_ws, &dummy_g, &dummy_g, nullptr) == Status::INVALID_ARGUMENT);
+    CHECK(s1::s1_compute_gradient_single(invalid_view, dummy_ws, &dummy_g, nullptr) == Status::INVALID_ARGUMENT);
 }
 
 void test_accuracy_and_batching(double scale, int w, int h) {
@@ -246,6 +282,66 @@ void test_accuracy_and_batching(double scale, int w, int h) {
     CUDA_CHECK(cudaStreamDestroy(stream));
 }
 
+void test_gradient() {
+    int w = 64, h = 48;
+    DeviceBuffer<uint8_t> d_ws(32);
+    double* pinned_ga = nullptr;
+    double* pinned_gb = nullptr;
+    CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_ga), sizeof(double)));
+    CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_gb), sizeof(double)));
+
+    cudaStream_t stream = nullptr;
+    CUDA_CHECK(cudaStreamCreate(&stream));
+
+    // 1. Constant image test: G must be 0.0
+    std::vector<uint8_t> const_a(w * h, 128);
+    std::vector<uint8_t> const_b(w * h, 200);
+    GpuGrayImage dev_const_a(w, h, const_a);
+    GpuGrayImage dev_const_b(w, h, const_b);
+
+    CHECK(s1::s1_compute_gradient(dev_const_a.view, dev_const_b.view,
+                                  d_ws.ptr, pinned_ga, pinned_gb, stream) == Status::OK);
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+    CHECK(*pinned_ga == 0.0);
+    CHECK(*pinned_gb == 0.0);
+
+    // 2. Checkerboard test: G must be 1.0
+    std::vector<uint8_t> checker_a(w * h);
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            checker_a[y * w + x] = ((x + y) % 2) ? 255 : 0;
+        }
+    }
+    GpuGrayImage dev_checker(w, h, checker_a);
+    CHECK(s1::s1_compute_gradient_single(dev_checker.view, d_ws.ptr, pinned_ga, stream) == Status::OK);
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+    CHECK(std::abs(*pinned_ga - 1.0) < 1e-9);
+
+    // 3. Synthetic texture test against CPU reference
+    std::vector<uint8_t> tex_a(w * h);
+    std::vector<uint8_t> tex_b(w * h);
+    for (int i = 0; i < w * h; ++i) {
+        tex_a[i] = static_cast<uint8_t>((i * 37 + 11) % 256);
+        tex_b[i] = static_cast<uint8_t>((i * 59 + 83) % 256);
+    }
+    GpuGrayImage dev_tex_a(w, h, tex_a);
+    GpuGrayImage dev_tex_b(w, h, tex_b);
+
+    CHECK(s1::s1_compute_gradient(dev_tex_a.view, dev_tex_b.view,
+                                  d_ws.ptr, pinned_ga, pinned_gb, stream) == Status::OK);
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+
+    double ref_ga = cpu_ref_mean_abs_gradient(tex_a, w, h);
+    double ref_gb = cpu_ref_mean_abs_gradient(tex_b, w, h);
+
+    CHECK(std::abs(*pinned_ga - ref_ga) < 1e-9);
+    CHECK(std::abs(*pinned_gb - ref_gb) < 1e-9);
+
+    CUDA_CHECK(cudaStreamDestroy(stream));
+    CUDA_CHECK(cudaFreeHost(pinned_ga));
+    CUDA_CHECK(cudaFreeHost(pinned_gb));
+}
+
 } // namespace
 
 int main() {
@@ -256,6 +352,7 @@ int main() {
     }
 
     test_invalid_arguments();
+    test_gradient();
 
     // Test scales {1.0, 0.5, 0.25, 0.75} on different image resolutions
     const double scales[] = {1.0, 0.5, 0.25, 0.75};

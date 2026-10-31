@@ -1,9 +1,67 @@
 \section{Adaptive Runtime Controller}
 \label{sec:controller}
-% Role: ownership/evidence boundary; the owner supplies the eventual method.
-The runtime must select budgets using only signals available at decision time
-and distinguish online self-check acceptance from the offline quality predicate
-in Section~\ref{sec:quality}. This working manuscript does not yet specify or
-evaluate a completed controller. Its owner-reviewed policy, retry/fallback
-rules, and reuse implementation are required before this section can describe
-an implemented adaptive method.
+% Role: describe checked host logic; GPU integration and calibration remain open.
+The implemented host controller selects an initial budget and consumes S5
+feedback through a finite configuration ladder. Its C++17 decision logic is
+tested independently of CUDA. Scene-feature extraction, adaptive-harness
+integration, and a calibrated policy are still required for an end-to-end
+evaluation. The tests described here establish control-flow behaviour; they
+provide no adaptive latency or quality result.
+
+\subsection{Explicit Policy and Initial Selection}
+% Role: define inputs, units and the classifier without inventing tuned values.
+A policy supplies a fixed probe scale, scene rules, and self-check thresholds
+for each ladder position. No numerical policy defaults are embedded in the
+controller. For probe image $I$ with dimensions $w\times h$, the S1 integration
+contract defines normalized mean absolute gradient as
+\begin{equation}
+ G(I)=\frac{\sum_{y=0}^{h-1}\sum_{x=0}^{w-2}|I(x+1,y)-I(x,y)|
+ +\sum_{y=0}^{h-2}\sum_{x=0}^{w-1}|I(x,y+1)-I(x,y)|}
+ {255\,[h(w-1)+w(h-1)]}.
+\end{equation}
+The controller receives $G_A$, $G_B$, and the probe scale metadata after checked
+GPU completion. It validates the metadata against the configured probe scale
+and forms $g=\min(G_A,G_B)$. Rules have decreasing inclusive lower bounds on $g$
+and specify an initial ladder index. The first matching rule selects the
+configuration. The last lower bound must be zero, covering all valid gradients.
+Rule bounds and indices remain development-set calibration parameters. This
+scalar feature does not directly measure overlap or parallax.
+
+\subsection{Feedback and Bounded Escalation}
+% Role: operational semantics, including failed models and terminal decisions.
+Each ladder entry is $(S,K,R,B)$. Entries are distinct and share $B$ for a run;
+only the ladder index must increase during escalation. S5 execution errors
+terminate the run. For a valid S5 model, the controller checks minimum inlier
+count, ratio, bounding-box coverage in image A, and maximum forward RMS
+reprojection error, in that order. Residual thresholds use S1 pixels and are
+specified separately for each ladder entry. These online checks are distinct
+from the offline quality predicate in Section~\ref{sec:quality}.
+
+A passing model produces \texttt{ACCEPT}; only then may the harness render S6
+using that attempt's original-coordinate homography and the fixed blend mode.
+A failed quality check or degenerate S5 model produces \texttt{RETRY} when a
+later entry exists. With fewer than four matches, entries retaining both $S$
+and $K$ are skipped, because changing $R$ alone cannot create correspondences.
+Exhausting the ladder produces \texttt{REJECT}; the final entry is subject to
+the same checks. Invalid API inputs leave both state and output unchanged.
+
+\subsection{Reuse and Resource Ownership}
+% Role: separate a host invalidation plan from proof that a GPU cache is usable.
+The harness owns buffers, streams, completion checks, and S5 cache state.
+Changing $S$ reruns S1--S5; changing $K$ at fixed $S$ reruns S2--S5. Changing
+only $R$ preserves S1--S4. An increase in $R$ permits S5 continuation from the
+previously completed budget when inputs, counts, scale metadata, generation,
+seed, solver settings, stream, and workspace remain compatible. A decrease in
+$R$ restarts S5, since the cached winner may come from an excluded hypothesis.
+The controller's host retry helper reports this dependency plan; the harness
+must establish cache compatibility before applying it.
+
+Policy and ladder arrays are borrowed and immutable. Per-pair methods make no
+CUDA calls, perform no I/O, and allocate no heap memory. Host tests cover rule
+boundaries, feedback validity, terminal states, escalation, and retry plans;
+an allocation counter checks 1,000 synthetic runs. A synthetic feedback trace
+also exercises continuation followed by keypoint-budget invalidation. A CUDA
+correspondence fixture checks controller--S5 continuation against a full search
+and checks rejection of invalid reuse. Testing the complete scene-aware path
+and measuring its probe, synchronization, decision, and retry costs remain
+necessary before reporting a speedup.

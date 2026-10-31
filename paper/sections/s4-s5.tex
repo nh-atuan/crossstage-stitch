@@ -1,0 +1,43 @@
+\subsection{Matching and Homography Estimation (S4--S5)}
+\label{sec:s4-s5}
+% Role: describe source-checked algorithms and the extension state they expose.
+S4 performs exact nearest-neighbour matching with Hamming distance for binary
+descriptors and Euclidean distance for floating-point descriptors. Each query
+retains its two nearest distinct neighbours. A strict distance-ratio test
+filters ambiguous matches~\cite{lowe2004sift}; an optional mutual-nearest check
+applies no reverse ratio test. Equal distances are resolved by training index.
+For floating-point descriptors, squared distances use FP64 accumulation and
+the squared ratio threshold. Prefix scans compact accepted matches in query
+order. Workspace grows linearly with descriptor capacities; no pairwise
+distance matrix is retained.
+
+S5 uses batched four-correspondence sampling in the RANSAC
+framework~\cite{fischler1981ransac}. A counter-based generator maps the seed and
+hypothesis index to four distinct match indices, so splitting the same total
+budget $R$ into extensions preserves the samples. Samples with a near-collinear
+triple in either image are rejected. Coordinates are centred and RMS-normalized
+before an eight-parameter homography fit using normal equations and pivoted
+elimination. This solver fixes the normalized-frame ninth coefficient and
+rejects ill-conditioned systems; it is not an SVD-based homogeneous DLT solver.
+
+Each hypothesis is scored by the truncated forward-reprojection loss
+\begin{equation}
+ L(H_s)=\sum_i\min\!\left(\|\pi(H_s p_{B,i})-p_{A,i}\|_2^2,\tau^2\right),
+\end{equation}
+where $\pi$ divides by the projective coordinate and $\tau$ is in S1 pixels.
+Equal losses favour the earlier hypothesis. The selected model is refitted
+on its inliers for a caller-specified number of steps, retaining a candidate
+only when it reduces the loss. S5 returns inlier count, ratio, bounding-box
+coverage in A, and forward RMS residual after refinement. Geometry checks
+reject non-finite models and a projective horizon crossing image B.
+
+With half-pixel scale transforms $D_A$ and $D_B$, the rendering homography is
+$H=D_A^{-1}H_sD_B$, mapping original B coordinates to A. The raw search winner
+is stored separately from the refined output. Increasing only $R$ evaluates
+the missing hypothesis indices and refines again; refinement never overwrites
+the continuation state. Reuse checks cover input pointers, capacities, counts,
+scale metadata, generation, seed, threshold, and batch size. The caller resets
+after changes to matches or image features and checks asynchronous completion
+before consuming the pinned host result. Standalone T4 tests check known
+transforms, failure statuses, and equality of split and full searches; they do
+not establish adaptive end-to-end performance.

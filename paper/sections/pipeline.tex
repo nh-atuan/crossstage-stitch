@@ -7,8 +7,8 @@ The repository connects six CUDA stages: preprocessing (S1), keypoint detection
 (S6). S1--S3 process both images before S4 matches their descriptors. S5 returns
 a homography $H$ mapping B to A in original-image coordinates. Upstream scale
 metadata converts an estimate from resized coordinates before rendering.
-Detailed descriptions of S1 and S4/S5 require their respective owners' review.
-The following subsections describe the S2/S3 and S6 code checked for this draft.
+The detailed S1 method still requires its owner's review. The following
+subsections describe the checked S2--S6 implementations.
 
 \subsection{Keypoint Detection and Description (S2--S3)}
 \label{sec:s2-s3}
@@ -78,6 +78,8 @@ descriptors match the reference bit for bit. This establishes implementation
 correctness, not matching quality. On test pairs with a large scale change,
 both our stages and OpenCV's single-level ORB fail to recover an accurate homography,
 which we attribute to the missing pyramid.
+
+\input{sections/s4-s5}
 
 \subsection{S6 Geometry, Sampling, and Validity}
 \label{sec:s6-geometry}

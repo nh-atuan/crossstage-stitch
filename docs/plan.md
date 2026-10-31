@@ -73,8 +73,7 @@ flowchart LR
 | 2 | Controller, thí nghiệm, viết phương pháp | 31/10 (Thứ 7) | ĐÃ XONG (PASS) |
 | 3 | Đại thực nghiệm, Ablation và Phân tích độc lập | 05/11 (Thứ 5) | Đang thực hiện |
 | 4 | Soạn thảo toàn diện bản thảo (Full Draft) | 09/11 (Thứ 2) | Dự kiến |
-| 5 | Rà soát chéo, Chuẩn hóa OASIcs và Nộp bài | 12/11 (Thứ 5) | Dự kiến |
-| | **Nộp bài EasyChair chính thức** | **13/11 (Thứ 6)** | Dự phòng 3 ngày trước hạn 16/11 |
+| 5 | Rà soát chéo, Chuẩn hóa OASIcs và Nộp bài EasyChair | 13/11 (Thứ 6) | Dự kiến (dự phòng 3 ngày trước hạn 16/11) |
 
 Để tránh dồn việc vào sát hạn chót và tăng cường làm việc song song, lộ trình từ 02/11 đến 13/11 được tổ chức thành các sprint ngắn (3–4 ngày). Kế hoạch tuân thủ nguyên tắc cuốn chiếu: Phase 3 có bảng task chi tiết; Phase 4 và 5 chỉ ghi ý chính định hướng và sẽ lập chi tiết khi hoàn tất Phase 3. Các thành viên được phép làm gối đầu sớm các task viết bài và rà soát của Phase 4–5 ngay trong Phase 3.
 
@@ -196,8 +195,7 @@ Mục tiêu chính: Tích hợp toàn bộ số liệu, bảng biểu, đồ th�
 
 ### Phase 5: Rà soát chéo, Chuẩn hóa OASIcs và Nộp bài (ý chính)
 
-Deadline nội bộ: 12/11 (Thứ 5).
-Hạn chót nộp bài EasyChair: **13/11 (Thứ 6)** (giữ 3 ngày đệm an toàn trước hạn chót 16/11 của ban tổ chức).
+Deadline chung: **13/11 (Thứ 6)** (nộp bài EasyChair, giữ 3 ngày đệm an toàn trước hạn chót 16/11 của ban tổ chức).
 
 Mục tiêu chính: Cả Nhóm đọc chéo (peer-review) toàn bộ 10 trang bài báo; rà soát văn phong chống AI writing; kiểm tra audit ẩn danh kép (double-blind); căn chỉnh layout không tràn 10 trang OASIcs; nộp file PDF chính thức lên EasyChair.
 

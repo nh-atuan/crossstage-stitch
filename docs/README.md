@@ -28,6 +28,8 @@ docs/
 │   ├── s6-p2-implementation.md            # Hiện thực mở rộng S6 Phase 2: QoR feedback & blend modes (Chương)
 │   ├── controller-contract.md             # Đặc tả giao diện Contract v1 của Adaptive Controller (Đế)
 │   └── controller-p2-implementation.md    # Bàn giao triển khai Controller Phase 2 (Đế)
+├── experiments/                           # Thiết kế thực nghiệm và thí nghiệm bóc tách (Phase 3)
+│   └── ablation-studies.md                # Đặc tả 5 bài thí nghiệm bóc tách A1–A5 (Đế, Chương, Thành)
 ├── reports/                               # Báo cáo các phase và cẩm nang vận hành
 │   ├── phase-1-gonogo-report.md           # Báo cáo kết quả Go/No-Go Phase 1 (sweep S×K×R)
 │   ├── phase-2-review-report.md           # Báo cáo review và pilot evaluation Phase 2
@@ -51,6 +53,7 @@ docs/
 | **Stage S4–S5** | [stages/s4-s5-implementation.md](stages/s4-s5-implementation.md)<br>[stages/s4-s5-validation.md](stages/s4-s5-validation.md) | Brute-force Hamming match, RANSAC 4-point homography, inlier mask | Đế |
 | **Stage S6** | [stages/s6-warp-blend.md](stages/s6-warp-blend.md)<br>[stages/s6-p1-implementation.md](stages/s6-p1-implementation.md)<br>[stages/s6-p2-implementation.md](stages/s6-p2-implementation.md) | Warp phối cảnh ngược, feather blend, multiband pyramid blend | Chương |
 | **Controller** | [stages/controller-contract.md](stages/controller-contract.md)<br>[stages/controller-p2-implementation.md](stages/controller-p2-implementation.md) | Interface ABI, ladder escalation policy, tái sử dụng kết quả S5 | Đế |
+| **Thực nghiệm (Experiments)** | [experiments/ablation-studies.md](experiments/ablation-studies.md) | Đặc tả 5 bài thí nghiệm bóc tách (A1–A5) cho Phase 3 | Toàn nhóm |
 | **Báo cáo & Vận hành** | [reports/phase-1-gonogo-report.md](reports/phase-1-gonogo-report.md)<br>[reports/phase-2-review-report.md](reports/phase-2-review-report.md)<br>[reports/sweep-gonogo-guide.md](reports/sweep-gonogo-guide.md) | Báo cáo Go/No-Go P1, báo cáo nghiệm thu P2, hướng dẫn sweep harness | Toàn nhóm |
 | **Nghiên cứu & Mở rộng** | [research/workshop-foundations.md](research/workshop-foundations.md)<br>[research/quantum-integration-proposal.md](research/quantum-integration-proposal.md)<br>[research/quantum-integration-tasks.md](research/quantum-integration-tasks.md) | Lý thuyết toán hình học, proposal tích hợp QUBO/QAOA trên simulator | Chương, Tuấn |
 

@@ -40,7 +40,9 @@ flowchart TD
     A5 --> Paper
 ```
 
-### 2.1. Ablation A1: Hiệu quả của Probe Signal (S1 Gradient) — Người chủ trì: Tuấn
+### 2.1. Ablation A1: Hiệu quả của Probe Signal (S1 Gradient)
+
+- **Người chủ trì duy nhất:** Tuấn
 
 - **Bối cảnh:** Controller đề xuất sử dụng kernel S1 trích xuất độ biến thiên gradient trung bình trên ảnh probe thu nhỏ (scale 0.25, chi phí $<0.1\text{ ms}$) để chọn mức cấu hình ban đầu (initial configuration).
 - **Câu hỏi khoa học:** Chi phí probe $t_{\text{probe}} \approx 0.07\text{ ms}$ có thực sự giúp giảm số vòng lặp retry và tiết kiệm latency tổng hay không so với việc luôn khởi đầu mù (blind) từ nấc nhẹ nhất?
@@ -55,7 +57,9 @@ flowchart TD
 
 ---
 
-### 2.2. Ablation A2: Đóng góp của State/Match Reuse trong S5 — Người chủ trì: Đế
+### 2.2. Ablation A2: Đóng góp của State/Match Reuse trong S5
+
+- **Người chủ trì duy nhất:** Đế
 
 - **Bối cảnh:** Khi Controller phát hiện S5 thiếu inliers nhưng cấu hình hiện tại chỉ cần tăng số vòng lặp RANSAC $R$ (ví dụ từ $R=256$ lên $512$ hoặc $1024$), danh sách match của S4 hoàn toàn không đổi.
 - **Câu hỏi khoa học:** Cơ chế tái sử dụng match của S4 và mở rộng đánh giá giả thuyết trên GPU tiết kiệm được bao nhiêu ms so với việc chạy lại từ đầu?
@@ -70,7 +74,9 @@ flowchart TD
 
 ---
 
-### 2.3. Ablation A3: Tác động của Ngân sách $K$ động trong S2–S3 — Người chủ trì: Thành
+### 2.3. Ablation A3: Tác động của Ngân sách K động trong S2-S3
+
+- **Người chủ trì duy nhất:** Thành
 
 - **Bối cảnh:** Khác với các pipeline truyền thống phải cấp phát lại buffer GPU mỗi khi thay đổi số lượng keypoints $K$, kiến trúc S2–S3 của nhóm cấp phát một buffer cố định cho $K_{\max}=2000$ ngay từ đầu (pre-allocated) và chỉ truyền tham số $K$ động vào kernel.
 - **Câu hỏi khoa học:** Thời gian thực thi của FAST và ORB co giãn như thế nào theo các nấc $K \in \{500, 1000, 2000\}$? Cơ chế zero-allocation giúp triệt tiêu hiện tượng jitter ra sao?
@@ -84,7 +90,9 @@ flowchart TD
 
 ---
 
-### 2.4. Ablation A4: Same-Homography Blending Trade-off trong S6 — Người chủ trì: Chương
+### 2.4. Ablation A4: Same-Homography Blending Trade-off trong S6
+
+- **Người chủ trì duy nhất:** Chương
 
 - **Bối cảnh:** Stage 6 hỗ trợ 3 chế độ blending: Feather (nhẹ), Multiband 3 mức, và Multiband 5 mức.
 - **Câu hỏi khoa học:** Chi phí tính toán và bộ nhớ của Multiband tăng lên gấp mấy lần so với Feather? Sự cải thiện về chất lượng ghép hình ở vùng biên (seamline) có tương xứng với độ trễ bỏ ra không?
@@ -99,7 +107,9 @@ flowchart TD
 
 ---
 
-### 2.5. Ablation A5: Độ nhạy của Ngưỡng Chất lượng ($\delta_S, \delta_P$) — Người chủ trì: Chương
+### 2.5. Ablation A5: Độ nhạy của Ngưỡng Chất lượng Overlap
+
+- **Người chủ trì duy nhất:** Chương
 
 - **Bối cảnh:** Chính sách QoR xác định một cấu hình $c$ là hợp lệ nếu $\mathrm{SSIM}(c) \ge \mathrm{SSIM}_{\mathrm{ref}} - \delta_S$ và $\mathrm{PSNR}(c) \ge \mathrm{PSNR}_{\mathrm{ref}} - \delta_P$.
 - **Câu hỏi khoa học:** Khi người dùng siết chặt yêu cầu chất lượng ($\delta_S=0.01$) hoặc nới lỏng ($\delta_S=0.05$), hành vi chọn cấu hình của Controller và trần lý thuyết của Oracle thay đổi như thế nào?

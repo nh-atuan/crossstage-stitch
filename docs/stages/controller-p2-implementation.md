@@ -27,7 +27,7 @@
 | `tests/controller/controller_trace.cpp` | Trace host tổng hợp, không ghi số đo GPU/QoR |
 | `tests/controller/test_controller_s5.cu` | Controller nhận output S5 CUDA thật; R continuation và invalid reuse |
 
-Xem [quyết định kỹ thuật](decisions/p2-de-controller.md) về phương án, trade-off, lifetime và calibration. Setup bổ sung của module:
+Xem [quyết định kỹ thuật](../decisions/p2-de-controller.md) về phương án, trade-off, lifetime và calibration. Setup bổ sung của module:
 
 ```cpp
 stitch::controller::Controller controller;
@@ -91,6 +91,6 @@ Chưa có thay đổi S1/harness trong nhánh này. Không sửa shared types ho
 
 ## 5. Nghiệm thu sau tích hợp
 
-Tuấn phụ trách S1 scene signals và adaptive harness theo [kế hoạch Phase 2](plan.md). Đế bàn giao module và hỗ trợ nối feedback/reuse; numerical policy cần được cung cấp tường minh sau development review.
+Tuấn phụ trách S1 scene signals và adaptive harness theo [kế hoạch Phase 2](../plan.md). Đế bàn giao module và hỗ trợ nối feedback/reuse; numerical policy cần được cung cấp tường minh sau development review.
 
 Khi harness sẵn sàng, kiểm đường ACCEPT, RETRY chỉ tăng R, RETRY đổi K/S và REJECT; xác nhận probe đúng một lần, output đã ready và cache/generation hợp lệ. Sau đó chạy pilot trên T4 với Fixed-Best, Oracle và Controller cùng timing boundary/QoR để đo overhead và speedup thực tế, gồm probe, synchronization và retry. Các test module hiện tại chưa thay thế lần nghiệm thu này.

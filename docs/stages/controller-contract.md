@@ -10,7 +10,7 @@ Contract xác định Controller C++ API, scene signals S1, feedback S5 và quy�
 
 Kiến trúc v1 là S1 probe → scene-aware initial selection → S1–S5 → S5 feedback → escalation/ACCEPT → S6; REJECT kết thúc run. Mỗi run ứng với một pair trong một repeat, có state và cache riêng.
 
-Các kiểu/API stage hiện tại phải được tái sử dụng, không đổi nghĩa: [common types](../src/common/types.hpp), [S1](../src/s1/s1.hpp), [S2](../src/s2_s3/s2.hpp), [S4](../src/s4/s4.hpp), [S5](../src/s5/s5.hpp), [S6](../src/s6/s6.hpp), [harness config](../harness/harness_types.hpp) và [runner](../harness/pipeline_runner.hpp). Phân công theo [kế hoạch Phase 2](plan.md) và [stages.md](stages.md); stream/geometry theo [quy ước chung](conventions.md), với ngoại lệ synchronization probe tại mục 4.2.
+Các kiểu/API stage hiện tại phải được tái sử dụng, không đổi nghĩa: [common types](../../src/common/types.hpp), [S1](../../src/s1/s1.hpp), [S2](../../src/s2_s3/s2.hpp), [S4](../../src/s4/s4.hpp), [S5](../../src/s5/s5.hpp), [S6](../../src/s6/s6.hpp), [harness config](../../harness/harness_types.hpp) và [runner](../../harness/pipeline_runner.hpp). Phân công theo [kế hoạch Phase 2](../plan.md) và [stages.md](../stages.md); stream/geometry theo [quy ước chung](../conventions.md), với ngoại lệ synchronization probe tại mục 4.2.
 
 ## 2. Bảng giao tiếp
 
@@ -104,7 +104,7 @@ private:
 
 ### 3.1. Input/output và ownership
 
-Ghi chú triển khai ngày 30/10 (Thứ 6): module ở [controller.hpp](../src/controller/controller.hpp) bổ sung bước setup `configure(const Policy&)` và accessor `probe_scale()`; API per-pair dưới đây giữ nguyên. Caller configure policy tường minh trước `initialize`, không có numerical policy mặc định. Configure thành công xóa binding ladder cũ, nên phải initialize lại; configure/initialize trong lúc đang chờ feedback bị từ chối. Policy chứa rule và self-check array mượn, phải sống và bất biến như ladder. Xem [schema policy](../src/controller/policy.hpp) và [bàn giao triển khai](p2-de-controller-implementation.md) về lifecycle setup, validation và bằng chứng kiểm thử. Khi chưa configure thành công, `initialize` trả `INVALID_ARGUMENT`, `probe_scale()` trả NaN.
+Ghi chú triển khai ngày 30/10 (Thứ 6): module ở [controller.hpp](../../src/controller/controller.hpp) bổ sung bước setup `configure(const Policy&)` và accessor `probe_scale()`; API per-pair dưới đây giữ nguyên. Caller configure policy tường minh trước `initialize`, không có numerical policy mặc định. Configure thành công xóa binding ladder cũ, nên phải initialize lại; configure/initialize trong lúc đang chờ feedback bị từ chối. Policy chứa rule và self-check array mượn, phải sống và bất biến như ladder. Xem [schema policy](../../src/controller/policy.hpp) và [bàn giao triển khai](controller-p2-implementation.md) về lifecycle setup, validation và bằng chứng kiểm thử. Khi chưa configure thành công, `initialize` trả `INVALID_ARGUMENT`, `probe_scale()` trả NaN.
 
 | Hàm | Điều kiện gọi và input | Kết quả khi trả `Status::OK` |
 |---|---|---|
@@ -164,7 +164,7 @@ Harness phải thực hiện đúng thứ tự sau:
 4. Chạy attempt S1–S5 theo cấu hình đầu. Được reuse ảnh S1 của probe nếu cùng input, tham số preprocessing, ScaleInfo và dữ liệu output còn nguyên; nếu không tương thích thì chạy lại S1.
 5. Sau mỗi attempt, kiểm tra completion S5 và gửi feedback vào `observe()`. RETRY phải chạy phần pipeline bị ảnh hưởng theo cấu hình trả về, không chạy probe lại. ACCEPT mới chạy S6; REJECT kết thúc run.
 
-Synchronization cuối probe là ngoại lệ của Controller v1 đối với quy tắc không đồng bộ sớm trong [conventions.md](conventions.md), mục 4. Probe nằm trước initial selection; trong mỗi attempt S1–S5 vẫn dùng cùng stream và không đồng bộ giữa các stage. Sau S5 phải đồng bộ trước khi đọc feedback; sau S6 phải kiểm tra completion như API hiện tại. Chi phí probe, copy và synchronization thuộc cùng ranh giới end-to-end hiện có.
+Synchronization cuối probe là ngoại lệ của Controller v1 đối với quy tắc không đồng bộ sớm trong [conventions.md](../conventions.md), mục 4. Probe nằm trước initial selection; trong mỗi attempt S1–S5 vẫn dùng cùng stream và không đồng bộ giữa các stage. Sau S5 phải đồng bộ trước khi đọc feedback; sau S6 phải kiểm tra completion như API hiện tại. Chi phí probe, copy và synchronization thuộc cùng ranh giới end-to-end hiện có.
 
 Controller không tự synchronize và không nhận cờ `ready` thay cho trách nhiệm readiness của caller. Nếu probe lỗi, thiếu scene signals hoặc metadata/gradient không hợp lệ thì phải kết thúc run; không gọi `begin_pair()` bằng dữ liệu giả và không chuyển sang cấu hình đầu cố định.
 
@@ -178,7 +178,7 @@ API S1 hiện tại chưa có output scene signals; phần bổ sung này là in
 
 `execution_status` do harness tổng hợp từ các lời gọi stage và điểm đồng bộ: OK chỉ khi S5 output đã sẵn sàng; nếu lỗi API/workspace/launch/completion thì dùng `INVALID_ARGUMENT`, `INSUFFICIENT_WORKSPACE` hoặc `CUDA_ERROR`. Không gán `NOT_ENOUGH_POINTS`/`DEGENERATE` vào trường này; chúng thuộc `homography.status`.
 
-Các quy tắc dưới đây đã được đối chiếu với `prepare`, `finish`, `estimate` trong [s5.cu](../src/s5/s5.cu), [s5.hpp](../src/s5/s5.hpp) và [validation cấu hình](../src/s5/s5_config.cpp). Return status của `estimate` và `HomographyResult.status` không được dùng thay nhau.
+Các quy tắc dưới đây đã được đối chiếu với `prepare`, `finish`, `estimate` trong [s5.cu](../../src/s5/s5.cu), [s5.hpp](../../src/s5/s5.hpp) và [validation cấu hình](../../src/s5/s5_config.cpp). Return status của `estimate` và `HomographyResult.status` không được dùng thay nhau.
 
 | Trạng thái | Payload hợp lệ và cách xử lý |
 |---|---|
@@ -262,7 +262,7 @@ S5 đã có API nối tiếp raw RANSAC state. Harness phải quản lý `genera
 | B thay đổi trong run | Không áp dụng | Lỗi contract; harness không được thực thi cấu hình này |
 | Đổi pair/repeat, ghi đè input hoặc đổi tham số ngoài S/K/R/B | Chỉ vùng cấp phát còn đủ dung lượng | Reset các kết quả bị phụ thuộc; S5 restart, đổi generation dù địa chỉ pointer không đổi |
 
-Để extension đúng [S5 API](../src/s5/s5.hpp), phải giữ nguyên keypoint/match arrays, counts/capacities, ScaleInfo, seed, threshold, batch size, generation, stream và workspace. Contract giữ cả refinement steps cố định trong một run. `previous_hypotheses` phải bằng R của lần S5 đã hoàn tất trong workspace. Nếu không chứng minh được điều kiện reuse thì restart S5 với `previous_hypotheses = 0`, không giả định cache hợp lệ.
+Để extension đúng [S5 API](../../src/s5/s5.hpp), phải giữ nguyên keypoint/match arrays, counts/capacities, ScaleInfo, seed, threshold, batch size, generation, stream và workspace. Contract giữ cả refinement steps cố định trong một run. `previous_hypotheses` phải bằng R của lần S5 đã hoàn tất trong workspace. Nếu không chứng minh được điều kiện reuse thì restart S5 với `previous_hypotheses = 0`, không giả định cache hợp lệ.
 
 Với execution OK và S5 DEGENERATE trên input đủ match, code hiện tại vẫn lưu trạng thái raw search; có thể extension khi các điều kiện trên còn đúng. Không dùng H/metric của kết quả DEGENERATE để render. Execution/CUDA error kết thúc run; không nối tiếp workspace lỗi. Seed và tham số stage khác không được tự đổi như một phần RETRY.
 

@@ -1,12 +1,12 @@
 # Quyết định Phase 0: S1 Preprocessing
 
-- **Task:** Khảo sát và chốt phương pháp chủ chốt cho S1 (task 3 của Tuấn, mục 6 của [kế hoạch](plan.md)).
+- **Task:** Khảo sát và chốt phương pháp chủ chốt cho S1 (task 3 của Tuấn, mục 6 của [kế hoạch](../plan.md)).
 - **Người quyết định:** Tuấn.
 - **Ngày ghi nhận:** 18/10 (Chủ nhật), năm 2026.
 - **Phase:** Phase 0.
 - **Trạng thái:** Đã chọn phương pháp. Chưa có kernel CUDA và chưa đo trên GPU Tesla T4. Các điểm chờ Thành xác nhận ở mục 6.
 
-Tham chiếu [các stage của pipeline](stages.md) và [quy ước chung](conventions.md). Ma trận `D` và các struct dữ liệu của S1 là một phần của interface dùng chung.
+Tham chiếu [các stage của pipeline](../stages.md) và [quy ước chung](../conventions.md). Ma trận `D` và các struct dữ liệu của S1 là một phần của interface dùng chung.
 
 ## 1. Bối cảnh
 
@@ -67,9 +67,9 @@ Lý do ưu tiên giảm số lần launch: ảnh UDIS-D khoảng 512×512, đọ
 
 Đã kiểm chứng ở máy local, `opencv-python` 5.0.0.93:
 
-- Công thức chuyển xám 15 bit khớp `cv2.cvtColor(COLOR_RGB2GRAY)` trên toàn bộ 2^24 giá trị RGB ([tests/python/test_mock_stages.py](../tests/python/test_mock_stages.py)).
+- Công thức chuyển xám 15 bit khớp `cv2.cvtColor(COLOR_RGB2GRAY)` trên toàn bộ 2^24 giá trị RGB ([tests/python/test_mock_stages.py](../../tests/python/test_mock_stages.py)).
 - Bộ hệ số 14 bit (4899, 9617, 1868) thường được nhắc cho OpenCV 4.x không khớp với `opencv-python` 5.0.0.93: có 162 sai khác trên 65.536 pixel ngẫu nhiên. Vì vậy công thức của S1 gắn với bản golden, không gắn với tên hàm OpenCV. Bản giả C++ dựa trên `libopencv-dev` của Colab (có thể là 4.x) có thể lệch ±1 so với golden ở bước này.
-- `make_scale_info` trong [src/common/geometry.hpp](../src/common/geometry.hpp) cho cùng kết quả với bản Python trên các ca kiểm tra đã viết.
+- `make_scale_info` trong [src/common/geometry.hpp](../../src/common/geometry.hpp) cho cùng kết quả với bản Python trên các ca kiểm tra đã viết.
 
 Chưa kiểm chứng: kernel CUDA, thời gian chạy, độ lệch của `INTER_AREA` so với kernel diện tích tự viết, các ước lượng thời gian ở mục 3.
 
@@ -80,4 +80,4 @@ Chưa kiểm chứng: kernel CUDA, thời gian chạy, độ lệch của `INTER
 | Kiểu ảnh S2 cần (`uint8` hay `float32`) và giá trị `σ` | Thành |
 | Làm sớm bộ cặp ảnh tổng hợp độ phân giải cao | Đế |
 
-Rủi ro: ở 512×512 cả pipeline có thể bị giới hạn bởi overhead launch, làm điều kiện Go/No-Go số 1 (khoảng 30% thời gian nằm ở các stage có núm) khó đạt. Cần cặp ảnh tổng hợp độ phân giải cao (mục 9 của [kế hoạch](plan.md)) để núm S có tác động đo được.
+Rủi ro: ở 512×512 cả pipeline có thể bị giới hạn bởi overhead launch, làm điều kiện Go/No-Go số 1 (khoảng 30% thời gian nằm ở các stage có núm) khó đạt. Cần cặp ảnh tổng hợp độ phân giải cao (mục 9 của [kế hoạch](../plan.md)) để núm S có tác động đo được.

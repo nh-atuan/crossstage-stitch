@@ -6,7 +6,7 @@
 - **Phase:** Phase 0; deadline chung 15/10 (Thứ 5).
 - **Trạng thái:** Đã chọn benchmark và phương pháp chủ chốt. Các ngưỡng QoR là đề xuất để kiểm chứng trên development data, chưa có kết quả đo trên GPU Tesla T4.
 
-Tài liệu chỉ ghi quyết định thuộc hai task trên. Tham chiếu [kế hoạch](plan.md) và [các stage của pipeline](stages.md). Interface, định dạng CSV và những quy ước dùng chung do Tuấn quyết định; phương pháp S2–S3 và S6 do Thành và Chương phụ trách.
+Tài liệu chỉ ghi quyết định thuộc hai task trên. Tham chiếu [kế hoạch](../plan.md) và [các stage của pipeline](../stages.md). Interface, định dạng CSV và những quy ước dùng chung do Tuấn quyết định; phương pháp S2–S3 và S6 do Thành và Chương phụ trách.
 
 ## 1. BENCH-01 — Benchmark cho panorama stitching
 

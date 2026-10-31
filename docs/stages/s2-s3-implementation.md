@@ -3,9 +3,9 @@
 - Người phụ trách: Thành.
 - Ngày ghi nhận: 25/10 (Chủ nhật), năm 2026.
 - Phase 1, deadline chung: 25/10 (Chủ nhật).
-- Trạng thái: đã build và chạy test trên Colab Tesla T4 ngày 25/10 (Chủ nhật). Golden, sanitizer và pipeline mock nối với S4/S5 CUDA đã chạy. Bằng chứng và phần chưa đạt nằm trong [bằng chứng T4](s2-s3-t4-validation.md). Phương pháp và lý do chọn nằm trong [quyết định S2/S3](decisions/s2-s3-orb.md).
+- Trạng thái: đã build và chạy test trên Colab Tesla T4 ngày 25/10 (Chủ nhật). Golden, sanitizer và pipeline mock nối với S4/S5 CUDA đã chạy. Bằng chứng và phần chưa đạt nằm trong [bằng chứng T4](s2-s3-validation.md). Phương pháp và lý do chọn nằm trong [quyết định S2/S3](../decisions/s2-s3-orb.md).
 
-Phạm vi theo [kế hoạch, mục 8](plan.md): kernel S2 có núm K, kernel S3, test so với OpenCV, tối ưu chỗ nghẽn. Ghép vào harness và root build thuộc phần của Tuấn và Đế.
+Phạm vi theo [kế hoạch, mục 8](../plan.md): kernel S2 có núm K, kernel S3, test so với OpenCV, tối ưu chỗ nghẽn. Ghép vào harness và root build thuộc phần của Tuấn và Đế.
 
 ## 1. Code và build
 
@@ -34,7 +34,7 @@ ctest --test-dir build/s2_s3 --output-on-failure
 
 ## 2. Contract
 
-API ở [s2.hpp](../src/s2_s3/s2.hpp) và [s3.hpp](../src/s2_s3/s3.hpp). Thứ tự gọi cho một ảnh:
+API ở [s2.hpp](../../src/s2_s3/s2.hpp) và [s3.hpp](../../src/s2_s3/s3.hpp). Thứ tự gọi cho một ảnh:
 
 ```cpp
 stitch::s2::Config c2{20, K, 0.04f};  // fast_threshold, max_keypoints, harris_k
@@ -93,17 +93,17 @@ Các sửa đổi:
 - chọn ngưỡng bằng scan song song;
 - loại sớm pixel bằng 4 điểm la bàn của vòng FAST.
 
-Output không đổi: 41/41 golden vẫn khớp từng bit. Thời gian S2 + S3 mỗi ảnh giảm 1,2–3,5 lần, số liệu ở [bằng chứng T4](s2-s3-t4-validation.md), mục 4.
+Output không đổi: 41/41 golden vẫn khớp từng bit. Thời gian S2 + S3 mỗi ảnh giảm 1,2–3,5 lần, số liệu ở [bằng chứng T4](s2-s3-validation.md), mục 4.
 
 ## 6. Việc cần phối hợp
 
 - **Tuấn:** S1 dùng σ = 0 khi chạy với S2/S3 này. `tools/mock/stages.py` hiện mặc định σ = 1, còn `check_mock_pipeline.py` truyền `sigma=0` mà không sửa file mock. Ngoài ra cần đưa `src/s2_s3` vào root build và harness. `t_s2` tính từ trước `s2_detect` của ảnh A tới sau `s2_detect` của ảnh B, `t_s3` tương tự.
 - **Đế:** `num_kp_a`, `num_kp_b` đọc từ `d_count` sau điểm đồng bộ 1. Descriptor dùng Hamming, giống ca ORB đã test ở S4. Dải K đề xuất cho sweep là {500, 1000, 2000, 4000}.
-- **Cả Nhóm:** quyết định cách xử lý ba cặp Oxford có thay đổi scale lớn mà ORB một level không ghép được ([bằng chứng T4](s2-s3-t4-validation.md), mục 3).
+- **Cả Nhóm:** quyết định cách xử lý ba cặp Oxford có thay đổi scale lớn mà ORB một level không ghép được ([bằng chứng T4](s2-s3-validation.md), mục 3).
 
 ## 7. Gọi với K động (Phase 2)
 
-Phần này bổ sung ngày 28/10 (Thứ 4) cho Phase 2. Lý do chọn nằm trong [quyết định K động](decisions/s2-s3-dynamic-k.md), số đo nằm trong [bằng chứng T4](s2-s3-t4-validation.md), mục 6. Code S2/S3 và API không đổi so với Phase 1.
+Phần này bổ sung ngày 28/10 (Thứ 4) cho Phase 2. Lý do chọn nằm trong [quyết định K động](../decisions/s2-s3-dynamic-k.md), số đo nằm trong [bằng chứng T4](s2-s3-validation.md), mục 6. Code S2/S3 và API không đổi so với Phase 1.
 
 Cấp phát một lần trước run:
 

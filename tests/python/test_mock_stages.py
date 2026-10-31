@@ -83,7 +83,7 @@ def test_s5_recovers_true_homography_and_to_original(tmp_path):
 
 
 def test_s6_translation_example_from_s6_doc():
-    # docs/s6-warp-blend.md section 8: two 4x3 images, B shifted by x=-2 -> canvas 6x3, offset (2, 0)
+    # docs/stages/s6-warp-blend.md section 8: two 4x3 images, B shifted by x=-2 -> canvas 6x3, offset (2, 0)
     a = np.full((3, 4, 3), 100, np.uint8)
     b = np.full((3, 4, 3), 100, np.uint8)
     h = np.array([[1, 0, -2.0], [0, 1, 0], [0, 0, 1]])

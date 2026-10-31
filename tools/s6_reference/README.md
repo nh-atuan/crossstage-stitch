@@ -1,6 +1,6 @@
 # Reference FP64 cho S6
 
-Đây là oracle CPU độc lập để kiểm tra `src/s6`, không phải backend chạy chính hoặc benchmark GPU. Ngày cập nhật: 23/10 (Thứ 6), năm 2026. Quy tắc chi tiết ở [bàn giao P1](../../docs/s6-p1-implementation.md) và [phương pháp](../../docs/s6-warp-blend.md).
+Đây là oracle CPU độc lập để kiểm tra `src/s6`, không phải backend chạy chính hoặc benchmark GPU. Ngày cập nhật: 23/10 (Thứ 6), năm 2026. Quy tắc chi tiết ở [bàn giao P1](../../docs/stages/s6-p1-implementation.md) và [phương pháp](../../docs/stages/s6-warp-blend.md).
 
 ## Chạy
 

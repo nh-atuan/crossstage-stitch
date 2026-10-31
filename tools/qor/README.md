@@ -5,7 +5,7 @@
 
 Bộ đánh giá trên CPU thực hiện protocol **đề xuất để pilot** trong
 [`docs/conventions.md`, mục 5–8](../../docs/conventions.md) và
-[`docs/benchmark-qor-s4-s5-decisions.md`, mục 2](../../docs/benchmark-qor-s4-s5-decisions.md).
+[`docs/decisions/benchmark-qor-s4-s5.md`, mục 2](../../docs/decisions/benchmark-qor-s4-s5.md).
 Các giá trị trong policy không phải ngưỡng chính thức của UDIS-D. Cần kiểm chứng
 trên development data trước khi khóa protocol đánh giá cuối.
 

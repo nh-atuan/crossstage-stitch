@@ -1,13 +1,13 @@
 # Báo cáo Thực nghiệm Grid Sweep và Phân tích Go/No-Go Phase 1
 
-- **Người thực hiện:** Tuấn (thay mặt Nhóm thực thi theo kế hoạch tại [specs/phase-1-sweep-gonogo/execution-plan.md](../specs/phase-1-sweep-gonogo/execution-plan.md)).
+- **Người thực hiện:** Tuấn (thay mặt Nhóm thực thi theo kế hoạch tại [specs/phase-1-sweep-gonogo/execution-plan.md](../../specs/phase-1-sweep-gonogo/execution-plan.md)).
 - **Môi trường đo lường:** Google Colab GPU Tesla T4 (`sm_75`), CUDA 13.0, Driver 580.82.
 - **Ngày thực hiện:** 26/10 (Thứ 2).
 - **Tài liệu tham chiếu:**
-  - Kế hoạch tổng thể: [docs/plan.md](plan.md)
+  - Kế hoạch tổng thể: [docs/plan.md](../plan.md)
   - Hướng dẫn thực thi: [docs/sweep-gonogo-guide.md](sweep-gonogo-guide.md)
-  - Quy ước telemetry: [docs/conventions.md](conventions.md)
-  - Quyết định benchmark & QoR: [docs/benchmark-qor-s4-s5-decisions.md](benchmark-qor-s4-s5-decisions.md)
+  - Quy ước telemetry: [docs/conventions.md](../conventions.md)
+  - Quyết định benchmark & QoR: [docs/benchmark-qor-s4-s5-decisions.md](../decisions/benchmark-qor-s4-s5.md)
 
 ---
 

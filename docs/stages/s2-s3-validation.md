@@ -137,7 +137,7 @@ Các số trên chỉ dùng cho kỹ thuật, chưa dùng trong paper: chưa đo
 - Ngày chạy: 28/10 (Thứ 4), năm 2026. Thành yêu cầu, AI hỗ trợ chạy qua Colab MCP.
 - Mã nguồn: nhánh `thanh/p2-dynamic-k`, commit `16fbfe7`.
 - Môi trường: Tesla T4 sm_75, driver 580.82.07, CUDA 13.0 (V13.0.88), CMake 3.31.10, Python 3.13.16, NumPy 2.1.3, `opencv-python` 5.0.0.93. Xung SM 1590/1590 MHz trước lượt đo đầu, 1575 MHz sau lượt đo thứ hai, nhiệt độ GPU 48–49 °C.
-- Quyết định liên quan: [K động](decisions/s2-s3-dynamic-k.md).
+- Quyết định liên quan: [K động](../decisions/s2-s3-dynamic-k.md).
 
 ### 6.1. Cách đưa code lên Colab
 
@@ -236,7 +236,7 @@ Mọi ô không đạt đều ở K = 1000. Các dòng K = 1000 của S3, chép 
 
 Với `capacity = 4000`, S3 luôn launch 1000 block (4 warp mỗi block), dù K nhỏ. Các block thừa chỉ đọc `d_count` rồi thoát. Đây là nguyên nhân hợp lý nhất của phần chậm thêm, vì `view` bỏ các block này và đạt ở mọi ô. Nhưng giả thuyết này chưa được profile, và chưa giải thích được vì sao K = 500 (nhiều block thừa hơn) vẫn đạt ở cả hai lượt.
 
-Kết luận: S2 và S3 nhận K động trên bộ nhớ cấp một lần mà không cấp phát lại, không rò rỉ và không đổi output. Để không mất hiệu năng ở S3, harness phải truyền view `capacity = K`. Hướng dẫn cho harness nằm trong [triển khai S2/S3](s2-s3-p1-implementation.md), mục 7.
+Kết luận: S2 và S3 nhận K động trên bộ nhớ cấp một lần mà không cấp phát lại, không rò rỉ và không đổi output. Để không mất hiệu năng ở S3, harness phải truyền view `capacity = K`. Hướng dẫn cho harness nằm trong [triển khai S2/S3](s2-s3-implementation.md), mục 7.
 
 ### 6.5. Chưa kiểm chứng ở Phase 2
 

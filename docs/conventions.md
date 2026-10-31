@@ -5,7 +5,7 @@
 - **Phase:** Phase 0.
 - **Trạng thái:** Interface dùng chung bị khóa sau 19/10 (Thứ 2); chỉ Tuấn sửa. Các điểm còn chờ xác nhận nằm ở mục 11. Phần CUDA chưa được kiểm chứng trên Colab T4.
 
-Quy ước này chỉ gồm những gì mọi thành viên cùng dùng. Phương pháp bên trong mỗi stage do người phụ trách quyết định (xem [kế hoạch](plan.md), mục 4). Mẫu ghi quyết định kỹ thuật: [decisions/TEMPLATE.md](decisions/TEMPLATE.md). Quyết định S1: [s1-preprocessing.md](s1-preprocessing.md).
+Quy ước này chỉ gồm những gì mọi thành viên cùng dùng. Phương pháp bên trong mỗi stage do người phụ trách quyết định (xem [kế hoạch](plan.md), mục 4). Mẫu ghi quyết định kỹ thuật: [decisions/TEMPLATE.md](decisions/TEMPLATE.md). Quyết định S1: [stages/s1-preprocessing.md](stages/s1-preprocessing.md).
 
 ## 1. Cấu trúc repo
 
@@ -21,7 +21,7 @@ Quy ước này chỉ gồm những gì mọi thành viên cùng dùng. Phương
 | `harness/` | Chương trình chạy S1–S6, đo thời gian, ghi CSV | Tuấn |
 | `tools/` | Script Python: mock data (`tools/mock/`), evaluator, phân tích | Theo task |
 | `tests/` | Test (CTest cho C++/CUDA, pytest cho Python trong `tests/python/`) | Mọi người, theo stage của mình |
-| `docs/decisions/` | Mẫu và ghi chép quyết định kỹ thuật | Mọi người |
+| `docs/` | Tài liệu dự án (mục lục tại `docs/README.md`): `decisions/`, `stages/`, `reports/`, `research/` | Tuấn điều phối, mọi người |
 | `paper/` | Bản LaTeX của paper | Chương dựng khung |
 | `data/`, `results/`, `build/` | Dữ liệu, kết quả, build. Không commit; chia sẻ qua Google Drive | |
 
@@ -130,7 +130,7 @@ Tính trong hệ tọa độ của ảnh A, nên không phụ thuộc canvas c�
 - Với cấu hình `c`: `valid_c = { p trong A : H_c⁻¹ · p hợp lệ và nằm trong B }`.
 - SSIM và PSNR tính giữa A và B đã warp bằng `H_c`, trên `Ω_i ∩ valid_c`.
 - `overlap_coverage = |Ω_i ∩ valid_c| / |Ω_i|`; `CoverageOK` khi `overlap_coverage ≥ 0.95` (giá trị để pilot).
-- Fixed-High không tạo được H hợp lệ: `reference_status = reference_failure`, báo cáo riêng theo [quyết định của Đế](benchmark-qor-s4-s5-decisions.md).
+- Fixed-High không tạo được H hợp lệ: `reference_status = reference_failure`, báo cáo riêng theo [quyết định của Đế](decisions/benchmark-qor-s4-s5.md).
 - `QualityPolicy` (`ΔSSIM_max`, `ΔPSNR_max`, ngưỡng coverage) không thuộc header của pipeline GPU vì chỉ evaluator offline dùng. Lưu dạng JSON có version, đọc bằng Python.
 
 Cách này chỉ đúng khi B cố định trong thí nghiệm S, K, R chính.

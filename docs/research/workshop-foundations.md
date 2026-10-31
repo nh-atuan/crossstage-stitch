@@ -6,7 +6,7 @@ Cập nhật: **22/10 (Thứ 5), năm 2026**. Phạm vi: bài của Nhóm tại 
 
 **Nhóm nghiên cứu một runtime điều chỉnh budget tính toán giữa các stage của pipeline ghép hai ảnh panorama trên GPU, theo độ khó của từng cảnh, nhằm giảm latency trong khi đáp ứng một quality policy đã định trước.**
 
-Câu hỏi trong [plan.md](plan.md#2-câu-hỏi-nghiên-cứu-và-hướng-tiếp-cận):
+Câu hỏi trong [plan.md](../plan.md#2-câu-hỏi-nghiên-cứu-và-hướng-tiếp-cận):
 
 *Can a scene-aware cross-stage runtime reduce GPU panorama-stitching latency by dynamically allocating computational budgets while maintaining a predefined Quality-of-Result constraint?*
 
@@ -32,13 +32,13 @@ PARMA-DITAM có các topic heterogeneous/parallel computing, công cụ phân t�
 
 | Nguồn | Vai trò |
 |---|---|
-| [plan.md](plan.md) | Research question, phân công, phase và Go/No-Go |
-| [stages.md](stages.md) | Pipeline, input/output và người phụ trách |
-| [conventions.md](conventions.md) | Contract dữ liệu, hình học, workspace, timing và CSV |
-| [s1-preprocessing.md](s1-preprocessing.md) | Phương pháp S1 do Tuấn chọn |
-| [benchmark-qor-s4-s5-decisions.md](benchmark-qor-s4-s5-decisions.md) | Benchmark, quality policy, S4/S5 do Đế phụ trách |
-| [s6-warp-blend.md](s6-warp-blend.md) | Quyết định và reference algorithm S6 của Chương |
-| [khung LaTeX](../PARMA-DITAM_2027_Workshop/README.md) | Story và outline manuscript |
+| [plan.md](../plan.md) | Research question, phân công, phase và Go/No-Go |
+| [stages.md](../stages.md) | Pipeline, input/output và người phụ trách |
+| [conventions.md](../conventions.md) | Contract dữ liệu, hình học, workspace, timing và CSV |
+| [s1-preprocessing.md](../stages/s1-preprocessing.md) | Phương pháp S1 do Tuấn chọn |
+| [benchmark-qor-s4-s5-decisions.md](../decisions/benchmark-qor-s4-s5.md) | Benchmark, quality policy, S4/S5 do Đế phụ trách |
+| [s6-warp-blend.md](../stages/s6-warp-blend.md) | Quyết định và reference algorithm S6 của Chương |
+| [khung LaTeX](../../PARMA-DITAM_2027_Workshop/README.md) | Story và outline manuscript |
 
 Tài liệu dùng các trạng thái sau:
 
@@ -163,11 +163,11 @@ D_A\bar p_A\sim H_sD_B\bar p_B
 H=D_A^{-1}H_sD_B.
 $$
 
-S5 trả cả hai ma trận; **S6 chỉ dùng H trong hệ RGB gốc**. Quy tắc này nằm trong [conventions.md](conventions.md#5-quy-ước-hình-học) và helper [geometry.hpp](../src/common/geometry.hpp). Không chuyển đổi thêm lần nữa trong S6.
+S5 trả cả hai ma trận; **S6 chỉ dùng H trong hệ RGB gốc**. Quy tắc này nằm trong [conventions.md](../conventions.md#5-quy-ước-hình-học) và helper [geometry.hpp](../../src/common/geometry.hpp). Không chuyển đổi thêm lần nữa trong S6.
 
 ## 6. S1 — Tiền xử lý ảnh
 
-**Phụ trách: Tuấn. Trạng thái: đã chọn phương pháp; kernel CUDA chưa có trong checkout.** Nguồn quyết định chi tiết là [s1-preprocessing.md](s1-preprocessing.md).
+**Phụ trách: Tuấn. Trạng thái: đã chọn phương pháp; kernel CUDA chưa có trong checkout.** Nguồn quyết định chi tiết là [s1-preprocessing.md](../stages/s1-preprocessing.md).
 
 Luồng đã chọn: RGB → gray → area resize → Gaussian blur. Resize làm giảm aliasing khi thu nhỏ; blur ở ảnh nhỏ giúp chi phí smoothing giảm theo diện tích ảnh làm việc. Gaussian có tính separable:
 
@@ -208,7 +208,7 @@ SIFT và ORB cung cấp những mức ổn định đối với scale/rotation k
 
 ### 7.2. Hướng mapping CUDA cần giữ
 
-Detection/filtering theo pixel/tile, compact điểm hợp lệ, ranking/top-K và description theo keypoint là các đơn vị có thể tách để kiểm thử. Shape/descriptor type phải chốt trước khi S4 tối ưu metric. Buffer output và số phần tử nằm trên device theo [types.hpp](../src/common/types.hpp).
+Detection/filtering theo pixel/tile, compact điểm hợp lệ, ranking/top-K và description theo keypoint là các đơn vị có thể tách để kiểm thử. Shape/descriptor type phải chốt trước khi S4 tối ưu metric. Buffer output và số phần tử nằm trên device theo [types.hpp](../../src/common/types.hpp).
 
 Tăng K có thể tăng S2 selection, S3 description và đặc biệt S4 matching. Vì thế K là núm **cross-stage**, không chỉ là tham số cục bộ của detector. Nếu K_A và K_B cùng tăng gấp đôi, số cặp matching có thể tăng khoảng bốn lần; thời gian thực còn phụ thuộc occupancy, bandwidth và overhead.
 
@@ -281,7 +281,7 @@ Nếu đổi S hoặc K làm matches thay đổi, RANSAC state cũ không mặc 
 
 ## 10. S6 — Warp và blending
 
-**Phụ trách: Chương. Trạng thái: đã chọn phương pháp ở mức tài liệu.** Chi tiết policy/reference nằm trong [s6-warp-blend.md](s6-warp-blend.md); các công thức bên dưới giải thích lựa chọn đó, không định nghĩa lại một blender khác.
+**Phụ trách: Chương. Trạng thái: đã chọn phương pháp ở mức tài liệu.** Chi tiết policy/reference nằm trong [s6-warp-blend.md](../stages/s6-warp-blend.md); các công thức bên dưới giải thích lựa chọn đó, không định nghĩa lại một blender khác.
 
 ### 10.1. Canvas và inverse warping
 
@@ -457,7 +457,7 @@ repeat:
     invalidate_only_dependencies_that_changed(state, c)
 ```
 
-Đây là pseudocode giải thích [stages.md](stages.md#3-controller), chưa phải controller đã cài. Feature set, classifier/rule, acceptance thresholds và ladder còn cần Đế chọn và kiểm chứng. Không mặc định dùng neural network, reinforcement learning hoặc quantum model.
+Đây là pseudocode giải thích [stages.md](../stages.md#3-controller), chưa phải controller đã cài. Feature set, classifier/rule, acceptance thresholds và ladder còn cần Đế chọn và kiểm chứng. Không mặc định dùng neural network, reinforcement learning hoặc quantum model.
 
 Self-check có thể dùng số matches/inliers, inlier ratio, reprojection residual, spatial coverage và H validity. Chúng là proxy, không phải PSNR/SSIM thật trên final. Phải đo false acceptance: controller chấp nhận nhưng evaluator offline đánh fail; cùng false rejection và retry cost khi phân tích policy.
 
@@ -486,7 +486,7 @@ $$
 
 ### 14.1. Contract thực thi
 
-Theo [conventions.md](conventions.md), dùng C++17/CUDA, T4 `sm_75`. Input RGB và buffers trung gian ở device; keypoints/matches dùng SoA và device count. Caller cấp output/workspace, mỗi stage cung cấp workspace query theo convention; đây không phải xác nhận đã thêm dependency CUB.
+Theo [conventions.md](../conventions.md), dùng C++17/CUDA, T4 `sm_75`. Input RGB và buffers trung gian ở device; keypoints/matches dùng SoA và device count. Caller cấp output/workspace, mỗi stage cung cấp workspace query theo convention; đây không phải xác nhận đã thêm dependency CUB.
 
 Bản đầu một stream, hai điểm đồng bộ chính:
 

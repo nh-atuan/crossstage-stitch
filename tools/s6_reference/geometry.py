@@ -1,7 +1,7 @@
 """Independent NumPy geometry reference; H maps original RGB B to A.
 
 Pixel centres are integers. Policies are provisional S6 implementation settings,
-not the benchmark's quality thresholds. See docs/s6-warp-blend.md section 5.
+not the benchmark's quality thresholds. See docs/stages/s6-warp-blend.md section 5.
 """
 from dataclasses import dataclass
 import math

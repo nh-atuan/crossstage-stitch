@@ -13,13 +13,13 @@ Cập nhật 27/10 (Thứ 3), năm 2026. Deadline Phase 2: 31/10 (Thứ 7); revi
 | P2-11 | Introduction, Related Work, khung pipeline/controller, S6 và protocol | Nội dung S1 của Tuấn, S2/S3 của Thành, S4/S5/controller của Đế cần owner review; chưa có bảng kết quả cuối |
 | P2-12 | Audit, lệnh tái lập, bằng chứng và danh sách phụ thuộc | Nhóm review và chạy môi trường chính thức |
 
-Không triển khai P2-01 đến P2-07, không đổi threshold/method của stage, không chạy quantum. Source kernel S6 và fixed pipeline giữ nguyên. [Quyết định kỹ thuật](decisions/p2-chuong-qor-blend.md) ghi trade-off và các vấn đề nằm ngoài ownership.
+Không triển khai P2-01 đến P2-07, không đổi threshold/method của stage, không chạy quantum. Source kernel S6 và fixed pipeline giữ nguyên. [Quyết định kỹ thuật](../decisions/p2-chuong-qor-blend.md) ghi trade-off và các vấn đề nằm ngoài ownership.
 
 ## 2. QoR
 
 `tools/qor/decision.py` cung cấp quyết định thuần; `tools.qor.evaluate.quality_decision` kiểm schema policy rồi gọi lõi. `quality_pass` bool cũ chỉ trả true cho PASS. Các trạng thái còn lại là FAIL, UNVERIFIED, REFERENCE_FAILED, EVALUATION_ERROR. Schema CSV tám cột và policy JSON cũ được giữ. `tools/qor/report.py` thêm `decision_status`, không đổi metric thành giá trị giả để pass.
 
-Ngưỡng vẫn là policy pilot hiện có, chưa được Nhóm duyệt: coverage tối thiểu 0.95, SSIM drop tối đa 0.02, PSNR drop tối đa 0.5 dB. Dấu so sánh là candidate >= reference − drop. Thiếu reference/metric không được pass; NaN và metric sai miền là lỗi; PSNR +inf hợp lệ cho zero MSE. Reference failure và pipeline failure được báo riêng. Chi tiết precedence và adapter cho Tuấn/Đế ở [QoR README](../tools/qor/README.md).
+Ngưỡng vẫn là policy pilot hiện có, chưa được Nhóm duyệt: coverage tối thiểu 0.95, SSIM drop tối đa 0.02, PSNR drop tối đa 0.5 dB. Dấu so sánh là candidate >= reference − drop. Thiếu reference/metric không được pass; NaN và metric sai miền là lỗi; PSNR +inf hợp lệ cho zero MSE. Reference failure và pipeline failure được báo riêng. Chi tiết precedence và adapter cho Tuấn/Đế ở [QoR README](../../tools/qor/README.md).
 
 Audit đã xác nhận Go/No-Go hiện tại bỏ SSIM/PSNR/reference status, dùng fallback khi Oracle không có candidate pass và chưa lọc Pareto đúng nghĩa nondominated. Chương không sửa script đó. Các số pilot 25 cặp vẫn là provisional; không thể kiểm định lại QoR/speedup từ một JSON tổng hợp. Không dùng chúng làm kết quả cuối paper.
 
@@ -57,17 +57,17 @@ python -m tools.bench.same_h --manifest input.json --output results/s6-same-h-t4
 compute-sanitizer --tool memcheck --error-exitcode 99 build/p2-t4/src/s6/test_s6_cuda
 ```
 
-Kỳ vọng: CTest không fail/skip CUDA, benchmark `status=passed`, GPU là T4, mask exact và RGB error <=2; sanitizer không báo lỗi. Đây là lệnh chưa thực hiện trên T4, không phải kết quả pass. `input.json` cần cohort được owner cung cấp đúng schema trong [benchmark README](../tools/bench/README.md).
+Kỳ vọng: CTest không fail/skip CUDA, benchmark `status=passed`, GPU là T4, mask exact và RGB error <=2; sanitizer không báo lỗi. Đây là lệnh chưa thực hiện trên T4, không phải kết quả pass. `input.json` cần cohort được owner cung cấp đúng schema trong [benchmark README](../../tools/bench/README.md).
 
 ## 4. Phân tích P2-09
 
 `tools/analysis/latency_qor.py` nhận terminal runs được gắn nhãn mode tường minh. Không nhận trực tiếp full grid, không tự chọn Fixed-Best hay tính Oracle. Join reference cùng pair, gọi predicate QoR chuẩn, giữ mọi category và mẫu số kỳ vọng/quan sát/thiếu. Median và p95 latency lấy trên pair medians sau khi loại warmup; failure có số đo vẫn được tính. Chỉ xuất paired speedup khi đủ cohort; quality-constrained speedup còn yêu cầu toàn bộ repeat pass policy được truyền vào.
 
-Retry histogram, fallback rate, controller/retry overhead chỉ có khi input cung cấp, không suy missing thành zero. Adapter tùy chọn chưa phải trace contract được owner duyệt. Đọc [analysis README](../tools/analysis/README.md) về input JSON, cùng split/policy/timing scope và hạn chế QoR theo pair/config.
+Retry histogram, fallback rate, controller/retry overhead chỉ có khi input cung cấp, không suy missing thành zero. Adapter tùy chọn chưa phải trace contract được owner duyệt. Đọc [analysis README](../../tools/analysis/README.md) về input JSON, cùng split/policy/timing scope và hạn chế QoR theo pair/config.
 
 ## 5. Working paper
 
-Source nằm ở [paper](../paper/README.md); dùng class OASIcs đã có, anonymous mode, author/metadata ẩn danh. Script build kiểm BibTeX, reference, warning, font embedding và các token nhận diện đã biết. README biên tập giữ claim/evidence map, nguồn đã kiểm tra và phần cần owner cung cấp. Không có bảng latency/QoR giả, không coi Oracle là controller online, không claim adaptive đã giảm latency.
+Source nằm ở [paper](../../paper/README.md); dùng class OASIcs đã có, anonymous mode, author/metadata ẩn danh. Script build kiểm BibTeX, reference, warning, font embedding và các token nhận diện đã biết. README biên tập giữ claim/evidence map, nguồn đã kiểm tra và phần cần owner cung cấp. Không có bảng latency/QoR giả, không coi Oracle là controller online, không claim adaptive đã giảm latency.
 
 Build thực tế bằng `wsl --exec python3 paper/build.py` và lần kiểm tra độc lập với `--output build/paper-root-review` đều pass: sáu trang A4, Author `Anonymous Authors`, 19 font embedded, final log không warning/citation/reference chưa resolve. Đã render và xem sáu trang. Class, asset và license được dùng trực tiếp từ template gốc qua `TEXINPUTS`; `kpsewhich` và hash trong receipt kiểm tra provenance, không thêm bản sao vendor. PDF và log ở `build/paper/`, không commit. Đây là working manuscript, chưa đủ nội dung và bằng chứng để nộp.
 

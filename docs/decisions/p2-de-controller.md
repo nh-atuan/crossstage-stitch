@@ -8,7 +8,7 @@
 
 ## 1. Bối cảnh
 
-[Contract v1](../controller-contract.md) đã khóa API per-pair, thứ tự quyết định, readiness và trách nhiệm cache. Repo chưa có module Controller, scene signals S1 hoặc adaptive harness. Báo cáo Phase 1 là tổng hợp; bản checkout không chứa ảnh, `runs.csv` hoặc `qor.csv` để hiệu chỉnh classifier và self-check.
+[Contract v1](../stages/controller-contract.md) đã khóa API per-pair, thứ tự quyết định, readiness và trách nhiệm cache. Repo chưa có module Controller, scene signals S1 hoặc adaptive harness. Báo cáo Phase 1 là tổng hợp; bản checkout không chứa ảnh, `runs.csv` hoặc `qor.csv` để hiệu chỉnh classifier và self-check.
 
 Controller cần chạy độc lập bằng feedback tổng hợp trước khi Tuấn tích hợp S1/harness. Mọi số đo GPU, policy dùng cho ảnh thật và kết luận speedup vẫn cần campaign riêng.
 
@@ -46,7 +46,7 @@ Không có policy, probe lỗi hoặc scene không hợp lệ: caller kết thú
 
 Test ở `tests/controller/` kiểm lifecycle, selection ở biên rule, metadata probe, status/payload, thứ tự reason, ladder không đơn điệu về budget, B cố định, budget exhaustion và retry invalidation. Một test chạy 1.000 pair tổng hợp và đếm C++ heap allocations trong các lời gọi per-pair. Trace riêng thể hiện S5 degeneration → R extension → thiếu match → đổi K → ACCEPT. Fixture chỉ có dữ liệu host, không chứng nhận model, cache hoặc QoR GPU.
 
-Sau đó đã bổ sung `test_controller_s5.cu`: nhận pinned output từ S5 CUDA thật, kiểm extension R và equality với full search, rồi từ chối stale reuse. Build integration chạy 5/5 CTest và memcheck/racecheck sạch trên Colab T4. Các fixture host ở trên vẫn chỉ kiểm logic; test CUDA này chưa chứng nhận scene-aware S1–S6 hoặc QoR end-to-end. [Bàn giao Controller](../p2-de-controller-implementation.md) ghi kết quả test, lệnh tái kiểm chứng và nơi lưu receipt/log.
+Sau đó đã bổ sung `test_controller_s5.cu`: nhận pinned output từ S5 CUDA thật, kiểm extension R và equality với full search, rồi từ chối stale reuse. Build integration chạy 5/5 CTest và memcheck/racecheck sạch trên Colab T4. Các fixture host ở trên vẫn chỉ kiểm logic; test CUDA này chưa chứng nhận scene-aware S1–S6 hoặc QoR end-to-end. [Bàn giao Controller](../stages/controller-p2-implementation.md) ghi kết quả test, lệnh tái kiểm chứng và nơi lưu receipt/log.
 
 Tuấn tích hợp S1/harness theo contract; Đế hỗ trợ feedback/reuse và cung cấp policy tường minh sau development review. Overhead và speedup end-to-end cần được đo sau tích hợp.
 

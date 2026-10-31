@@ -4,11 +4,11 @@
 - **Người quyết định:** Thành.
 - **Ngày ghi nhận:** 28/10 (Thứ 4), năm 2026.
 - **Phase:** Phase 2.
-- **Trạng thái:** Đã chọn ngày 28/10 (Thứ 4), sau khi kiểm chứng trên Colab T4. Fallback ở mục 4 là bắt buộc: khi cấp theo K_max, harness phải truyền view `capacity = K`. Bằng chứng ở mục 5 và trong [bằng chứng T4](../s2-s3-t4-validation.md), mục 6.
+- **Trạng thái:** Đã chọn ngày 28/10 (Thứ 4), sau khi kiểm chứng trên Colab T4. Fallback ở mục 4 là bắt buộc: khi cấp theo K_max, harness phải truyền view `capacity = K`. Bằng chứng ở mục 5 và trong [bằng chứng T4](../stages/s2-s3-validation.md), mục 6.
 
 ## 1. Bối cảnh
 
-Theo [contract Controller](../controller-contract.md), mỗi pair có thể chạy nhiều attempt. Mỗi attempt mang một bộ S/K/R do Controller chọn từ ladder. Harness chuyển K vào `s2::Config::max_keypoints` và sở hữu mọi buffer, workspace (contract, mục 2). Khi K đổi, harness chạy lại S2 tới S5 và không được coi output của K mới là prefix của output cũ (contract, mục 6.3).
+Theo [contract Controller](../stages/controller-contract.md), mỗi pair có thể chạy nhiều attempt. Mỗi attempt mang một bộ S/K/R do Controller chọn từ ladder. Harness chuyển K vào `s2::Config::max_keypoints` và sở hữu mọi buffer, workspace (contract, mục 2). Khi K đổi, harness chạy lại S2 tới S5 và không được coi output của K mới là prefix của output cũ (contract, mục 6.3).
 
 Tiêu chí nghiệm thu trong kế hoạch:
 
@@ -80,7 +80,7 @@ Phương án phụ thêm tham số K vào `s3_describe` đã được cân nhắ
 
 Ngưỡng hiệu năng do Thành chốt ngày 28/10 (Thứ 4): với từng ô S×K, median `t_s2` và `t_s3` khi cấp theo K_max được chậm hơn khi cấp vừa đúng K tối đa max(5%, 0.005 ms).
 
-Kết quả chạy ngày 28/10 (Thứ 4), code ở commit `16fbfe7`. Chi tiết, lệnh và bảng số nằm trong [bằng chứng T4](../s2-s3-t4-validation.md), mục 6.
+Kết quả chạy ngày 28/10 (Thứ 4), code ở commit `16fbfe7`. Chi tiết, lệnh và bảng số nằm trong [bằng chứng T4](../stages/s2-s3-validation.md), mục 6.
 
 | Kiểm tra | Nơi chạy | Điều kiện đạt | Kết quả |
 |---|---|---|---|
@@ -91,7 +91,7 @@ Kết quả chạy ngày 28/10 (Thứ 4), code ở commit `16fbfe7`. Chi tiết,
 | Thời gian S2 khi cấp theo K_max, S ∈ {1, 0.75, 0.5, 0.25}, K ∈ {500, 1000, 2000, 4000}, ảnh `graf` và `wall` | T4 | Đạt ngưỡng trên | Đạt ở cả 32 ô, cả hai lượt đo |
 | Thời gian S3 khi cấp theo K_max, `capacity = K_max` | T4 | Đạt ngưỡng trên | **Không đạt** ở 6 ô (lượt 1) và 7 ô (lượt 2), đều ở K = 1000, chậm thêm 0.0060–0.0093 ms |
 | Thời gian S3 khi cấp theo K_max, view `capacity = K` | T4 | Đạt ngưỡng trên | Đạt ở cả 32 ô, cả hai lượt đo |
-| 41 golden case và 16 cặp Oxford của Phase 1 | T4 | Kết quả giống [bằng chứng Phase 1](../s2-s3-t4-validation.md) | 41/41 khớp từng bit; 16 cặp cho cùng số liệu, 13/16 PASS |
+| 41 golden case và 16 cặp Oxford của Phase 1 | T4 | Kết quả giống [bằng chứng Phase 1](../stages/s2-s3-validation.md) | 41/41 khớp từng bit; 16 cặp cho cùng số liệu, 13/16 PASS |
 
 Nguyên nhân chỉ K = 1000 vượt ngưỡng mà K = 500 thì không chưa được giải thích. Với `capacity = K_max`, S3 launch `K_max / 4` block bất kể K, nên block thừa là nguyên nhân hợp lý nhất. Nhưng chưa có profile để xác nhận, và giả thuyết này không giải thích được vì sao K = 500 (nhiều block thừa hơn) vẫn đạt. Fallback loại bỏ block thừa và đạt ở mọi ô, nên việc profile không chặn quyết định.
 

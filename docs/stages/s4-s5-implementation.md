@@ -4,9 +4,9 @@
 - Ngày ghi nhận: 22/10 (Thứ 5), năm 2026.
 - Cập nhật cấu trúc thư mục: 23/10 (Thứ 6), năm 2026, theo yêu cầu của Đế.
 - Phase 1, deadline chung: 25/10 (Chủ nhật).
-- Trạng thái: đã build và chạy test S4/S5 trên Colab Tesla T4 ngày 23/10 (Thứ 6). CTest, memcheck/racecheck và mock tổng hợp ORB/SIFT pass; xem [bằng chứng T4](s4-s5-t4-validation.md). Chưa nghiệm thu toàn bộ Phase 1 trên benchmark thật.
+- Trạng thái: đã build và chạy test S4/S5 trên Colab Tesla T4 ngày 23/10 (Thứ 6). CTest, memcheck/racecheck và mock tổng hợp ORB/SIFT pass; xem [bằng chứng T4](s4-s5-validation.md). Chưa nghiệm thu toàn bộ Phase 1 trên benchmark thật.
 
-Phạm vi theo [kế hoạch, mục 8](plan.md): S4 matching; S5 homography có núm R, tín hiệu tự kiểm tra và tái sử dụng khi chỉ tăng R. Controller thuộc Phase 2. Ghép đủ sáu stage và Go/No-Go còn phụ thuộc kernel của các thành viên, harness của Tuấn và kết quả trên development data.
+Phạm vi theo [kế hoạch, mục 8](../plan.md): S4 matching; S5 homography có núm R, tín hiệu tự kiểm tra và tái sử dụng khi chỉ tăng R. Controller thuộc Phase 2. Ghép đủ sáu stage và Go/No-Go còn phụ thuộc kernel của các thành viên, harness của Tuấn và kết quả trên development data.
 
 ## 1. Code và build
 
@@ -39,7 +39,7 @@ ctest --test-dir build/s5 --output-on-failure
 
 ## 2. S4
 
-Giữ phương pháp trong [quyết định Phase 0](benchmark-qor-s4-s5-decisions.md): exact brute-force top-2 theo tile. Mỗi block xử lý một query, mỗi thread giữ top-2 riêng rồi reduction. Descriptor binary dùng Hamming thông thường; descriptor float tích lũy squared L2 bằng double, xuất distance L2. Đây không phải Hamming2 cho ORB WTA_K 3/4.
+Giữ phương pháp trong [quyết định Phase 0](../decisions/benchmark-qor-s4-s5.md): exact brute-force top-2 theo tile. Mỗi block xử lý một query, mỗi thread giữ top-2 riêng rồi reduction. Descriptor binary dùng Hamming thông thường; descriptor float tích lũy squared L2 bằng double, xuất distance L2. Đây không phải Hamming2 cho ORB WTA_K 3/4.
 
 Tie chọn index B nhỏ hơn. Ratio test dùng bất đẳng thức nghiêm ngặt; khi tính squared L2, bình phương ratio. Thiếu hai train descriptors hoặc hai distance cùng bằng 0 thì loại. `cross_check` kiểm tra nearest theo chiều ngược, không thêm reverse ratio test. API yêu cầu caller truyền ratio và cờ cross-check; không có tham số đã tune ngầm.
 
@@ -111,13 +111,13 @@ python3 -m py_compile tools/s4_s5/check_mock_pipeline.py
 
 Hai executable host pass; script Python qua kiểm tra cú pháp. `test_common` hiện có cũng pass. Solver host còn được build/chạy với `-fsanitize=address,undefined -fno-omit-frame-pointer`, không có báo lỗi.
 
-Ở lần kiểm tra local ban đầu, lệnh `python3 -m pytest tests/python/test_qor.py -q` dừng ở collection vì `ModuleNotFoundError: No module named 'cv2'`. Diagnostics LSP không chạy được vì thiếu `clangd` và `basedpyright`. Sau đó bộ test Python đã được chạy trên Colab, kết quả ở [bằng chứng T4](s4-s5-t4-validation.md).
+Ở lần kiểm tra local ban đầu, lệnh `python3 -m pytest tests/python/test_qor.py -q` dừng ở collection vì `ModuleNotFoundError: No module named 'cv2'`. Diagnostics LSP không chạy được vì thiếu `clangd` và `basedpyright`. Sau đó bộ test Python đã được chạy trên Colab, kết quả ở [bằng chứng T4](s4-s5-validation.md).
 
 Host tests kiểm tra workspace/config, homography projective đã biết, sample bốn điểm, suy biến, sample counter xác định và chuyển hệ half-pixel. Chúng không chứng minh CUDA biên dịch, GPU correctness, reuse trên GPU hoặc hiệu năng.
 
 ## 5. Quy trình kiểm thử trên Colab T4
 
-Quy trình này đã được chạy trên revision `aaa937a`; kết quả và môi trường Python riêng được ghi tại [bằng chứng T4](s4-s5-t4-validation.md).
+Quy trình này đã được chạy trên revision `aaa937a`; kết quả và môi trường Python riêng được ghi tại [bằng chứng T4](s4-s5-validation.md).
 
 Từ root repo, kiểm tra `nvidia-smi` hiển thị Tesla T4, ghi version CUDA và commit SHA vào log. Cài các dependency đã khai báo của Nhóm nếu phiên Colab chưa có:
 
@@ -191,6 +191,6 @@ Nếu solver/refinement không ổn định, giữ phương án phụ đã ghi �
 
 ## 8. Nguồn
 
-Matching và solver được triển khai theo quyết định của Đế tại [Phase 0](benchmark-qor-s4-s5-decisions.md) và hợp đồng [quy ước chung](conventions.md). Nguồn RANSAC, local refinement và ratio test đã ghi trong tài liệu Phase 0.
+Matching và solver được triển khai theo quyết định của Đế tại [Phase 0](../decisions/benchmark-qor-s4-s5.md) và hợp đồng [quy ước chung](../conventions.md). Nguồn RANSAC, local refinement và ratio test đã ghi trong tài liệu Phase 0.
 
 Counter hash dùng công thức SplitMix64 của Sebastiano Vigna: [mã nguồn tác giả](https://prng.di.unimi.it/splitmix64.c), public domain, truy cập 22/10 (Thứ 5), năm 2026. Dùng phần add/xorshift/multiply để sinh sample theo counter, không dùng biến RNG toàn cục của nguồn. Phép modulo có bias nhỏ; chưa tuyên bố sample phân phối đều tuyệt đối. Seed/counter phục vụ tái lập mẫu.

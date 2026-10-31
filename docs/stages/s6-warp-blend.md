@@ -2,7 +2,7 @@
 
 Người phụ trách: Chương. Ngày cập nhật triển khai: 23/10 (Thứ 6), năm 2026; khảo sát nguồn gốc: 15/10 (Thứ 5).
 
-Task hiện tại: **Phase 1 — triển khai S6 và evaluator QoR của Chương**, theo [kế hoạch](plan.md). Quyết định phương pháp Phase 0 được giữ bên dưới; API, mã nguồn, bằng chứng kiểm tra và lệnh chạy T4 ở [bàn giao P1](s6-p1-implementation.md). Dựng khung LaTeX là task riêng.
+Task hiện tại: **Phase 1 — triển khai S6 và evaluator QoR của Chương**, theo [kế hoạch](../plan.md). Quyết định phương pháp Phase 0 được giữ bên dưới; API, mã nguồn, bằng chứng kiểm tra và lệnh chạy T4 ở [bàn giao P1](s6-p1-implementation.md). Dựng khung LaTeX là task riêng.
 
 **Quyết định thiết kế:** global homography B → A, inverse warping và bilinear; tự viết CUDA cho hai họ blend là feather và Laplacian multi-band. Núm `B` ban đầu gồm `feather`, `multiband_3`, `multiband_5`. Average 50/50 chỉ làm đối chứng. Controller của Đế chọn `B` cùng `S, K, R`; S6 không dựng một controller khác.
 
@@ -10,7 +10,7 @@ Task hiện tại: **Phase 1 — triển khai S6 và evaluator QoR của Chươn
 
 ## 1. Bối cảnh và tiêu chí quyết định
 
-Research question của Nhóm là giảm latency của pipeline GPU bằng phân bổ lượng tính toán theo cảnh, dưới ràng buộc QoR. [Pipeline](stages.md) giao Chương S6; Tuấn S1 và quy ước chung; Thành S2–S3; Đế S4–S5, controller, benchmark và định nghĩa `Qmin`.
+Research question của Nhóm là giảm latency của pipeline GPU bằng phân bổ lượng tính toán theo cảnh, dưới ràng buộc QoR. [Pipeline](../stages.md) giao Chương S6; Tuấn S1 và quy ước chung; Thành S2–S3; Đế S4–S5, controller, benchmark và định nghĩa `Qmin`.
 
 Workshop nêu parallel/heterogeneous computing, công cụ phân tích hiệu năng và case studies trong phạm vi tiếp nhận [W1]. Từ đó, thiết kế S6 cần giúp kiểm tra giả thuyết runtime: lựa chọn có chi phí/chất lượng khác nhau, đo được overhead và tái sử dụng được kết quả. Đây là cách diễn giải cho dự án, không phải bảo đảm paper được chấp nhận.
 
@@ -129,7 +129,7 @@ flowchart LR
 
 ### 5.1. Đầu vào, hệ tọa độ và đầu ra
 
-Contract đã được hiện thực bằng API riêng ở [src/s6/s6.hpp](../src/s6/s6.hpp) và [geometry.hpp](../src/s6/geometry.hpp), dùng `ImageView`/`Status`/stream chung hiện có. Chưa sửa header chung hoặc root CMake; Tuấn cần review tích hợp. `Geometry.origin_x/y` là tọa độ trong A của góc canvas, **ngược dấu offset A → canvas** trong công thức dưới. Mask union có giá trị 0/1.
+Contract đã được hiện thực bằng API riêng ở [src/s6/s6.hpp](../../src/s6/s6.hpp) và [geometry.hpp](../../src/s6/geometry.hpp), dùng `ImageView`/`Status`/stream chung hiện có. Chưa sửa header chung hoặc root CMake; Tuấn cần review tích hợp. `Geometry.origin_x/y` là tọa độ trong A của góc canvas, **ngược dấu offset A → canvas** trong công thức dưới. Mask union có giá trị 0/1.
 
 | Thành phần | Contract đề xuất |
 |---|---|
@@ -306,7 +306,7 @@ Tách development/calibration và held-out test theo scene/sequence trước khi
 
 Ở review Phase 1, S6 cung cấp fraction latency, cost từng B, chất lượng output và dominated points trên dữ liệu thử Nhóm. Nếu B không tạo trade-off, giữ blender cố định tốt nhất rồi kiểm tra S/K/R. Nếu chỉ hai B hữu ích, rút thang. Geometry failure chiếm ưu thế thì báo infeasible/phối hợp S5, không tăng pyramid như cách sửa H.
 
-Theo [Go/No-Go](plan.md#7-gonogo), ngưỡng quyết định do cả Nhóm thống nhất; tài liệu này không thay ngưỡng đó. Nếu QoR render chưa đáng tin, chưa tuyên bố Adaptive-B giữ được `Qmin`; dùng B cố định ở đánh giá chính, báo sweep B như khảo sát phụ tới khi giải quyết được.
+Theo [Go/No-Go](../plan.md#7-gonogo), ngưỡng quyết định do cả Nhóm thống nhất; tài liệu này không thay ngưỡng đó. Nếu QoR render chưa đáng tin, chưa tuyên bố Adaptive-B giữ được `Qmin`; dùng B cố định ở đánh giá chính, báo sweep B như khảo sát phụ tới khi giải quyết được.
 
 ## 9. Kiểm chứng cần thực hiện và bàn giao
 

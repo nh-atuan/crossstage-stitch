@@ -14,7 +14,7 @@ Mốc nộp bài của Nhóm: 13/11/2026.
 | `docs/plan.md` | Kế hoạch: mục tiêu, phân vai, nguyên tắc làm việc, lịch các phase, task Phase 0, Go/No-Go, dataset, môi trường, paper, rủi ro |
 | `docs/stages.md` | Các stage của pipeline: mục tiêu, đầu vào, đầu ra, núm chỉnh, người phụ trách, controller |
 | `docs/conventions.md` | Quy ước chung: cấu trúc repo, môi trường, interface giữa các stage, file kết quả, đo thời gian, Git |
-| `docs/s1-preprocessing.md` | Quyết định kỹ thuật S1 |
+| `docs/stages/s1-preprocessing.md` | Quyết định kỹ thuật S1 |
 | `docs/decisions/TEMPLATE.md` | Mẫu ghi quyết định kỹ thuật |
 | `src/common/` | Header interface dùng chung |
 | `tools/mock/` | Script sinh mock data và bản giả OpenCV của từng stage |

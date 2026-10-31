@@ -13,7 +13,7 @@ Ngày cập nhật: 23/10 (Thứ 6), năm 2026. Người phụ trách: Chương;
 
 ## 1. Việc có thể làm trước và phạm vi đã triển khai
 
-Theo [plan](plan.md), [stages](stages.md) và [phương pháp S6](s6-warp-blend.md), geometry, sampling, blender và evaluator có thể phát triển bằng dữ liệu tổng hợp, độc lập với tiến độ kernel S1–S5. Khi tích hợp, S5 phải trả H chiều B → A trong hệ RGB gốc; S6 không tự suy đoán hoặc đổi scale lần nữa.
+Theo [plan](../plan.md), [stages](../stages.md) và [phương pháp S6](s6-warp-blend.md), geometry, sampling, blender và evaluator có thể phát triển bằng dữ liệu tổng hợp, độc lập với tiến độ kernel S1–S5. Khi tích hợp, S5 phải trả H chiều B → A trong hệ RGB gốc; S6 không tự suy đoán hoặc đổi scale lần nữa.
 
 | Thứ tự | Sản phẩm hiện có | Phần còn phải xác nhận |
 |---|---|---|
@@ -28,7 +28,7 @@ Không sửa `src/common/`, root `CMakeLists.txt`, plan hoặc CSV chung. S6 dù
 
 ## 2. Contract để tích hợp
 
-API ở [geometry.hpp](../src/s6/geometry.hpp) và [s6.hpp](../src/s6/s6.hpp):
+API ở [geometry.hpp](../../src/s6/geometry.hpp) và [s6.hpp](../../src/s6/s6.hpp):
 
 ```cpp
 stitch::s6::Geometry geometry;
@@ -47,7 +47,7 @@ status = stitch::s6::render(a, b, geometry, mode, output, mask,
 // Check launch status, then check stream completion before consuming/releasing.
 ```
 
-Đây là đoạn minh họa chuỗi gọi, không phải hàm hoàn chỉnh: caller phải xử lý mọi `Status`, lỗi cấp phát và lỗi hoàn tất CUDA. Test [test_s6_cuda.cu](../tests/test_s6_cuda.cu) có ví dụ quản lý device buffer, stream và event thực tế.
+Đây là đoạn minh họa chuỗi gọi, không phải hàm hoàn chỉnh: caller phải xử lý mọi `Status`, lỗi cấp phát và lỗi hoàn tất CUDA. Test [test_s6_cuda.cu](../../tests/test_s6_cuda.cu) có ví dụ quản lý device buffer, stream và event thực tế.
 
 `a/b/output/mask` là **device views**; pitch tính bằng byte, cho phép padding. A/B chỉ đọc và có thể trùng nhau. Output/mask/workspace không được chồng nhau hoặc chồng input. `render()` không `cudaMalloc`, không đồng bộ và không copy ảnh về host; mọi buffer phải sống đến khi stream hoàn tất. `Status::OK` khi trả về chỉ xác nhận validation/launch đã qua, không xác nhận hoàn tất GPU. Các lỗi async được caller kiểm tra theo [CUDA Programming Guide 12.5](https://docs.nvidia.com/cuda/archive/12.5.0/cuda-c-programming-guide/index.html#asynchronous-concurrent-execution).
 
@@ -148,7 +148,7 @@ Mỗi fixture xuất RGB PPM, mask PGM và JSON geometry/mode/levels/workspace/c
 
 ## 7. QoR độc lập và việc cần Đế review
 
-Hướng dẫn đầy đủ và schema ở [tools/qor/README.md](../tools/qor/README.md). Chạy:
+Hướng dẫn đầy đủ và schema ở [tools/qor/README.md](../../tools/qor/README.md). Chạy:
 
 ```bash
 python -m tools.qor.evaluate --manifest data/pairs.json --runs results/runs.csv --policy tools/qor/policy-pilot.json --ref-config S1_K2000_R1024_Bfeather --output results/qor.csv

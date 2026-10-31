@@ -1,15 +1,15 @@
 # Báo cáo Nghiệm thu và Đánh giá Thực nghiệm Phase 2
 
-- **Người thực hiện:** Tuấn (thay mặt Nhóm điều phối và thực thi theo kế hoạch tại [specs/phase-2/review-and-pilot-plan.md](../specs/phase-2/review-and-pilot-plan.md)).
+- **Người thực hiện:** Tuấn (thay mặt Nhóm điều phối và thực thi theo kế hoạch tại [specs/phase-2/review-and-pilot-plan.md](../../specs/phase-2/review-and-pilot-plan.md)).
 - **Môi trường đo lường:** Google Colab GPU Tesla T4 (`sm_75`, Compute Capability 7.5, 15.360 MiB VRAM), CUDA 13.0, Driver 580.82.07.
 - **Ngày thực hiện:** 31/10 (Thứ 7).
 - **Ngày review:** 01/11 (Chủ nhật).
 - **Tài liệu tham chiếu:**
-  - Kế hoạch tổng thể: [docs/plan.md](plan.md)
-  - Hướng dẫn triển khai Phase 2: [specs/phase-2/review-and-pilot-plan.md](../specs/phase-2/review-and-pilot-plan.md)
-  - Contract Controller v1: [docs/controller-contract.md](controller-contract.md)
+  - Kế hoạch tổng thể: [docs/plan.md](../plan.md)
+  - Hướng dẫn triển khai Phase 2: [specs/phase-2/review-and-pilot-plan.md](../../specs/phase-2/review-and-pilot-plan.md)
+  - Contract Controller v1: [docs/controller-contract.md](../stages/controller-contract.md)
   - Báo cáo Go/No-Go Phase 1: [docs/phase-1-gonogo-report.md](phase-1-gonogo-report.md)
-  - Quyết định kỹ thuật: [docs/decisions/p2-de-controller.md](decisions/p2-de-controller.md), [docs/decisions/s2-s3-dynamic-k.md](decisions/s2-s3-dynamic-k.md), [docs/decisions/p2-chuong-qor-blend.md](decisions/p2-chuong-qor-blend.md)
+  - Quyết định kỹ thuật: [docs/decisions/p2-de-controller.md](../decisions/p2-de-controller.md), [docs/decisions/s2-s3-dynamic-k.md](../decisions/s2-s3-dynamic-k.md), [docs/decisions/p2-chuong-qor-blend.md](../decisions/p2-chuong-qor-blend.md)
 
 ---
 

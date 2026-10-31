@@ -71,7 +71,7 @@ Mỗi đoạn trong `.tex` có comment ngắn `Role:`: opening/background, chall
 | B có thể được chọn dưới composition constraint | Overlap metrics không đủ; cần output-sensitive criterion và same-H B sweep | needs evidence |
 | Chất lượng thị giác được bảo đảm hoặc đạt realtime/energy saving | Chưa có phép đo/chứng minh tương ứng; không viết như claim | needs evidence |
 
-Bám [quyết định benchmark/QoR](../docs/benchmark-qor-s4-s5-decisions.md): UDIS-D là benchmark chính; HPatches dùng phát triển/geometry, synthetic high-resolution là stress test riêng. Main S/K/R giữ B cố định trước khi có composition policy. Hai tolerance 0,02 SSIM và 0,5 dB trong tài liệu Đế vẫn là pilot proposals, không tự nâng thành ngưỡng chuẩn đã khóa hoặc ngưỡng của dataset.
+Bám [quyết định benchmark/QoR](../docs/decisions/benchmark-qor-s4-s5.md): UDIS-D là benchmark chính; HPatches dùng phát triển/geometry, synthetic high-resolution là stress test riêng. Main S/K/R giữ B cố định trước khi có composition policy. Hai tolerance 0,02 SSIM và 0,5 dB trong tài liệu Đế vẫn là pilot proposals, không tự nâng thành ngưỡng chuẩn đã khóa hoặc ngưỡng của dataset.
 
 ## 4. Tự phản biện năm chiều
 

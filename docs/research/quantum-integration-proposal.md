@@ -25,7 +25,7 @@ Chọn Hướng A: chọn catalogue cấu hình offline bằng QUBO và QAOA cho
 
 ## 2. Hiện trạng và câu hỏi nghiên cứu
 
-Đã đọc [plan](plan.md), [stages](stages.md), [conventions](conventions.md), [S1](s1-preprocessing.md), [benchmark/QoR/S4–S5](benchmark-qor-s4-s5-decisions.md), [S6](s6-warp-blend.md), [bàn giao P1](s6-p1-implementation.md), [khung workshop](../PARMA-DITAM_2027_Workshop/README.md); kiểm tra source, test, mock và results trong checkout.
+Đã đọc [plan](../plan.md), [stages](../stages.md), [conventions](../conventions.md), [S1](../stages/s1-preprocessing.md), [benchmark/QoR/S4–S5](../decisions/benchmark-qor-s4-s5.md), [S6](../stages/s6-warp-blend.md), [bàn giao P1](../stages/s6-p1-implementation.md), [khung workshop](../../PARMA-DITAM_2027_Workshop/README.md); kiểm tra source, test, mock và results trong checkout.
 
 | Có bằng chứng tại checkout | Chưa có bằng chứng tại checkout |
 |---|---|

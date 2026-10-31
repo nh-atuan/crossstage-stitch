@@ -9,7 +9,7 @@ import math
 import cv2
 import numpy as np
 
-# S1 defaults (docs/s1-preprocessing.md)
+# S1 defaults (docs/stages/s1-preprocessing.md)
 S1_SIGMA = 1.0
 # S2/S3 defaults for the mock bundle
 ORB_FEATURES = 1000
@@ -115,12 +115,12 @@ def s5_homography(kp_a, kp_b, idx, d_a, d_b, seed=0):
 
 
 def _feather_weight(x, y, w, h):
-    """Project-defined relative distance to the source border (docs/s6-warp-blend.md 5.3)."""
+    """Project-defined relative distance to the source border (docs/stages/s6-warp-blend.md 5.3)."""
     return np.minimum.reduce([(x + 0.5) / w, (w - 0.5 - x) / w, (y + 0.5) / h, (h - 0.5 - y) / h])
 
 
 def s6_warp_feather(img_a, img_b, h):
-    """Inverse warp + feather following docs/s6-warp-blend.md 5.2-5.3 (float64 geometry).
+    """Inverse warp + feather following docs/stages/s6-warp-blend.md 5.2-5.3 (float64 geometry).
 
     Returns dict(panorama uint8 (Hc, Wc, 3), mask uint8, offset (ox, oy), canvas (Wc, Hc)).
     """

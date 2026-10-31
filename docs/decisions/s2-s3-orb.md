@@ -4,7 +4,7 @@
 - **Người quyết định:** Thành.
 - **Ngày ghi nhận:** 25/10 (Chủ nhật), năm 2026.
 - **Phase:** Phase 1.
-- **Trạng thái:** Đã chọn phương pháp. Bản tham chiếu NumPy đã được so với `cv2.ORB` của `opencv-python` 5.0.0.93 trên ảnh tổng hợp (mục 5). Kernel CUDA khớp bản tham chiếu từng bit trên Colab T4 ngày 25/10 (Chủ nhật). Trên 16 cặp Oxford, 13 cặp đạt và 3 cặp có thay đổi scale lớn không đạt; xem [bằng chứng T4](../s2-s3-t4-validation.md). Chưa chạy trên UDIS-D.
+- **Trạng thái:** Đã chọn phương pháp. Bản tham chiếu NumPy đã được so với `cv2.ORB` của `opencv-python` 5.0.0.93 trên ảnh tổng hợp (mục 5). Kernel CUDA khớp bản tham chiếu từng bit trên Colab T4 ngày 25/10 (Chủ nhật). Trên 16 cặp Oxford, 13 cặp đạt và 3 cặp có thay đổi scale lớn không đạt; xem [bằng chứng T4](../stages/s2-s3-validation.md). Chưa chạy trên UDIS-D.
 
 ## 1. Bối cảnh
 
@@ -18,7 +18,7 @@ Ràng buộc từ phía Nhóm:
 - Pull request chỉ được merge khi output khớp bản giả OpenCV trong sai số do người phụ trách ghi rõ.
 - Mốc nộp bài là 13/11 (Thứ 6), nên kernel phải viết và kiểm chứng xong trong vài ngày.
 
-Quyết định này trả lời các điểm đang chờ Thành ở [quy ước chung, mục 11](../conventions.md) và [S1, mục 6](../s1-preprocessing.md).
+Quyết định này trả lời các điểm đang chờ Thành ở [quy ước chung, mục 11](../conventions.md) và [S1, mục 6](../stages/s1-preprocessing.md).
 
 ## 2. Phương án chọn
 
@@ -91,7 +91,7 @@ Khác biệt có chủ ý so với OpenCV: `KeyPointsFilter::retainBest` giữ m
 
 ## 5. Kiểm chứng
 
-Đã chạy ngày 25/10 (Chủ nhật) trên máy Windows của Thành: Python 3.11, `opencv-python` 5.0.0.93, NumPy 2.4. Ảnh thử là ảnh 640×480 tổng hợp (noise, hình tròn và chữ, tạo tương tự fixture trong [bằng chứng S4/S5](../s4-s5-t4-validation.md)), `fast_threshold = 20`.
+Đã chạy ngày 25/10 (Chủ nhật) trên máy Windows của Thành: Python 3.11, `opencv-python` 5.0.0.93, NumPy 2.4. Ảnh thử là ảnh 640×480 tổng hợp (noise, hình tròn và chữ, tạo tương tự fixture trong [bằng chứng S4/S5](../stages/s4-s5-validation.md)), `fast_threshold = 20`.
 
 | Kiểm tra | Kết quả |
 |---|---|
@@ -103,7 +103,7 @@ Khác biệt có chủ ý so với OpenCV: `KeyPointsFilter::retainBest` giữ m
 
 Test tự động của bản tham chiếu nằm trong `tests/python/test_s2_s3_reference.py`.
 
-Kernel CUDA, sanitizer, thời gian chạy trên T4 và lần nối đầu tiên với S4/S5 trên 16 cặp Oxford được ghi trong [bằng chứng T4](../s2-s3-t4-validation.md). Phần chưa kiểm chứng gồm:
+Kernel CUDA, sanitizer, thời gian chạy trên T4 và lần nối đầu tiên với S4/S5 trên 16 cặp Oxford được ghi trong [bằng chứng T4](../stages/s2-s3-validation.md). Phần chưa kiểm chứng gồm:
 
 - chất lượng H trên UDIS-D và tập development;
 - thời gian theo ranh giới đo chung của harness.

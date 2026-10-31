@@ -47,7 +47,7 @@ inline Status s1_gradient_workspace_bytes(std::size_t* bytes) {
 }
 
 // Computes mean absolute gradient for preprocessed GRAY8 images A and B.
-// Formula matching docs/controller-contract.md section 4.1:
+// Formula matching docs/stages/controller-contract.md section 4.1:
 //   G = (sum |I(x+1,y)-I(x,y)| + sum |I(x,y+1)-I(x,y)|) / (255 * (h*(w-1) + w*(h-1)))
 // d_workspace: at least s1_gradient_workspace_bytes() on device (32 bytes).
 // pinned_gradient_a, pinned_gradient_b: host pinned pointers to receive normalized G values asynchronously.

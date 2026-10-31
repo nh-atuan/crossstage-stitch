@@ -156,7 +156,7 @@ def test_s1_invalid_scale():
 
 
 def s1_mean_abs_gradient_reference(gray: np.ndarray) -> float:
-    """Mean absolute gradient matching docs/controller-contract.md section 4.1."""
+    """Mean absolute gradient matching docs/stages/controller-contract.md section 4.1."""
     h, w = gray.shape
     if w < 2 or h < 2:
         raise ValueError("Image dimensions must be at least 2x2")

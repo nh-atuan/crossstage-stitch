@@ -143,7 +143,7 @@ Ngày review: Đế ghép 6 stage GPU và chạy script quét trên 20-30 cặp 
 
 Deadline chung cho các task: 31/10 (Thứ 7).
 
-Điều kiện bắt đầu: Phase 1 kết luận GO (đã nghiệm thu vào 26/10 (Thứ 2), xem [Báo cáo Go/No-Go](phase-1-gonogo-report.md)).
+Điều kiện bắt đầu: Phase 1 kết luận GO (đã nghiệm thu vào 26/10 (Thứ 2), xem [Báo cáo Go/No-Go](reports/phase-1-gonogo-report.md)).
 
 | Thành viên | Task | Tiêu chí nghiệm thu |
 |---|---|---|

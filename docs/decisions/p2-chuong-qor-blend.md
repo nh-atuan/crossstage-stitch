@@ -45,8 +45,8 @@ Thiếu CUDA thì chỉ chạy CPU/tests và tạo fixture với nhãn `prepared
 
 QoR regression: 157 test pass. S6/benchmark Python: 70 test pass. Build toàn dự án bằng NVCC CUDA 12.5, `sm_75` thành công; CTest 12/12 pass trên GTX 1650. Same-H chạy hai cặp Oxford đã có trong máy, mỗi cặp ba B, hai warmup và mười repeat: sáu fixture CUDA pass, mask exact, sai số RGB tối đa 1 so FP64 oracle. H lấy từ ORB mock đã có, không phải S5 CUDA. Một fixture tổng hợp vùng tách rời chạy ba mode với 0 warmup/3 repeat cũng pass và kiểm tra mặc định không giữ ảnh.
 
-Receipt lần chạy cuối có cảnh báo CUDA event lớn hơn host elapsed ở một số repeat; chưa xác định nguyên nhân clock/môi trường WSL. Lệnh `--require-t4` từ chối GTX 1650 đúng như yêu cầu. T4, Compute Sanitizer và corrected pilot chưa được nghiệm thu. Chi tiết và lệnh ở [bàn giao](../p2-chuong-implementation.md).
+Receipt lần chạy cuối có cảnh báo CUDA event lớn hơn host elapsed ở một số repeat; chưa xác định nguyên nhân clock/môi trường WSL. Lệnh `--require-t4` từ chối GTX 1650 đúng như yêu cầu. T4, Compute Sanitizer và corrected pilot chưa được nghiệm thu. Chi tiết và lệnh ở [bàn giao](../stages/s6-p2-implementation.md).
 
 ## 6. Nguồn
 
-Đối chiếu source nội bộ: [S6](../../src/s6/), [evaluator](../../tools/qor/), [runner S6](../../tests/test_s6_cuda.cu), [harness](../../harness/pipeline_runner.cu), [plan](../plan.md), [conventions](../conventions.md), [phương pháp S6](../s6-warp-blend.md). Các lựa chọn trên là sửa hạ tầng kiểm chứng, không đưa phương pháp ngoài vào kernel. Nguồn học thuật và phạm vi đọc cho paper nằm trong [paper README](../../paper/README.md).
+Đối chiếu source nội bộ: [S6](../../src/s6/), [evaluator](../../tools/qor/), [runner S6](../../tests/test_s6_cuda.cu), [harness](../../harness/pipeline_runner.cu), [plan](../plan.md), [conventions](../conventions.md), [phương pháp S6](../stages/s6-warp-blend.md). Các lựa chọn trên là sửa hạ tầng kiểm chứng, không đưa phương pháp ngoài vào kernel. Nguồn học thuật và phạm vi đọc cho paper nằm trong [paper README](../../paper/README.md).

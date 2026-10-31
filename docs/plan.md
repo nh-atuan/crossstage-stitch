@@ -181,7 +181,7 @@ Tài liệu đi kèm: [Đặc tả 5 bài thí nghiệm bóc tách (Ablation Stu
 
 Quy định riêng của Phase 3:
 
-- **Phân vai cân bằng kỹ thuật:** Mỗi thành viên chủ trì đúng bài thí nghiệm bóc tách cốt lõi gắn liền với stage của mình (A1: Tuấn, A2: Đế, A3: Thành, A4 & A5: Chương). Tuấn phụ trách S1 probe, harness và batch runner trên T4, không đưa các công việc mang tính hành chính/kể công (như "điều phối, kiểm soát tiến độ") vào bảng task chính thức để giữ tinh thần khiêm tốn, tập trung thuần túy vào kỹ thuật.
+- **Phân vai cân bằng kỹ thuật:** Mỗi thành viên chủ trì đúng bài thí nghiệm bóc tách cốt lõi gắn liền với stage của mình: A1 (Tuấn), A2 (Đế), A3 (Thành), A4 & A5 (Chương).
 - **Nguyên tắc trách nhiệm duy nhất (Single Owner):** Mỗi bài thí nghiệm bóc tách (A1–A5) do đúng một thành viên phụ trách toàn bộ từ chạy thử, lấy số liệu đến viết phân tích theo [Đặc tả 5 bài thí nghiệm bóc tách](experiments/ablation-studies.md); không giao chung để tránh đùn đẩy trách nhiệm.
 - **Tôn trọng quyền tự quyết phân tích:** Mỗi thành viên tự đào sâu dữ liệu, rút ra insights và nhận xét kỹ thuật khách quan cho phần mình phụ trách; không để AI hoặc một cá nhân áp đặt góc nhìn chủ quan (bias) lên bài báo.
 - **Làm việc gối đầu:** Khuyến khích các thành viên làm trước các khung bảng biểu, draft mục thảo luận và rà soát của Phase 4–5 ngay trong Phase 3 để đẩy nhanh tiến độ.

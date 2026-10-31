@@ -59,20 +59,24 @@ Cách chia stage giữ giống đồ án môn học để mỗi người làm ti
 ```mermaid
 flowchart LR
     P0["Phase 0<br/>Khởi động"] --> P1["Phase 1<br/>Pipeline và Pareto"]
-    P1 --> P2["Phase 2<br/>Controller, thí nghiệm, viết phương pháp"]
-    P2 --> P3["Phase 3<br/>Viết kết quả và hoàn thiện"]
-    P3 --> END["13/11 (Thứ 6)<br/>Nộp bài"]
+    P1 --> P2["Phase 2<br/>Controller & Thí nghiệm"]
+    P2 --> P3["Phase 3<br/>Đại thực nghiệm & Ablation"]
+    P3 --> P4["Phase 4<br/>Soạn thảo Full Draft"]
+    P4 --> P5["Phase 5<br/>Review & Hoàn thiện"]
+    P5 --> END["13/11 (Thứ 6)<br/>Nộp bài EasyChair"]
 ```
 
-| Phase | Tên | Deadline |
-|---|---|---|
-| 0 | Khởi động | 19/10 (Thứ 2) |
-| 1 | Pipeline và Pareto (Go/No-Go) | 25/10 (Chủ nhật) |
-| 2 | Controller, thí nghiệm, viết phương pháp | 31/10 (Thứ 7) |
-| 3 | Viết kết quả và hoàn thiện | |
-| | **Nộp bài** | **13/11 (Thứ 6)** |
+| Phase | Tên | Deadline | Trạng thái |
+|---|---|---|---|
+| 0 | Khởi động | 19/10 (Thứ 2) | ĐÃ XONG |
+| 1 | Pipeline và Pareto (Go/No-Go) | 25/10 (Chủ nhật) | ĐÃ XONG (GO) |
+| 2 | Controller, thí nghiệm, viết phương pháp | 31/10 (Thứ 7) | ĐÃ XONG (PASS) |
+| 3 | Đại thực nghiệm, Ablation và Phân tích độc lập | 05/11 (Thứ 5) | Đang thực hiện |
+| 4 | Soạn thảo toàn diện bản thảo (Full Draft) | 09/11 (Thứ 2) | Dự kiến (xem `specs/phase-4-5-draft.md`) |
+| 5 | Rà soát chéo, Chuẩn hóa OASIcs và Nộp bài | 12/11 (Thứ 5) | Dự kiến (xem `specs/phase-4-5-draft.md`) |
+| | **Nộp bài EasyChair chính thức** | **13/11 (Thứ 6)** | Dự phòng 3 ngày trước hạn 16/11 |
 
-Ngày 18/10, các phase còn lại được gộp từ 4 xuống 3 để kịp mốc nộp; mỗi phase vẫn tối đa 7 ngày (mục 4). Deadline và task của Phase 2, Phase 3 sẽ được giao khi phase trước hoàn tất.
+Để tránh dồn việc vào sát hạn chót và tăng cường làm việc song song, lộ trình từ 02/11 đến 13/11 được tổ chức thành các sprint ngắn (3–4 ngày). Kế hoạch tuân thủ nguyên tắc cuốn chiếu: Phase 3 có bảng task chi tiết; Phase 4 và 5 ghi ý chính và lưu dự thảo tạm thời tại `specs/phase-4-5-draft.md`. Các thành viên được phép làm gối đầu sớm các task viết bài và rà soát của Phase 4–5 ngay trong Phase 3.
 
 ## 6. Phase 0: Khởi động
 
@@ -160,27 +164,58 @@ Quy định riêng của Phase 2:
 
 Ngày review: 01/11 (Chủ nhật). Ghép Controller vào harness, chạy thử nghiệm pilot trên Colab T4, đánh giá speedup thực tế so với Fixed-Best và Oracle; lập task chi tiết cho Phase 3.
 
-### Phase 3: Viết kết quả và hoàn thiện (ý chính)
+### Phase 3: Đại thực nghiệm, Ablation và Phân tích độc lập
 
-Viết Results, Abstract, Conclusion; cả Nhóm review toàn bộ paper và sửa; kiểm tra ẩn danh, định dạng OASIcs và số trang trước khi nộp. Thời gian còn lại tới 13/11 (Thứ 6) dùng làm dự phòng.
+Deadline chung cho các task: 05/11 (Thứ 5).
+
+Điều kiện bắt đầu: Phase 2 đã nghiệm thu ĐẠT vào 01/11 (Chủ nhật), xem [Báo cáo nghiệm thu Phase 2](reports/phase-2-review-report.md).
+
+| Thành viên | Task | Tiêu chí nghiệm thu |
+|---|---|---|
+| **Tuấn** | 1. Cung cấp batch script tự động (`tools/colab_runner.py` / `stitch_harness`) chạy UDIS-D test set (1.106 cặp) trên Colab Tesla T4, trích xuất dữ liệu đo lường thô `telemetry_results.csv` cho 3 chế độ (`Fixed-Best`, `Oracle`, `Adaptive`)<br>2. Soạn thảo Section 5.1 (Experimental Protocol & Hardware Setup) ghi nhận chi tiết hệ thống đo lường, phần cứng, flags, seeds<br>3. Điều phối, review pull request và kiểm soát tiến độ chung của Nhóm | - File raw CSV đo đạc trên T4 hoàn chỉnh, không có dữ liệu lỗi/thiếu trường<br>- Section 5.1 súc tích, minh bạch, đúng chuẩn học thuật |
+| **Đế** | 1. Phân tích telemetry của Controller trên UDIS-D test set: phân bố các nấc thang (ladder distribution), tỉ lệ retry, số inliers phục hồi, và mổ xẻ các ca corner case (thất bại do `BUDGET_EXHAUSTED` hoặc parallax mạnh)<br>2. Chủ trì duy nhất (Single Owner) 2 bài thí nghiệm bóc tách: **Ablation A1** (Hiệu quả của Probe Signal S1 so với Blind Escalation) và **Ablation A2** (Lợi ích tiết kiệm thời gian của cơ chế tái sử dụng match trong S5 khi tăng $R$)<br>3. Chạy kiểm chứng hình học độc lập trên HPatches (59 chuỗi biến đổi góc nhìn có ground-truth homography), tính Mean Corner Error (MCE) chứng minh tính chính xác hình học<br>4. Soạn thảo draft phân tích Controller cho Section 5.2 và Section 6 (Discussion & Limitations) | - Báo cáo số liệu phân tích Controller rõ ràng, logic, không thiên vị<br>- 2 bài Ablation A1 và A2 có số liệu định lượng cụ thể chứng minh giá trị của cơ chế thiết kế<br>- Bảng kết quả sai số hình học MCE trên HPatches |
+| **Chương** | 1. Chạy công cụ QoR (SSIM, PSNR vùng chồng lấn) trên toàn bộ kết quả UDIS-D test set của 3 chế độ<br>2. Chủ trì duy nhất (Single Owner) 2 bài thí nghiệm bóc tách: **Ablation A4** (Same-Homography Blending: đối sánh chi phí và chất lượng giữa Feather, Multiband 3 và Multiband 5) và **Ablation A5** (Độ nhạy của ngưỡng chất lượng $\delta_S, \delta_P$)<br>3. Chạy stress-test độ phân giải (Synthetic 720p, 1080p, 4K) và chạy đo latency mở rộng trên L4 / A100 qua tài khoản Colab Pro (Cross-Architecture Study)<br>4. Xuất các biểu đồ vector (Pareto curve, Latency CDF, Bar charts), bảng số liệu LaTeX và chọn 2–3 ảnh so sánh trực quan (visual panorama) | - Báo cáo QoR hoàn tất, trích xuất được bảng latency breakdown và Pareto data<br>- 2 bài Ablation A4 và A5 có số liệu và biểu đồ đối sánh rõ ràng<br>- Dữ liệu so sánh độ trễ vi kiến trúc (T4 vs L4 vs A100) sẵn sàng đưa vào paper<br>- Các biểu đồ vector chuẩn xuất bản, sắc nét |
+| **Thành** | 1. Chủ trì duy nhất (Single Owner) **Ablation A3**: Phân tích chi tiết hành vi của S2 (FAST) và S3 (ORB) khi nhận ngân sách $K$ động ($K \in \{500, 1000, 2000\}$), đo độ co giãn latency và kiểm chứng tính ổn định bộ nhớ (zero-allocation)<br>2. Soạn thảo draft tiểu mục Feature Budget Allocation trong Section 5<br>3. Khởi động rà soát sớm văn phong học thuật (loại bỏ triệt để các dấu hiệu AI writing) cho các phần Section 1, 2, 3, 4 đã hoàn thành | - Bài Ablation A3 có bảng đối sánh định lượng thời gian và footprint bộ nhớ theo $K$<br>- Soạn thảo hoàn chỉnh nội dung S2–S3 cho Section 5<br>- Rà soát xong văn phong các section cũ, câu từ súc tích, mạch lạc |
+
+Quy định riêng của Phase 3:
+
+- **Phân vai Leader nhẹ gánh thực thi:** Tuấn tập trung vào điều phối, cung cấp công cụ tự động hóa chạy batch và duyệt PR; toàn bộ khối lượng thí nghiệm bóc tách, mổ xẻ dữ liệu và viết draft thô được phân bổ cho Đế, Chương, Thành.
+- **Nguyên tắc trách nhiệm duy nhất (Single Owner):** Mỗi bài thí nghiệm bóc tách (A1–A5) do đúng một thành viên phụ trách toàn bộ từ chạy thử, lấy số liệu đến viết phân tích; không giao chung để tránh đùn đẩy trách nhiệm.
+- **Tôn trọng quyền tự quyết phân tích:** Mỗi thành viên tự đào sâu dữ liệu, rút ra insights và nhận xét kỹ thuật khách quan cho phần mình phụ trách; không để AI hoặc một cá nhân áp đặt góc nhìn chủ quan (bias) lên bài báo.
+- **Làm việc gối đầu:** Khuyến khích các thành viên làm trước các khung bảng biểu, draft mục thảo luận và rà soát của Phase 4–5 ngay trong Phase 3 để đẩy nhanh tiến độ.
+
+Ngày review Phase 3: 05/11 (Thứ 5). Nghiệm thu toàn bộ số liệu đo đạc (freeze data), các bảng biểu/đồ thị và các draft phân tích độc lập; kích hoạt Phase 4.
+
+### Phase 4: Soạn thảo toàn diện bản thảo (Full Draft) (ý chính)
+
+Deadline dự kiến: 09/11 (Thứ 2).
+
+Mục tiêu chính: Tích hợp toàn bộ số liệu, bảng biểu, đồ thị từ Phase 3 vào `paper/`; viết hoàn chỉnh Section 5 (Experimental Evaluation), Section 6 (Discussion & Limitations), Section 7 (Conclusion); chốt các con số định lượng trong Abstract và hoàn thiện Introduction. Chi tiết phân công xem tại `specs/phase-4-5-draft.md`.
+
+### Phase 5: Rà soát chéo, Chuẩn hóa OASIcs và Nộp bài (ý chính)
+
+Deadline nội bộ: 12/11 (Thứ 5).
+Hạn chót nộp bài EasyChair: **13/11 (Thứ 6)** (giữ 3 ngày đệm an toàn trước hạn chót 16/11 của ban tổ chức).
+
+Mục tiêu chính: Cả Nhóm đọc chéo (peer-review) toàn bộ 10 trang bài báo; rà soát văn phong chống AI writing; kiểm tra audit ẩn danh kép (double-blind); căn chỉnh layout không tràn 10 trang OASIcs; nộp file PDF chính thức lên EasyChair. Chi tiết xem tại `specs/phase-4-5-draft.md`.
 
 ## 9. Dataset và benchmark
 
-Paper dùng dataset công khai để người khác tái lập được kết quả; không bắt buộc ảnh tự chụp. Chưa có benchmark dành riêng cho bài toán ghép ảnh trên GPU thích nghi theo ràng buộc chất lượng, nên Nhóm kết hợp các bộ phổ biến. Các ứng viên để Đế khảo sát và chốt ở Phase 0:
+Để đảm bảo tính khách quan toàn diện và chiều sâu học thuật, bài báo áp dụng chiến lược dữ liệu 3 trục độc lập:
 
-| Dataset | Nội dung | Phù hợp ở điểm nào |
-|---|---|---|
-| [CA-UDHN](https://github.com/JirongZhang/DeepHomography) (ECCV 2020) | Khoảng 80k cặp chia 5 loại cảnh: thường, ít texture, thiếu sáng, tiền cảnh nhỏ, tiền cảnh lớn. Tập test khoảng 4.2k cặp có 6-8 điểm tương ứng gán nhãn tay | Mỗi loại cảnh ứng với một mức độ khó, khớp với ý tưởng scene-aware |
-| [HPatches](https://arxiv.org/abs/1704.05939) | 116 chuỗi ảnh (59 chuỗi đổi góc nhìn), có homography đúng | Tính sai số hình học chính xác |
-| UDIS-D | 10.440 cặp train và 1.106 cặp test ảnh thật, có parallax, cảnh đêm, tối, tuyết; không có homography đúng | Kiểm tra trên ảnh thật, đo chất lượng vùng chồng lấn |
+| Trục dữ liệu | Bộ dữ liệu | Mục đích và Vai trò trong Paper | Người phụ trách |
+|---|---|---|---|
+| **1. Ảnh thực tế đa dạng cảnh** | **UDIS-D Test Set** (1.106 cặp ảnh) | Benchmark chính end-to-end: đo latency thực tế, tỉ lệ thành công, Overlap SSIM/PSNR; phân nhóm theo 4 loại cảnh (Normal, Low-texture, Night, Large parallax) để chứng minh tính Scene-Aware | Tuấn chạy batch, Đế & Chương phân tích |
+| **2. Đối chứng hình học chuẩn xác** | **HPatches** (59 chuỗi biến đổi góc nhìn) | Có homography đúng ($H_{\text{gt}}$ 100%): đo sai số hình học tuyệt đối (Mean Corner Error - MCE), chứng minh Controller không làm suy giảm độ chính xác hình học | Đế |
+| **3. Thử tải độ phân giải** | **Synthetic Scaling** (720p, 1080p, 4K) | Đo đạc sự co giãn tài nguyên và điểm nghẽn GPU ở độ phân giải lớn, làm nổi bật giá trị của núm $S$ và núm $B$ | Chương |
 
-Lưu ý: các bộ trên có độ phân giải thấp so với 1080p/4K. Để đo latency trên GPU ở độ phân giải cao, cần bổ sung cặp ảnh tổng hợp từ ảnh độ phân giải cao, biến đổi bằng homography đã biết. Ảnh tự chụp chỉ là tùy chọn bổ sung.
+Tập 25 cặp ảnh development đã dùng ở Phase 2 được giữ nguyên vai trò kiểm tra tính năng và khóa policy; tuyệt đối không dùng tập test để tune tham số nhằm giữ vững tính trung thực học thuật.
 
 ## 10. Môi trường chạy
 
-- Mọi build, test và đo đạc chạy trên Google Colab với GPU Tesla T4; build CUDA bằng `-arch=sm_75`.
-- `nvidia-smi` trên Colab đọc được công suất, nên có thể đo năng lượng.
-- Thí nghiệm cuối chạy trong cùng một phiên Colab; ghi tên GPU và xung nhịp cùng kết quả.
+- **Baseline chính (Primary):** Google Colab GPU Tesla T4 (kiến trúc Turing, `sm_75`, CUDA 13.0, Compute Capability 7.5). Toàn bộ bài đo chuẩn mực và bảng số liệu chính của bài báo chạy trên môi trường này.
+- **Nghiên cứu mở rộng xuyên kiến trúc (Cross-Architecture Study):** Tận dụng tài khoản Colab Pro để chạy mở rộng trên **L4 GPU (Ada Lovelace, `sm_89`)** và **A100 GPU (Ampere, `sm_80`)**. Thí nghiệm này đánh giá tính tổng quát hóa của Controller khi chuyển dịch giữa các thế hệ vi kiến trúc GPU khác nhau.
+- `nvidia-smi` ghi nhận xung nhịp, công suất (năng lượng) và thông tin phần cứng cụ thể trong từng phiên chạy; kết quả đo lường ghi nhận rõ môi trường thực thi.
 
 ## 11. Paper
 

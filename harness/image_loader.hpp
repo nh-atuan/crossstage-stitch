@@ -34,7 +34,6 @@ inline HostImageRGB load_ppm(const std::string& path) {
     }
 
     auto skip_comments = [&file]() {
-        char ch;
         while (file >> std::ws && file.peek() == '#') {
             std::string line;
             std::getline(file, line);

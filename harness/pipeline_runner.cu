@@ -549,7 +549,7 @@ void PipelineRunner::execute_adaptive_run(
     controller::Knobs executed_knobs = current_knobs;
     controller::Decision decision{};
     bool accepted = false;
-    int current_gen = 1;
+    std::uint64_t current_gen = 1;
     int completed_r = 0;
     double prev_s = probe_s; // Gray buffer currently holds probe_s
     int prev_k = -1;

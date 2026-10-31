@@ -5,6 +5,7 @@ find_package(OpenCV QUIET)
 add_executable(stitch_harness main.cpp pipeline_runner.cu)
 target_link_libraries(stitch_harness PRIVATE
   stitch_common
+  stitch_controller
   stitch_s1
   stitch_s2_s3
   stitch_s4

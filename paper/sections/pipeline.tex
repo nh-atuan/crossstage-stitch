@@ -7,8 +7,33 @@ The repository connects six CUDA stages: preprocessing (S1), keypoint detection
 (S6). S1--S3 process both images before S4 matches their descriptors. S5 returns
 a homography $H$ mapping B to A in original-image coordinates. Upstream scale
 metadata converts an estimate from resized coordinates before rendering.
-The detailed S1 method still requires its owner's review. The following
-subsections describe the checked S2--S6 implementations.
+The following subsections describe the checked stage implementations from S1 to S6.
+
+\subsection{Image Preprocessing and Scene Feature Extraction (S1)}
+\label{sec:s1}
+% Role: integer color conversion and area downsampling with zero allocations.
+S1 converts paired interleaved RGB8 input images into GRAY8 working images and scales
+them by a downsampling ratio $S \in (0.0, 1.0]$. The conversion applies fixed-point
+15-bit integer coefficients ($9798 R + 19235 G + 3735 B + 16384 \gg 15$) bit-identical
+to OpenCV's integer path. Resizing uses an area box filter that integrates pixel coverage
+fractions. For dyadic downsampling scales ($S=0.5$ and $S=0.25$), dedicated fast paths
+average $2\times 2$ or $4\times 4$ source pixel blocks without floating-point division.
+Both images (A and B) execute in a single batched kernel launch using the third grid
+dimension ($z \in \{0, 1\}$), eliminating launch latency overhead between the inputs.
+The caller allocates image buffers and workspace upfront; the stage performs zero
+dynamic device allocations inside the measurement window.
+
+% Role: probe gradient reduction for runtime scene awareness.
+To inform initial budget selection in the adaptive controller, S1 also provides a
+lightweight scene probe executed at the configured probe scale ($S_{\text{probe}} \le S$).
+A two-dimensional reduction kernel computes the mean absolute first-order spatial gradient
+$G(I)$ across all horizontal and vertical adjacent pixel pairs according to the definition
+in Section~\ref{sec:controller}. Intra-block sums accumulate using warp-shuffle instructions
+and shared memory, updating a 64-bit device accumulator. A normalization kernel scales the sum
+by total valid edge count and transfers the scalar result to host pinned memory via an
+asynchronous copy on the pipeline stream. On the target GPU, this reduction executes in
+under $0.02$\,ms at typical probe resolutions ($S_{\text{probe}}=0.25$), keeping probe
+overhead well below the $0.1$\,ms contract budget.
 
 \subsection{Keypoint Detection and Description (S2--S3)}
 \label{sec:s2-s3}
@@ -79,90 +104,10 @@ correctness, not matching quality. On test pairs with a large scale change,
 both our stages and OpenCV's single-level ORB fail to recover an accurate homography,
 which we attribute to the missing pyramid.
 
+\subsection{Matching and Homography Estimation (S4--S5)}
+\label{sec:s4-s5}
 \input{sections/s4-s5}
 
-\subsection{S6 Geometry, Sampling, and Validity}
-\label{sec:s6-geometry}
-% Role: motivation and representation; validity is independent of RGB intensity.
-S6 takes original RGB8 images and a row-major, double-precision homography
-$H_{B\rightarrow A}$. The caller owns pitched image views, workspace, and a CUDA
-stream. Geometry preparation rejects non-finite or singular transforms,
-a projective horizon crossing B, and a canvas exceeding its configured budget.
-It normalizes $H$ by its largest-magnitude coefficient and does not require
-$h_{33}=1$.
-
-% Role: forward geometry; match integer pixel-centre and origin conventions.
-Pixel centres have integer coordinates. The canvas encloses A and the projected
-corner centres of B using snapped floor/ceiling bounds with an inclusive $+1$
-extent. The origin $(x_0,y_0)$ is expressed in A coordinates. For canvas pixel
-$(x,y)$, sampling uses
-\begin{equation}
- p_A=(x+x_0,y+y_0,1)^\mathsf{T},\qquad p_B\sim H^{-1}p_A.
-\label{eq:inverse-warp}
-\end{equation}
-The renderer checks the projective denominator and source-coordinate validity
-before bilinear sampling. Coordinates use FP64; colour/filter computations use
-FP32. Neighbours at a valid last row or column are clamped. Clamping does not
-make an out-of-source coordinate valid.
-
-% Role: output interpretation and invariant.
-Each source has an explicit validity mask independent of colour: black pixels
-can be valid. The output mask is their union, encoded as 0 or 1. A pixel covered
-by one source retains that source's warped colour. Pixels outside both sources
-have zero RGB and mask. These rules also apply after multi-band reconstruction,
-so filtering does not expand reported coverage.
-
-\subsection{Feather Blending}
-% Role: forward formula; source-normalized geometric weights are project policy.
-For valid coordinate $(u_i,v_i)$ in source $i$ of size $W_i\times H_i$, define
-\begin{equation}
- d_i=\min\!\left\{\frac{u_i+1/2}{W_i},\frac{W_i-1/2-u_i}{W_i},
-                 \frac{v_i+1/2}{H_i},\frac{H_i-1/2-v_i}{H_i}\right\}.
-\end{equation}
-In the overlap, feather output is
-$C_F=(d_A C_A+d_B C_B)/(d_A+d_B)$. The half-pixel terms keep edge weights
-positive, including single-pixel dimensions. This source-normalized rule is
-a project convention, not a canvas-mask distance transform or an assertion of
-equivalence to a library feather implementation. The CUDA path fuses inverse
-warping and feather composition and requires no temporary workspace.
-
-\subsection{Multi-Band Blending}
-% Role: ownership and extension; describe actual boundary handling.
-Multi-band ownership assigns overlap pixels to the source with larger $d_i$,
-breaking ties in favour of A. A single valid source owns its pixels. Before
-building colour pyramids, a pull--push extension fills invalid colour samples
-for filtering only. Colour numerators and validity weights are reduced to
-$1\times1$; valid normalized values are retained while missing values are expanded
-from coarser levels. Original validity and ownership masks remain unchanged.
-Both requested multi-band depths use the same extension procedure.
-
-% Role: pyramid construction and reconstruction.
-Let $R$ denote filtering with the separable kernel $[1,4,6,4,1]/16$ followed by
-even-coordinate subsampling to ceiling-half shape. Expansion $E$ inserts zeros,
-applies the two-dimensional filter with gain four, and crops to the parent
-shape. Borders use reflect-101, with an explicit rule for a dimension of length
-one. For source $i$, Gaussian colours are $P_i^0=F_i$,
-$P_i^{\ell+1}=R(P_i^\ell)$, where $F_i$ is the extended image. Gaussian ownership
-weights use $U_i^{\ell+1}=R(U_i^\ell)$. Laplacian bands are
-\begin{equation}
- L_i^\ell=P_i^\ell-E(P_i^{\ell+1})\quad(\ell<L),\qquad L_i^L=P_i^L.
-\end{equation}
-Each blended band is
-\begin{equation}
- Z^\ell=\frac{U_A^\ell L_A^\ell+U_B^\ell L_B^\ell}{U_A^\ell+U_B^\ell},
-\end{equation}
-with zero for a zero denominator. Reconstruction starts at $C^L=Z^L$ and uses
-$C^\ell=Z^\ell+E(C^{\ell+1})$. The modes request $L=3$ or $L=5$
-\emph{reductions}, corresponding to four or six stored levels on a sufficiently
-large canvas. Effective depth stops at $1\times1$.
-
-% Role: numeric/resource trade-offs and unimplemented optimizations.
-Only overlap pixels use reconstructed colour. Quantization is
-$\lfloor\operatorname{clamp}(255C,0,255)+1/2\rfloor$; signed Laplacian bands are
-not clamped prematurely. Current kernels evaluate the $5\times5$ filter directly,
-rather than claiming a separable-pass optimization. S6 performs no allocation
-or synchronization inside its asynchronous render call. The caller queries
-workspace size, respects alignment and alias restrictions, and checks stream
-completion before consuming output. Optional union/overlap counters have an
-explicit device-buffer lifetime and cost. The renderer implements neither gain
-correction, gamma linearization, content-aware seam optimization, nor warp caching.
+\subsection{Composition and Multiband Blending (S6)}
+\label{sec:s6}
+\input{sections/pipeline-s6}

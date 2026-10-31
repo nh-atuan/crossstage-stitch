@@ -153,3 +153,31 @@ def test_s1_invalid_scale():
         s1_scale_info(100, 100, 1.5)
     with pytest.raises(ValueError):
         s1_scale_info(0, 100, 0.5)
+
+
+def s1_mean_abs_gradient_reference(gray: np.ndarray) -> float:
+    """Mean absolute gradient matching docs/controller-contract.md section 4.1."""
+    h, w = gray.shape
+    if w < 2 or h < 2:
+        raise ValueError("Image dimensions must be at least 2x2")
+    diff_h = np.abs(gray[:, 1:].astype(np.int64) - gray[:, :-1].astype(np.int64)).sum()
+    diff_v = np.abs(gray[1:, :].astype(np.int64) - gray[:-1, :].astype(np.int64)).sum()
+    total_diff = diff_h + diff_v
+    num_edges = h * (w - 1) + w * (h - 1)
+    return float(total_diff) / (255.0 * float(num_edges))
+
+
+def test_s1_mean_abs_gradient():
+    # 1. Constant image gives G = 0.0
+    const_img = np.full((120, 160), 128, dtype=np.uint8)
+    assert s1_mean_abs_gradient_reference(const_img) == 0.0
+
+    # 2. Checkerboard image gives G = 1.0
+    y_idx, x_idx = np.indices((10, 10))
+    checker = ((x_idx + y_idx) % 2 * 255).astype(np.uint8)
+    assert math.isclose(s1_mean_abs_gradient_reference(checker), 1.0, rel_tol=1e-9)
+
+    # 3. Known gradient
+    ramp = np.tile(np.arange(0, 256, step=2, dtype=np.uint8), (50, 1))
+    g = s1_mean_abs_gradient_reference(ramp)
+    assert 0.0 < g < 1.0

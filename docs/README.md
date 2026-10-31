@@ -60,3 +60,4 @@ docs/
 2. **Cập nhật stage:** Tài liệu giải thuật hoặc bằng chứng đo kiểm đặt trong `docs/stages/`.
 3. **Báo cáo mốc:** Kết thúc mỗi phase, báo cáo tổng kết được lưu trong `docs/reports/`.
 4. **Đường dẫn liên kết:** Luôn sử dụng đường dẫn tương đối (relative path) và kiểm tra tính toàn vẹn của liên kết khi chuyển đổi hoặc tạo tài liệu mới.
+

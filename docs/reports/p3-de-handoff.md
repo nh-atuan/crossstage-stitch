@@ -1,4 +1,65 @@
-# Bàn giao phần chuẩn bị Phase 3 của Đế
+# Bàn giao Phase 3 của Đế
+
+## Cập nhật sau khi kết nối được T4
+
+Cập nhật 01/11 (Chủ nhật), năm 2026. Code đo đã commit tại `8e1380f`.
+Các mục phía dưới phần cập nhật này là bản bàn giao trước khi kết nối được
+T4, giữ để đối chiếu; trạng thái hiện tại theo phần cập nhật này.
+
+Bridge MCP đã khôi phục quyền đọc/chạy notebook. Đã quan sát Tesla T4,
+15360 MiB VRAM, CUDA, CMake và compute-sanitizer. Source được truyền bằng
+archive vì repo không clone được khi thiếu GitHub authentication. Git snapshot
+trên Colab được ghi riêng với source revision local và hash source/binary;
+không coi snapshot đó là commit của nhánh local.
+
+Kiểm chứng đã quan sát trên T4: bản gốc 15/15 CTest; bản instrumentation
+16/16 CTest; 381 test Python; memcheck Controller/S5 và harness với ảnh
+HPatches rộng 2456 px đều 0 errors. Smoke adaptive ba pair, 2 warmup/10
+repeat có đủ trace và phân tích thành công. Lần chạy Python đầu trên source
+archive có sáu test fail vì thiếu `.git`; đã bổ sung metadata Git thật rồi
+chạy lại, không sửa hoặc vô hiệu hóa test. Local hiện có 382 test Python pass,
+gồm test sinh bảng LaTeX/PDF/SVG và kiểm hai biến thể reuse cùng kết quả.
+
+UDIS-D testing.zip thiếu input1/000001.jpg. Đã khôi phục ảnh từ repo khác của
+cùng tác giả; ảnh B khớp từng byte với archive. Receipt ghi URL, commit và
+SHA-256. Đã chuẩn bị đủ 1106 pair UDIS-D và 295 pair từ 59 viewpoint sequence
+HPatches. Harness cấp phát theo kích thước input trước vùng đo, giữ nguyên
+ảnh gốc và kiểm giới hạn canvas. Chi tiết ở
+[quyết định campaign](../decisions/p3-de-campaign.md).
+
+Đã khởi chạy worker đo UDIS-D (Fixed/Adaptive/No Reuse) rồi HPatches
+(Fixed/Adaptive), seed 20261101, 2 warmup/10 repeat, batch 32; đảo thứ tự mode
+theo batch. Không chạy hai campaign GPU song song. Output từ repo Colab là
+`../results/p3-de-t4-20261101/`; mỗi batch có CSV, trace, log và hash receipt.
+
+Sau khi khởi chạy, yêu cầu đọc log/notebook chưa được frontend trả lời.
+Chưa biết worker còn chạy, đã xong hay bị lỗi; không gửi lại lệnh campaign.
+Chưa có số liệu campaign được đọc, tải về local hoặc đưa vào paper. Không
+khẳng định giữ được phiên chỉ từ việc Popen trả PID. Runtime chưa mount Drive,
+nên cần tải checkpoint về máy ngay khi kết nối phục hồi.
+
+Nếu kiểm tra thủ công, tạo **cell mới**, không chạy lại cell khởi động job.
+Với notebook ở thư mục mặc định Colab:
+
+```python
+from pathlib import Path
+root = Path.cwd() / 'p3-de-work'
+print((root / 'campaign.log').read_text()[-5000:])
+for path in (root / 'results/p3-de-t4-20261101').glob('*/progress.json'):
+    print(path.parent.name, path.read_text())
+print('complete:', (root / 'results/p3-de-t4-20261101/measurements-complete.json').exists())
+```
+
+Module mới `p3_report.py` sinh JSON, bảng LaTeX, PDF/SVG từ raw CSV;
+`p3_cases.py` xuất case ledger và ảnh diagnostic. Dependency báo cáo ở
+`tools/controller/requirements-report.txt`. Các module này đã kiểm bằng
+fixture local nhưng chưa chạy trên kết quả campaign hoặc compile LaTeX.
+Sau khi kết nối phục hồi, cần đồng bộ module mới lên Colab, kiểm receipt
+campaign, sinh báo cáo, xem corner case và hoàn tất draft Section 5.2/6.
+
+**Cả bốn task chưa nghiệm thu** vì còn thiếu kết quả đo và phân tích cuối.
+
+## Bản bàn giao trước khi kết nối T4
 
 - **Ngày:** 01/11 (Chủ nhật), năm 2026.
 - **Deadline phase:** 05/11 (Thứ 5).

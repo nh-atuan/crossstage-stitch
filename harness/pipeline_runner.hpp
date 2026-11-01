@@ -19,6 +19,7 @@
 #include "s6/s6.hpp"
 #include "harness/harness_types.hpp"
 #include "harness/image_loader.hpp"
+#include "harness/attempt_trace.hpp"
 
 namespace stitch::harness {
 
@@ -36,6 +37,8 @@ public:
 
     // Upload image pair A and B to device outside the measurement window
     void upload_pair(const HostImageRGB& img_a, const HostImageRGB& img_b);
+    void set_reuse_enabled(bool enabled) { reuse_enabled_ = enabled; }
+    const AttemptTrace& attempt_trace() const { return trace_; }
 
     // Execute one fixed/oracle run without any cudaMalloc in the measurement window
     void execute_run(const HarnessConfig& config,
@@ -62,6 +65,9 @@ public:
                               RunRecord* record);
 
 private:
+    bool reuse_enabled_{true};
+    AttemptTrace trace_{};
+    int allocated_width_{}, allocated_height_{};
     cudaStream_t stream_{nullptr};
 
     // CUDA timing events

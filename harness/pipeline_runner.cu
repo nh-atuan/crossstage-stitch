@@ -115,6 +115,8 @@ PipelineRunner::~PipelineRunner() {
 
 void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r) {
     if (initialized_) return;
+    allocated_width_ = max_w;
+    allocated_height_ = max_h;
 
     // Allocate input image buffers
     dev_img_a_.width = max_w;
@@ -248,6 +250,9 @@ void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r) {
 }
 
 void PipelineRunner::upload_pair(const HostImageRGB& img_a, const HostImageRGB& img_b) {
+    if (!initialized_ || img_a.width > allocated_width_ || img_b.width > allocated_width_ ||
+        img_a.height > allocated_height_ || img_b.height > allocated_height_)
+        throw std::runtime_error("input exceeds allocated pipeline dimensions");
     cur_w_a_ = img_a.width;
     cur_h_a_ = img_a.height;
     cur_w_b_ = img_b.width;
@@ -397,6 +402,8 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
     s6::Geometry geom{};
     s6::GeometryPolicy geom_policy{};
     Status g_stat = s6::prepare_geometry(cur_w_a_, cur_h_a_, cur_w_b_, cur_h_b_, pinned_h_res_->H, geom_policy, &geom);
+    if (g_stat == Status::OK && (geom.width > kMaxCanvasDim || geom.height > kMaxCanvasDim))
+        g_stat = Status::INSUFFICIENT_WORKSPACE;
     if (g_stat != Status::OK) {
         const auto t_host_end = std::chrono::steady_clock::now();
         record->t_e2e = std::chrono::duration<double, std::milli>(t_host_end - t_host_start).count();
@@ -477,6 +484,8 @@ void PipelineRunner::execute_adaptive_run(
     record->is_warmup = is_warmup;
     record->seed = seed;
     record->cache_hit = 0;
+    trace_.count = 0;
+    *pinned_h_res_ = HomographyResult{};
 
     const auto t_host_start = std::chrono::steady_clock::now();
 
@@ -558,6 +567,12 @@ void PipelineRunner::execute_adaptive_run(
     double total_s2_ms = 0.0, total_s3_ms = 0.0, total_s4_ms = 0.0, total_s5_ms = 0.0;
 
     while (true) {
+        if (trace_.count == static_cast<int>(trace_.records.size())) {
+            throw std::runtime_error("adaptive attempt trace capacity exceeded");
+        }
+        const auto attempt_start = std::chrono::steady_clock::now();
+        const double s4_before = total_s4_ms, s5_before = total_s5_ms;
+        int eligible_r_old = 0;
         attempts++;
         bool rerun_s1 = (current_knobs.S != prev_s);
         bool rerun_s2 = rerun_s1 || (current_knobs.K != prev_k);
@@ -578,8 +593,13 @@ void PipelineRunner::execute_adaptive_run(
                 rerun_s2 = true; rerun_s4 = true;
             }
             if (plan.extend_s5) {
-                prev_r = completed_r;
-                record->cache_hit = 1;
+                eligible_r_old = completed_r;
+                if (reuse_enabled_) {
+                    prev_r = completed_r;
+                    record->cache_hit = 1;
+                } else {
+                    rerun_s4 = true;
+                }
             }
             if (plan.change_generation) {
                 current_gen++;
@@ -685,6 +705,18 @@ void PipelineRunner::execute_adaptive_run(
             break;
         }
 
+        auto& trace = trace_.records[trace_.count++];
+        trace.knobs = current_knobs;
+        trace.decision = decision;
+        trace.homography = *pinned_h_res_;
+        trace.previous_R = prev_r;
+        trace.eligible_R_old = eligible_r_old;
+        trace.generation = current_gen;
+        trace.t_s4 = total_s4_ms - s4_before;
+        trace.t_s5 = total_s5_ms - s5_before;
+        trace.t_attempt = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - attempt_start).count();
+
         if (decision.action == controller::Action::ACCEPT) {
             accepted = true;
             break;
@@ -733,6 +765,8 @@ void PipelineRunner::execute_adaptive_run(
         s6::Geometry geom{};
         s6::GeometryPolicy geom_policy{};
         Status g_stat = s6::prepare_geometry(cur_w_a_, cur_h_a_, cur_w_b_, cur_h_b_, pinned_h_res_->H, geom_policy, &geom);
+        if (g_stat == Status::OK && (geom.width > kMaxCanvasDim || geom.height > kMaxCanvasDim))
+            g_stat = Status::INSUFFICIENT_WORKSPACE;
         if (g_stat != Status::OK) {
             const auto t_host_end = std::chrono::steady_clock::now();
             record->t_e2e = std::chrono::duration<double, std::milli>(t_host_end - t_host_start).count();

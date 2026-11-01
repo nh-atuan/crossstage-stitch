@@ -1,6 +1,7 @@
 // Benchmark Harness entry point (stitch_harness).
 // Supports fixed baseline, oracle, and adaptive controller modes.
 #include <chrono>
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -96,6 +97,8 @@ int main(int argc, char** argv) {
     std::string split = "dev";
     std::string run_id = generate_run_id();
     std::string mode = "fixed";  // "fixed", "oracle", "adaptive"
+    std::string trace_path;
+    bool reuse_enabled = true;
 
     // Single run options
     std::string img_a_path, img_b_path;
@@ -112,6 +115,8 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--manifest" && i + 1 < argc) manifest_path = argv[++i];
+        else if (arg == "--trace-out" && i + 1 < argc) trace_path = argv[++i];
+        else if (arg == "--no-reuse") reuse_enabled = false;
         else if (arg == "--configs" && i + 1 < argc) configs_path = argv[++i];
         else if (arg == "--out" && i + 1 < argc) out_path = argv[++i];
         else if (arg == "--dataset" && i + 1 < argc) dataset = argv[++i];
@@ -135,6 +140,8 @@ int main(int argc, char** argv) {
                       << "Modes:\n"
                       << "  --mode <fixed|oracle|adaptive>  Execution mode (default: fixed)\n"
                       << "  --adaptive                      Shortcut for --mode adaptive\n"
+                      << "  --trace-out <path>              Per-attempt Controller trace CSV\n"
+                      << "  --no-reuse                      A2 control: rerun S4/S5 for R-only retries\n"
                       << "  --oracle                        Shortcut for --mode oracle\n"
                       << "Batch options:\n"
                       << "  --manifest <path>               Pairs JSON manifest\n"
@@ -236,8 +243,18 @@ int main(int argc, char** argv) {
 
     // Initialize pipeline runner with maximum bounds
     PipelineRunner runner;
+    runner.set_reuse_enabled(reuse_enabled);
     try {
-        runner.initialize(2048, 2048, 4000, 2048);
+        int max_width = 2048, max_height = 2048;
+        const auto directory = manifest_path.empty() ? std::string{} : get_parent_dir(manifest_path);
+        for (const auto& pair : pairs) {
+            for (const auto& path : {pair.img_a_path, pair.img_b_path}) {
+                const auto image = load_image(join_paths(directory, path));
+                max_width = std::max(max_width, image.width);
+                max_height = std::max(max_height, image.height);
+            }
+        }
+        runner.initialize(max_width, max_height, 4000, 2048);
     } catch (const std::exception& e) {
         std::cerr << "Failed to initialize pipeline runner: " << e.what() << "\n";
         return 1;
@@ -249,6 +266,16 @@ int main(int argc, char** argv) {
         return 1;
     }
     write_csv_header(csv_out);
+    std::ofstream trace_out;
+    if (!trace_path.empty()) {
+        if (mode != "adaptive") {
+            std::cerr << "Attempt trace requires adaptive mode.\n";
+            return 1;
+        }
+        trace_out.open(trace_path);
+        if (!trace_out) return 1;
+        write_attempt_header(trace_out);
+    }
 
     std::cout << "Starting benchmark harness:\n"
               << "  Mode: " << mode << "\n"
@@ -282,14 +309,17 @@ int main(int argc, char** argv) {
                 RunRecord rec;
                 runner.execute_adaptive_run(controller, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, w, 1, seed, &rec);
                 write_csv_row(csv_out, rec);
+                if (trace_out.is_open()) write_attempt_rows(trace_out, rec, runner.attempt_trace());
             }
             for (int r = 0; r < num_repeats; ++r) {
                 RunRecord rec;
                 runner.execute_adaptive_run(controller, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, r, 0, seed, &rec);
                 write_csv_row(csv_out, rec);
+                if (trace_out.is_open()) write_attempt_rows(trace_out, rec, runner.attempt_trace());
                 total_runs++;
             }
             csv_out.flush();
+            if (trace_out.is_open()) trace_out.flush();
         } else {
             // Fixed-Best or Oracle mode
             for (const auto& cfg : configs) {

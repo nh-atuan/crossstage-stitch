@@ -53,8 +53,6 @@ def prepare(root: Path, output: Path, expected_sequences: int = 59) -> dict:
             image = cv2.imread(str(path), cv2.IMREAD_COLOR)
             if image is None or min(image.shape[:2]) < 2:
                 raise ValueError(f'unreadable image: {path}')
-            if max(image.shape[:2]) > 2048:
-                raise ValueError('input exceeds current harness allocation; do not resize ground truth implicitly')
             images[index] = image.shape[:2]
             sources[str(path.relative_to(root))] = sha256(path)
         for index in range(2, 7):

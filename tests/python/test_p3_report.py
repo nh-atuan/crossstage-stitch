@@ -1,5 +1,7 @@
 """Publication assets are generated from real-shaped raw CSVs, never fixture numbers in source."""
 import json
+import csv
+import shutil
 import cv2
 import numpy as np
 import pytest
@@ -38,6 +40,10 @@ def test_end_to_end_report_assets_and_correctness_guard(tmp_path):
     assert report['controller']['retry']['pairs_with_retry']==1
     assert report['a2']['pairs']==1
     assert report['geometry_comparison']['paired_adaptive_mean_px']==0
+    assert report['protocol']==dict(seed=7,warmups=0,repeats=10)
+    text=(output/'controller-results.tex').read_text()
+    assert 'seed 7, 0 warmups and 10 measured repeats' in text
+    assert '1 viewpoint sequences (1 pairs)' in text
     for name in ('controller-results.tex','controller-ladder.pdf','controller-ladder.svg','a2-retry.pdf','generation.json'):
         assert (output/name).stat().st_size>0
     image=tmp_path/'image.ppm'
@@ -47,6 +53,30 @@ def test_end_to_end_report_assets_and_correctness_guard(tmp_path):
     cases=export_cases(udis,visual_manifest,output/'cases')
     assert cases['selected'][0]['recovered_inliers']==15
     assert (output/'cases/case-review.png').stat().st_size>0
+    metadata=dict(inputs={pair:{'a':'a','b':'b'}},harness_sha256='binary',manifest_sha256='manifest',
+                  seed=7,warmup=0,repeats=10,dataset='hpatches',split='viewpoint',gpu={'name':'T4'})
+    (udis/'campaign.json').write_text(json.dumps(metadata))
+    study=tmp_path/'separate-a2'
+    shutil.copytree(udis,study)
+    for path in study.glob('*.csv'):
+        with path.open() as handle:
+            alternate=list(csv.DictReader(handle))
+        for row in alternate:row['run_id']='separate-a2'
+        write_csv(path,alternate)
+    (udis/'no_reuse.csv').unlink()
+    separate=build(udis,hp,manifest,tmp_path/'separate-report',a2_campaign=study)
+    assert separate['a2']['pairs']==1
+    bad={**metadata,'harness_sha256':'different-binary'}
+    (study/'campaign.json').write_text(json.dumps(bad))
+    with pytest.raises(ValueError,match='campaign identity mismatch: harness_sha256'):
+        build(udis,hp,manifest,tmp_path/'wrong-binary',a2_campaign=study)
+    (study/'campaign.json').write_text(json.dumps(metadata))
+    path=study/'no_reuse-attempts.csv'
+    with path.open() as handle:alternate=list(csv.DictReader(handle))
+    alternate[0]['reason']='DIFFERENT_PATH'
+    write_csv(path,alternate)
+    with pytest.raises(ValueError,match='retry path differs'):
+        build(udis,hp,manifest,tmp_path/'wrong-path',a2_campaign=study)
     rows[0]['num_inliers']=21
     write_csv(udis/'no_reuse.csv',rows)
     with pytest.raises(ValueError,match='num_inliers'):

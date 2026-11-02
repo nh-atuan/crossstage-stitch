@@ -81,7 +81,7 @@ def safe_path(root: Path, relative: str) -> Path:
     if not isinstance(relative, str) or not relative or "\\" in relative or ":" in relative:
         raise ValueError("invalid relative path")
     parts = PurePosixPath(relative).parts
-    if PurePosixPath(relative).is_absolute() or any(p in (".", "..") for p in parts):
+    if not parts or PurePosixPath(relative).is_absolute() or any(p in (".", "..") for p in parts):
         raise ValueError("path escapes artifact root")
     if PurePosixPath(relative).as_posix() != relative:
         raise ValueError("path must be canonical POSIX relative")

@@ -17,7 +17,7 @@ SIDES = {"input1": "a", "input2": "b"}
 SUFFIXES = {".jpg", ".jpeg", ".png", ".ppm"}
 
 
-def verify_source(archive: Path, source: Any, split: str, mode: str) -> None:
+def validate_source_metadata(source: Any, split: str, mode: str) -> None:
     keys = {"schema_version", "split", "author_source_url", "download_url", "sha256",
             "checksum_origin", "checksum_reference"}
     if not isinstance(source, dict) or set(source) != keys or source["schema_version"] != SOURCE_SCHEMA:
@@ -37,7 +37,12 @@ def verify_source(archive: Path, source: Any, split: str, mode: str) -> None:
     url = urlparse(source["download_url"])
     if mode == "real" and (url.scheme != "https" or url.hostname not in ("drive.google.com", "pan.baidu.com")):
         raise ValueError("real mode requires an author-linked HTTPS download provider")
-    if sha256(archive) != require_hash(source["sha256"]):
+    require_hash(source["sha256"])
+
+
+def verify_source(archive: Path, source: Any, split: str, mode: str) -> None:
+    validate_source_metadata(source, split, mode)
+    if sha256(archive) != source["sha256"]:
         raise ValueError("archive SHA-256 mismatch")
 
 

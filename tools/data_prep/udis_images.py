@@ -63,7 +63,10 @@ def decode_rgb(data: bytes, max_pixels: int) -> NDArray[np.uint8]:
     if min(width, height) <= 0 or width * height > max_pixels:
         raise ValueError("image exceeds pixel admission limit")
     # UNCHANGED preserves bit depth/channels and ignores EXIF orientation.
-    image = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+    try:
+        image = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+    except cv2.error as exc:
+        raise ValueError(f"image decoder rejected input: {exc}") from exc
     if image is None or image.dtype != np.uint8 or image.shape != (height, width, 3):
         raise ValueError("require decodable H x W x 3 uint8 image; no alpha/depth/channel coercion")
     return np.ascontiguousarray(image[:, :, ::-1])

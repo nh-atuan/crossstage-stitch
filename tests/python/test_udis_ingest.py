@@ -176,3 +176,14 @@ def test_real_verify_refuses_fixture_and_crc_failure_is_recorded(tmp_path: Path)
     assert report["ledger"][0]["status"] == "invalid"
     assert "CRC" in report["ledger"][0]["errors"][0]
     assert not (failed / "data_manifest.json").exists()
+
+
+def test_forged_evidence_label_cannot_hide_fixture_provenance(tmp_path: Path) -> None:
+    archive, source = archive_fixture(tmp_path)
+    output = tmp_path / "out"
+    ingest(archive, source, output, split="training", mode="fixture")
+    manifest = read_json(output / "data_manifest.json")
+    manifest["evidence_type"] = "real"
+    (output / "data_manifest.json").write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="author dataset source"):
+        verify_manifest(output / "data_manifest.json")

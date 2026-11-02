@@ -24,7 +24,7 @@ def test_atomic_no_clobber_and_strict_json(tmp_path: Path) -> None:
         atomic_json(tmp_path / "bad.json", {"x": float("nan")})
 
 
-@pytest.mark.parametrize("relative", ["../x", "/x", "C:/x", "a\\b", "a//b", "./x"])
+@pytest.mark.parametrize("relative", ["../x", "/x", "C:/x", "a\\b", "a//b", "./x", "."])
 def test_safe_paths(tmp_path: Path, relative: str) -> None:
     with pytest.raises(ValueError):
         safe_path(tmp_path, relative)

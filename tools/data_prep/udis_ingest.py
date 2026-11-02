@@ -9,7 +9,7 @@ import zlib
 
 import cv2
 
-from tools.data_prep.udis_archive import SPLITS, index_archive, verify_source
+from tools.data_prep.udis_archive import SPLITS, index_archive, validate_source_metadata, verify_source
 from tools.data_prep.udis_images import decode_rgb, pixel_hash, ppm_bytes
 from tools.repro.io import (atomic_bytes, atomic_json, digest, execution_flags, log,
                             read_json, require_hash, safe_path, sha256)
@@ -118,6 +118,8 @@ def verify_manifest(path: Path) -> dict[str, Any]:
         raise ValueError("missing/invalid data manifest")
     if value.get("dataset") != "UDIS-D" or value.get("split") not in SPLITS or value.get("evidence_type") not in ("real", "synthetic_fixture"):
         raise ValueError("invalid dataset provenance")
+    validate_source_metadata(value["source"], value["split"],
+                             "real" if value["evidence_type"] == "real" else "fixture")
     canonical = value["evidence_type"] == "real" and value["split"] == "testing"
     if type(value.get("canonical_test")) is not bool or value["canonical_test"] != canonical:
         raise ValueError("invalid canonical test declaration")

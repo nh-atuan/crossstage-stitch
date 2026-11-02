@@ -68,3 +68,25 @@ def test_receipt_cli_dry_run_and_verify(tmp_path: Path) -> None:
         assert main(["--output", str(output)]) == 0
     assert main(["--output", str(output), "--verify-only"]) == 0
     assert main(["--output", str(output), "--tool", "unknown=x", "--dry-run"]) == 2
+
+
+def test_receipt_tracks_dirty_source_content_and_deletions(tmp_path: Path) -> None:
+    (tmp_path / "source.py").write_bytes(b"changed source")
+
+    def source_probe(argv: list[str], cwd: Path) -> dict:
+        result = fake_probe(argv, cwd)
+        if "ls-files" in argv:
+            result["stdout"] = "source.py\x00deleted.py\x00"
+        if "status" in argv:
+            result["stdout"] = " M source.py\n D deleted.py"
+        return result
+
+    with patch("tools.env.generate_receipt.probe", side_effect=source_probe):
+        result = receipt(tmp_path, {}, [])
+    assert result["git"]["dirty"]
+    assert result["tracked_source"]["files_sha256"] == {"source.py": digest(b"changed source")}
+    assert result["tracked_source"]["missing_files"] == ["deleted.py"]
+    verify(result)
+    result["tracked_source"]["files_sha256"]["source.py"] = "0" * 64
+    with pytest.raises(ValueError, match="inventory hash"):
+        verify(result)

@@ -11,7 +11,8 @@ import subprocess
 import sys
 from typing import Any
 
-from tools.repro.io import atomic_json, execution_flags, log, read_json, sha256
+from tools.repro.io import (atomic_json, digest, execution_flags, json_bytes, log,
+                            read_json, require_hash, safe_path, sha256)
 
 SCHEMA = "environment-receipt-v1"
 TOOLS = ("git", "nvcc", "g++", "clang++", "cmake", "ctest", "compute-sanitizer")
@@ -40,6 +41,17 @@ def receipt(repo: Path, overrides: dict[str, str], evidence: list[Path]) -> dict
     status = probe([git, "status", "--porcelain=v1", "--untracked-files=all"], repo)
     if any(item["status"] != "available" for item in (revision, branch, status)):
         raise ValueError("cannot capture repository revision/branch/dirty status")
+    tracked = probe([git, "ls-files", "-z"], repo)
+    if tracked["status"] != "available":
+        raise ValueError("cannot capture tracked source inventory")
+    source_files = {}
+    missing_files = []
+    for relative in filter(None, tracked["stdout"].split("\x00")):
+        path = safe_path(repo, relative)
+        if path.is_file():
+            source_files[relative] = sha256(path)
+        else:
+            missing_files.append(relative)
     packages: dict[str, str | None] = {}
     for name in ("pytest", "numpy", "opencv-python", "pip"):
         try:
@@ -55,6 +67,9 @@ def receipt(repo: Path, overrides: dict[str, str], evidence: list[Path]) -> dict
             "host": {"platform": platform.platform(), "machine": platform.machine()},
             "git": {"sha": revision["stdout"], "branch": branch["stdout"],
                     "dirty": bool(status["stdout"]), "porcelain": status["stdout"].splitlines()},
+            "tracked_source": {"files_sha256": source_files, "missing_files": missing_files,
+                               "inventory_sha256": digest(json_bytes(source_files)),
+                               "limits": "Untracked files are listed by git status but are not source-hashed."},
             "python": {"executable": sys.executable, "version": platform.python_version(), "packages": packages},
             "tools": tools, "evidence": records,
             "gpu_execution": "not_performed", "test_execution": "not_performed_by_receipt",
@@ -76,6 +91,12 @@ def verify(value: Any) -> None:
         raise ValueError("invalid git provenance")
     if not isinstance(value.get("capability_matrix"), list) or len(value["capability_matrix"]) != 4:
         raise ValueError("invalid capability matrix")
+    source = value["tracked_source"]
+    if digest(json_bytes(source["files_sha256"])) != source["inventory_sha256"]:
+        raise ValueError("source inventory hash mismatch")
+    for relative, expected in source["files_sha256"].items():
+        safe_path(Path("."), relative)
+        require_hash(expected)
     for record in value["evidence"]:
         if sha256(Path(record["path"])) != record["sha256"]:
             raise ValueError("attached evidence changed")

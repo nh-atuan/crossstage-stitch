@@ -171,6 +171,8 @@ Deadline chung cho các task: 05/11 (Thứ 5).
 
 Tài liệu đi kèm: [Đặc tả 5 bài thí nghiệm bóc tách (Ablation Studies)](experiments/ablation-studies.md), [phương pháp quantum offline](research/quantum-integration-proposal.md) và [task quantum của Thành](research/quantum-integration-tasks.md).
 
+Thiết kế A4/A5 được chốt ngày 02/11 (Thứ 2): A4 dùng alignment invariant và seam crops định tính; A5 dùng lưới 5×4, controller hiệu chỉnh trên development theo policy và khóa trước test. A1/A2/A3 và quantum giữ phân công hiện tại.
+
 Điều kiện bắt đầu: Phase 2 đã nghiệm thu ĐẠT vào 01/11 (Chủ nhật), xem [Báo cáo nghiệm thu Phase 2](reports/phase-2-review-report.md).
 
 | Thành viên | Task | Tiêu chí nghiệm thu |

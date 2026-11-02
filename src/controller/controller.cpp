@@ -71,11 +71,12 @@ Status Controller::observe(const Feedback& feedback, Decision* decision) noexcep
             phase_ = Phase::Finished;
         } else {
             std::size_t next = ladder_position_ + 1;
-            if (result.reason == Reason::TOO_FEW_MATCHES) {
-                while (next < count_ && ladder_[next].S == feedback.executed.S &&
-                       ladder_[next].K == feedback.executed.K)
-                    ++next;
-            }
+            // Changing R cannot add matches. Skip candidates whose inlier
+            // requirement already exceeds the available correspondence count.
+            while (next < count_ && ladder_[next].S == feedback.executed.S &&
+                   ladder_[next].K == feedback.executed.K &&
+                   feedback.homography.num_matches < policy_.self_checks[next].min_inliers)
+                ++next;
             if (next < count_) {
                 result.action = Action::RETRY;
                 result.next = ladder_[next];

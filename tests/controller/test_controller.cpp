@@ -322,6 +322,47 @@ void test_retry_plan() {
     CHECK(plan_retry(a, b, nullptr) == Status::INVALID_ARGUMENT);
 }
 
+void test_retry_skips_unreachable_inlier_requirements() {
+    Fixture f;
+    f.checks[1].min_inliers = 25;
+    auto k = f.begin();
+    auto feedback = f.good(k);
+    feedback.homography.num_matches = 23;
+    feedback.homography.num_inliers = 6;
+    feedback.homography.inlier_ratio = 6.0 / 23;
+    Decision d{};
+    CHECK(f.controller.observe(feedback, &d) == Status::OK);
+    CHECK(d.action == Action::RETRY && detail::same_knobs(d.next, f.ladder[2]));
+
+    // Equality is feasible: R may improve the model to include every match.
+    f.controller.reset_pair();
+    k = f.begin();
+    feedback = f.good(k);
+    feedback.homography.num_matches = 25;
+    feedback.homography.num_inliers = 6;
+    feedback.homography.inlier_ratio = 6.0 / 25;
+    CHECK(f.controller.observe(feedback, &d) == Status::OK);
+    CHECK(d.action == Action::RETRY && detail::same_knobs(d.next, f.ladder[1]));
+
+    // A degenerate model still reports the usable correspondence count.
+    f.controller.reset_pair();
+    k = f.begin();
+    CHECK(f.controller.observe(f.failure(k, Status::DEGENERATE, 23), &d) == Status::OK);
+    CHECK(d.action == Action::RETRY && detail::same_knobs(d.next, f.ladder[2]));
+
+    // Exhaustion is explicit when every remaining candidate is unreachable.
+    Knobs ladder[4];
+    for (int i = 0; i < 4; ++i) {
+        ladder[i] = {0.5, 500, 64 + i, feather};
+        f.checks[i].min_inliers = 25;
+    }
+    f.controller.reset_pair();
+    CHECK(f.controller.initialize(ladder, 4) == Status::OK);
+    k = f.begin();
+    CHECK(f.controller.observe(f.failure(k, Status::DEGENERATE, 23), &d) == Status::OK);
+    CHECK(d.action == Action::REJECT && d.reason == Reason::BUDGET_EXHAUSTED);
+}
+
 void test_no_per_pair_allocations() {
     Fixture f;
     const auto scene = f.scene();
@@ -360,6 +401,7 @@ int main() {
     test_execution_errors_and_invalid_payloads();
     test_nonmonotone_ladder_and_blending();
     test_retry_plan();
+    test_retry_skips_unreachable_inlier_requirements();
     test_no_per_pair_allocations();
     std::puts("Controller host contract tests passed (synthetic policy; no GPU evidence)");
 }

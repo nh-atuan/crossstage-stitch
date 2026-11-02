@@ -225,7 +225,7 @@ Inlier count/ratio/coverage và residual là kết quả sau refinement. Không 
 
 Ladder phải hữu hạn, không trùng cấu hình và có cùng B trên mọi phần tử; `initialize` phải kiểm tra các điều kiện này trước run. Chỉ vị trí ladder phải tiến về phía trước; S/K/R có thể tăng hoặc giảm. Mỗi RETRY phải thay ít nhất một trong S/K/R; thay B trong run là lỗi contract, không phải ứng viên để bỏ qua. Không quay về vị trí cũ, số lượt không vượt độ dài ladder. Cấu hình cuối vẫn phải qua self-check.
 
-Nếu S5 báo thiếu 4 match, bỏ qua mọi ứng viên giữ nguyên cả S lẫn K: tăng/giảm R không tạo thêm match. Chọn ứng viên hợp lệ đầu tiên phía sau theo các điều kiện trên; không có thì REJECT/BUDGET_EXHAUSTED. Không yêu cầu S/K tăng chỉ để đáp ứng quy tắc transition; thứ tự ladder do policy riêng cung cấp.
+Nếu số match nhỏ hơn `min_inliers` của ứng viên giữ nguyên cả S lẫn K, bỏ qua ứng viên đó: tăng/giảm R không tạo thêm match, và số inlier không thể vượt số match. Quy tắc này bao gồm trường hợp S5 báo thiếu 4 match vì mọi self-check yêu cầu ít nhất 4 inlier. Chọn ứng viên hợp lệ đầu tiên phía sau theo các điều kiện trên; không có thì REJECT/BUDGET_EXHAUSTED. Không yêu cầu S/K tăng chỉ để đáp ứng quy tắc transition; thứ tự ladder do policy riêng cung cấp. Hiệu chỉnh ngày 03/11 (Thứ 3), năm 2026, theo [quyết định calibration](../decisions/p3-controller-calibration.md).
 
 Với S5 OK nhưng fail threshold, reason đầu tiên theo thứ tự: TOO_FEW_INLIERS, LOW_INLIER_RATIO, LOW_INLIER_COVERAGE, HIGH_RESIDUAL. S5 NOT_ENOUGH_POINTS dùng TOO_FEW_MATCHES, DEGENERATE dùng DEGENERATE_MODEL. Khi không còn ứng viên, reason là BUDGET_EXHAUSTED; feedback cuối vẫn giữ nguyên để caller biết lỗi chất lượng. Execution error luôn REJECT/EXECUTION_ERROR trước khi xét threshold.
 

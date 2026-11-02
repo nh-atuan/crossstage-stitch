@@ -4,14 +4,18 @@
 
 - Origin Skill: academic-research-suite / deep-research.
 - Origin Mode: nghiên cứu định hướng và thiết kế thực nghiệm theo RQ đã xác định.
-- Origin Date: 2026-10-24; cập nhật 24/10 (Thứ 7), năm 2026.
-- Verification Status: ANALYZED — đã đối chiếu nguồn và thiết kế; chưa chạy QAOA của dự án.
-- Version Label: quantum_catalogue_v2.
-- Snapshot: `d5d5acd`, nhánh `chuong/p1-s6-completion`; thay bản ngày 21/10. Các ngưỡng, owner và split mới dưới đây là đề xuất cần Nhóm duyệt.
+- Origin Date: 02/11 (Thứ 2), năm 2026; kế thừa khảo sát ngày 24/10 (Thứ 7).
+- Verification Status: ANALYZED / PLANNED — hướng offline và owner Thành đã được người dùng chốt; chưa chạy QAOA của dự án.
+- Version Label: quantum_catalogue_v3_thanh_parallel.
+- Snapshot hiện trạng: `main@ea992fa`; bản lịch sử `d5d5acd` chỉ phản ánh khảo sát trước đây. Hướng/owner đã chốt không đồng nghĩa mọi policy, split hoặc budget đề xuất dưới đây được duyệt.
 
 ## 1. Quyết định và phạm vi bàn giao
 
 **Primary Quantum Integration Path: Hướng A — Offline QUBO/QAOA catalogue selection for quality-constrained adaptive GPU panorama stitching.** Quantum giải bài toán chọn tập cấu hình nhỏ dùng chung cho nhiều cảnh từ bảng CUDA latency–QoR. Controller online và S1–S6 tiếp tục chạy cổ điển. B cố định trong thí nghiệm đầu; đề xuất feather, cần Chương và Nhóm xác nhận.
+
+**Quyết định ngày 02/11 (Thứ 2): Thành chủ trì quantum tooling và thí nghiệm offline; chạy song song với runtime không quantum.** Owner stage, controller và harness không đổi. Chương review QoR/B và tổng hợp paper; Đế giữ policy/reference và consumer catalogue; Tuấn cung cấp sweep và giữ hạ tầng đo. [Quyết định kỹ thuật](../decisions/p3-offline-quantum-catalogue.md) và [task Phase 3](quantum-integration-tasks.md) thay phân công đề xuất cũ.
+
+Catalogue được tạo offline là dữ liệu cấu hình, không là quantum state truyền vào CUDA. Pipeline mặc định phải build/chạy khi không cài quantum dependencies; giữ nguyên các kernels và public ABI S1–S6. QAOA không nhận RGB, không sửa H và không chạy trong đường xử lý từng ảnh. Chỉ sau validator và validation, Đế mới đưa catalogue vào consumer cổ điển; catalogue kém có thể ảnh hưởng budget/retry/QoR gián tiếp nên không được mặc định là an toàn hoặc nhanh hơn.
 
 Quantum là thành phần bắt buộc của kế hoạch: phải chạy QAOA circuit trên simulator cho ít nhất một instance phát sinh từ sweep CUDA, lưu raw distribution/bitstrings và so với classical solvers. Chỉ có công thức QUBO, SA hoặc toy circuit chưa hoàn thành tích hợp ứng dụng. QPU là tùy chọn; phiên này chưa xác nhận quyền truy cập QPU. Hai tài liệu hiện tại bàn giao nghiên cứu và backlog, chưa báo kết quả quantum đã thực hiện.
 
@@ -29,10 +33,10 @@ Chọn Hướng A: chọn catalogue cấu hình offline bằng QUBO và QAOA cho
 
 | Có bằng chứng tại checkout | Chưa có bằng chứng tại checkout |
 |---|---|
-| `src/s6`: geometry, warp, feather, multiband 3/5; 3/5 là số REDUCE | Kernel S1–S5 đầy đủ, root harness và controller end-to-end |
-| `tools/qor/evaluate.py`, `report.py`, policy versioned | Sweep CUDA S×K×R; policy đã được Đế duyệt |
-| FP64 reference, mock CPU, importer và CUDA validation runner | Catalogue thật, QUBO từ sweep, QAOA logs hoặc QPU runs |
-| Evidence S6 GTX 1650 và hai cặp Oxford trong bàn giao P1 | Nghiệm thu T4; benchmark UDIS-D của toàn runtime |
+| Source S1–S6, controller và harness fixed/oracle/adaptive đã merge | Quantum adapter/solver/circuit trong `tools/quantum/` |
+| Báo cáo nghiệm thu Phase 2 ghi root CTest 15/15 và sanitizer trên T4 | Raw characterization đủ provenance được tooling quantum kiểm tra; không thay bằng summary |
+| `tools/qor/`, policy versioned và `tools/controller/audit_sweep.py` dùng predicate chuẩn | Policy file vẫn `pilot-not-team-approved`; owner phải duyệt policy dùng cho quantum |
+| FP64 reference, same-H runner và historical classical formulation check | Catalogue từ QAOA, raw counts, solver logs, QPU runs hoặc benchmark W1/W2 |
 
 `results/s6-validation-20261023-final/s6-timings.csv` chỉ đo S6 steady-state. `results/s6-qor-smoke/runs.csv` có H mock ORB/SIFT nhưng không có t_e2e; đổi descriptor không phải sweep S/K/R. Không dùng chúng làm characterization chính. Không thấy artifact trong checkout không chứng minh thành viên khác chưa có dữ liệu trên nhánh riêng.
 
@@ -44,7 +48,7 @@ RQ chính giữ nguyên:
 
 Tách ba kiểm định: catalogue có ích không; encoding có đúng không; QAOA có thêm giá trị không. Biết trước mọi latency/QoR của một pair thì chọn cấu hình nhanh nhất chỉ cần quét C. Tính tổ hợp nằm ở việc nhiều pair cùng chia sẻ catalogue; không gán NP-hard cho một phép argmin online.
 
-Mốc nội bộ từ plan là review P1 ngày 25/10 (Chủ nhật), nộp bài ngày 13/11 (Thứ 6). Backlog quantum mới không thay lịch hoặc tự giao task cho các thành viên.
+Phase hiện tại là Phase 3, deadline chung 05/11 (Thứ 5); Phase 4 là 09/11 (Thứ 2), Phase 5/nộp nội bộ là 13/11 (Thứ 6). Nhánh runtime không quantum tiếp tục dù quantum thiếu input hoặc thất bại. Thiếu prototype quantum được ghi là chưa hoàn thành, không đổi deadline hoặc đánh dấu quantum đã làm bằng kết quả baseline.
 
 ## 3. Khảo sát và bảng so sánh A–F
 
@@ -75,6 +79,8 @@ C cần chi phí chuyển tiếp thực: tăng R có thể giữ matches/hypothe
 ### 4.1. Characterization là task đầu tiên
 
 Hoàn thành CUDA sweep qua harness của Tuấn và pipeline Đế tích hợp. Mỗi pair/config cần 2 warmup + 10 đo theo conventions, seed thuật toán cố định và H tất định. Nếu nghiên cứu nhiều seed RANSAC, dùng cohort/run riêng; không trộn thành 10 timing repeats.
+
+Thành nhận và kiểm tra dữ liệu qua adapter riêng; tái dùng semantics của `tools.controller.audit_sweep` và `tools.qor.evaluate.quality_decision`, không viết một predicate pass khác. `--mode oracle` của harness thực thi các cấu hình đầu vào, chưa tự bảo đảm đó là Oracle dưới QoR: phải audit grid rồi chọn offline. Các lỗi legacy của `tools.analysis.analyze_gonogo` không được đưa vào nhánh quantum bằng cách đọc nhãn pass cũ.
 
 Join `runs.csv`, `qor.csv`, `meta.json`; bảng dẫn xuất riêng `characterization.csv` có:
 
@@ -197,9 +203,25 @@ Repair optional: thêm cấu hình phủ nhiều uncovered rows nhất rồi rev
 
 ## 7. Protocol đánh giá hệ thống
 
+### Hai nhánh triển khai và đối chứng W0/W1/W2
+
+| Nhóm | Cách chọn cấu hình/catalogue | Vai trò thực nghiệm |
+|---|---|---|
+| W0 — Adaptive-original | Runtime/ladder baseline hiện có, cùng Fixed-Best và Oracle được audit | Nhánh không quantum độc lập, không bị chặn bởi solver/môi trường quantum |
+| W1 — Adaptive-classical-catalogue | Exact/CP-SAT/greedy hoặc classical solver được khai báo chọn catalogue | Đo giá trị thiết kế catalogue và làm đối chứng cho solver quantum |
+| W2 — Adaptive-QAOA-catalogue | QAOA simulator chọn catalogue; raw/repaired được ghi riêng | Đo đóng góp solver trên cùng bài toán; online consumer vẫn cổ điển |
+
+Thành triển khai và chạy solvers offline cho W1/W2; Đế/Tuấn quản lý consumer và instrumentation online. Không tạo runtime branch phụ thuộc Qiskit/Aer. W0 không cần đợi consumer mới; W1 cũng không cần đợi QAOA. Khi consumer chưa có, chỉ so solver/catalogue offline và ghi W1/W2 e2e `not_measured`, không suy latency online từ bảng cover.
+
+W1/W2 phải dùng cùng preprocessing/reduction, candidate set, policy/reference, split, B, consumer, selector family và tuning budget, self-check, reuse, retry/fallback cap. Lựa chọn catalogue và repair chỉ dùng development-fit; validation chọn tham số; test chỉ đánh giá sau lock. Không lấy seed tốt nhất trên test. Bảng chính giữ tất cả nghiệm và failures; matched-size control là bổ sung, không thay bảng chính. W0/W1 khác consumer hoặc policy phải công khai; không quy mọi khác biệt đó cho QAOA.
+
+Nhánh quantum đầu dùng một quality policy đã được Đế duyệt, không đồng thời chạy toàn lưới A5. User đã chốt A5 là controller theo policy hiệu chỉnh trên development; đó là sensitivity riêng do Chương chủ trì và không tự đổi policy của instance quantum.
+
+### Protocol khi có consumer đã kiểm chứng
+
 1. Khóa split trước fit. Development-fit tạo catalogue/selector; validation chọn rho, penalty, solver budget và controller thresholds. Final chỉ mở sau protocol lock, không dùng chọn seed đẹp hoặc fit lại.
 2. Group theo scene/source ảnh; report số groups/pairs, duplicate/missing/failure mỗi split. Khóa C, reference, B và policy; Đế xác nhận reference đáng tin.
-3. So Fixed-High, Fixed-Best, Oracle-C, Adaptive-full-grid, Adaptive-classical-catalogue, Adaptive-QAOA-catalogue và Oracle-P. Oracle-P tách catalogue loss khỏi controller loss. Giữ cùng selector family/data/tuning budget, self-check/reuse/fallback; thêm matched-size comparison khi có, không xóa nghiệm khác size khỏi bảng chính.
+3. So Fixed-High, Fixed-Best, Oracle-C, Adaptive-original (W0), Adaptive-classical-catalogue (W1), Adaptive-QAOA-catalogue (W2) và Oracle-P. W0 là ladder baseline đã đăng ký, không tự gọi là toàn grid nếu chưa có implementation đó. Oracle-P tách catalogue loss khỏi controller loss. Giữ cùng selector family/data/tuning budget giữa W1/W2, self-check/reuse/fallback; thêm matched-size comparison khi có, không xóa nghiệm khác size khỏi bảng chính.
 4. Initial selector chỉ dùng shape/features rẻ có trước quyết định, tính extraction cost; sau chạy mới dùng tín hiệu S5. Cấm pair_id lookup, H_ref, Oracle/Pass labels hoặc features của cấu hình chưa chạy. Offline labels chỉ dùng train/evaluate. Fixed-High fallback có thể ngoài P: báo |P|, |P union fallback|, retry/fallback rate, quality và latency sau fallback.
 5. P là tập, chưa phải ladder đơn điệu. Đế xác định thứ tự classical theo development cost, khóa retry cap/termination; không suy ra tăng S/K/R luôn tăng quality. Chỉ tăng R mới có thể giữ matches/hypothesis state theo S5 contract; đổi S/K invalidate dependencies; đổi H làm lại S6. Reuse on/off cần đối chiếu cả output/failure.
 6. `t_e2e` gồm controller, sync, retry và cache bookkeeping; giữ cả latency run thất bại. False acceptance = accepted-but-offline-fail/accepted-evaluable; false rejection = rejected-but-offline-pass/rejected-evaluable. Ghi counts và denominator, reference failure riêng; tín hiệu S5 không bảo đảm QoR.
@@ -216,7 +238,7 @@ Quantum offline không cộng vào từng ảnh. Công bố tổng offline thự
 
 | Ablation | Nội dung kiểm tra |
 |---|---|
-| Full grid vs classical catalogue | Giá trị nén với cùng selector/reuse |
+| W0 original vs W1 classical catalogue | Giá trị catalogue/consumer; công khai khác biệt, giữ selector family/reuse và budget đối chứng |
 | Classical vs quantum catalogue | Cùng instance/policy/controller; thêm matched-size |
 | QAOA vs SA/random/exact/greedy | Same-QUBO QAOA/SA, native cover exact/greedy |
 | Reduction on/off | Optimum/mapping, bits/couplings/time; resource-limit ghi rõ |
@@ -233,12 +255,14 @@ Quantum selector không thuộc primary: classical-vs-quantum selector ablation 
 
 Không thêm/cài dependency trong lượt viết. Đề xuất môi trường riêng Python 3.12 CPU, tách `tools/requirements.txt`. Task môi trường thử compatibility, pin versions/hashes vào `tools/quantum/requirements-lock.txt`, lưu OS/CPU/RAM/threads và license/NOTICE trực tiếp/transitive.
 
+Classical core/CLI/tests chỉ cần stdlib/NumPy, CP-SAT có extra OR-Tools riêng; Qiskit/Aer được import muộn trong backend QAOA. Package initializer và consumer catalogue online không import quantum SDK. Điều kiện này phải có smoke test trong môi trường không cài Qiskit/Aer để W0/W1 tiếp tục độc lập; lockfile quantum không trở thành requirements của pipeline.
+
 - Qiskit và Qiskit Aer: Apache-2.0 theo LICENSE chính thức [D4,D5]. QAOAAnsatz hoặc circuit tương đương cần test với oracle NumPy; CPU simulator đủ cho pilot, không cần account [D1].
 - OR-Tools CP-SAT: Apache-2.0 [D6]; native integer cover và status handling theo [D3].
 - NumPy có sẵn ở tooling; validator/exhaustive/greedy/SA/random có thể dựa NumPy/stdlib. SPSA nhỏ có thể cài riêng với test, chưa thêm optimizer package mặc định.
 - Ocean/QPU ngoài install plan MVP. Trước dùng cần xác minh version/license/API, quyền truy cập, chi phí, embedding/chain strength/break handling/reads. Backend chỉ cần instance được phép chia sẻ, không cần RGB/manuscript.
 
-CLI dự kiến, **chưa tồn tại**: `tools.quantum.characterize`, `build_instance`, `solve_classical`, `solve_qaoa`, `evaluate_catalogue`. Tests dự kiến `tests/python/test_quantum_*.py`; data/results/build theo gitignore. Catalogue schema riêng, không sửa common ABI. Đế giữ controller/S4–S5/QoR; Tuấn harness/S1/common và merge; Thành S2–S3; Chương được đề xuất quantum tooling và giữ S6. Chi tiết ở [quantum-integration-tasks.md](quantum-integration-tasks.md).
+CLI dự kiến, **chưa tồn tại**: `tools.quantum.characterize`, `build_instance`, `solve_classical`, `solve_qaoa`, `evaluate_catalogue`. Tests dự kiến `tests/python/test_quantum_*.py`; data/results/build theo gitignore. Catalogue schema riêng, không sửa common ABI. Thành chủ trì quantum tooling, classical controls, simulator, tests và báo cáo solver, đồng thời giữ S2–S3/A3. Đế giữ controller/S4–S5 và duyệt policy; Tuấn giữ harness/S1/common/merge; Chương giữ S6/A4/A5, review QoR và tổng hợp paper. Chi tiết ở [quantum-integration-tasks.md](quantum-integration-tasks.md).
 
 ## 9. Rủi ro và tiêu chí phản bác
 
@@ -288,13 +312,15 @@ Khuyến nghị Go cho A ở quy mô simulator có budget, bắt đầu bằng s
 
 ## 11. Trạng thái và quyết định còn chờ
 
-Đã cập nhật snapshot S6/QoR, đọc attachment, đối chiếu nguồn sơ cấp và thiết kế protocol có thể phản bác. Chưa chạy QAOA/QPU hoặc tạo sweep CUDA mới. Kết quả 441 ma trận cover trong bản cũ là lịch sử kiểm tra nhỏ, không thay tests của implementation mới hay chứng nhận mọi reduction.
+Ngày 02/11 (Thứ 2) đã chốt hướng offline, Thành chủ trì và nhánh không quantum chạy song song; cập nhật hiện trạng source/plan sau Phase 2. Lượt này chỉ cập nhật nghiên cứu/kế hoạch, chưa triển khai solver, chạy QAOA/QPU hoặc tạo sweep CUDA mới. Kết quả 441 ma trận cover trong bản cũ là lịch sử kiểm tra nhỏ, không thay tests của implementation mới hay chứng nhận mọi reduction.
 
 Ngày 24/10 (Thứ 7) đã chạy lại kiểm tra thiết kế độc lập bằng Python/stdlib: **441 ma trận có 1–3 hàng và 1–3 cột, mọi hàng khác zero, tổng 19.374 assignments (y,z)**, lambda=1 và alpha=|C|+1. Residual energy, upper-triangular QUBO và Ising có offset khớp trên mọi assignment; mọi ground state cover ma trận gốc với cardinality bằng native optimum. Receipt và hash script ở `results/quantum-design-check-20261024.json`, script cục bộ `build/verify_quantum_formulation.py`. Đây chưa kiểm tra code reducer/QAOA, noise hoặc performance; không tính là prototype quantum hoàn tất.
 
-Cần review phương án cụ thể: C/B_fixed, split/grouping, policy/Fixed-High, rho/sensitivity, budget/seeds, threshold hệ thống và người nhận task quantum. Tài liệu không tự ghi các đề xuất thành quyết định của Nhóm. Có agent riêng tra nguồn optimization; tổng hợp/phản biện cùng ngữ cảnh, không phải hội đồng độc lập hoặc cross-model review. Không đánh dấu nguồn như người dùng đã đọc.
+Còn cần owner review C/B_fixed, split/grouping, policy/Fixed-High, rho/sensitivity, budget/seeds và threshold hệ thống trước thí nghiệm. Owner Thành và kiến trúc offline là quyết định đã chốt; các tham số khác vẫn là đề xuất. Khảo sát nguồn lịch sử có agent riêng tra optimization; tổng hợp cùng ngữ cảnh, không phải hội đồng độc lập hoặc cross-model review. Lượt cập nhật này đối chiếu nguồn inline, không đánh dấu nguồn như người dùng đã đọc.
 
 ## 12. Nguồn đã kiểm tra và phạm vi đọc
+
+Đối chiếu bổ sung ngày 02/11 (Thứ 2): metadata/abstract QAOA gốc [R12], phần set cover của Lucas [R1] và [IBM QAOA tutorial](https://quantum.cloud.ibm.com/docs/en/tutorials/quantum-approximate-optimization-algorithm), mục Background và From classical optimization to quantum circuits. Dùng cho ranh giới hybrid offline và mapping QUBO/Ising/circuit; không coi tutorial là benchmark catalogue hoặc chứng cứ quantum advantage. Không mở lại toàn bộ corpus bên dưới trong lượt này; phạm vi đọc lịch sử được giữ nguyên.
 
 Bảng tiếp theo ghi nguồn gốc, formulation/backend, baseline/metric, kết quả và giới hạn thực sự được kiểm tra. Không dùng số citation hoặc impact factor làm bằng chứng. Các suy dẫn QUBO và khuyến nghị architecture trong tài liệu là thiết kế của dự án, không phải kết luận paper ngoài.
 

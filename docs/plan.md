@@ -36,11 +36,13 @@ Chi tiết thiết kế do người phụ trách từng phần quyết định t
 | Thành viên | Stage phụ trách | Vai trò chung |
 |---|---|---|
 | Tuấn | S1 Preprocessing | Điều phối; review pull request theo task/stage và merge |
-| Thành | S2 Keypoint detection, S3 Description | |
+| Thành | S2 Keypoint detection, S3 Description | Chủ trì quantum catalogue optimization offline, bổ sung ngày 02/11 (Thứ 2) |
 | Đế | S4 Matching, S5 Homography | Controller; ghép code và chạy end-to-end để tìm module lỗi, điểm nghẽn |
 | Chương | S6 Warping and blending | |
 
 Cách chia stage giữ giống đồ án môn học để mỗi người làm tiếp stage mình đã quen. Lý do chi tiết nằm ở [stages.md](stages.md).
+
+Quyết định bổ sung ngày 02/11 (Thứ 2): **Thành chủ trì workstream quantum offline để chọn catalogue cấu hình**, gồm adapter dữ liệu, native cover/QUBO, classical baselines, QAOA simulator và báo cáo đối chứng. Đây là trách nhiệm nghiên cứu bổ sung, không chuyển ownership S1/S4/S5/S6 hoặc controller cho Thành. Tuấn cung cấp sweep/measurement; Đế review policy và quản lý consumer catalogue trong controller; Chương review QoR/B và tổng hợp paper. Chi tiết ở [kế hoạch quantum](research/quantum-integration-tasks.md) và [quyết định kỹ thuật](decisions/p3-offline-quantum-catalogue.md).
 
 ## 4. Nguyên tắc làm việc
 
@@ -167,7 +169,7 @@ Ngày review: 01/11 (Chủ nhật). Ghép Controller vào harness, chạy thử 
 
 Deadline chung cho các task: 05/11 (Thứ 5).
 
-Tài liệu đi kèm: [Đặc tả 5 bài thí nghiệm bóc tách (Ablation Studies)](experiments/ablation-studies.md).
+Tài liệu đi kèm: [Đặc tả 5 bài thí nghiệm bóc tách (Ablation Studies)](experiments/ablation-studies.md), [phương pháp quantum offline](research/quantum-integration-proposal.md) và [task quantum của Thành](research/quantum-integration-tasks.md).
 
 Điều kiện bắt đầu: Phase 2 đã nghiệm thu ĐẠT vào 01/11 (Chủ nhật), xem [Báo cáo nghiệm thu Phase 2](reports/phase-2-review-report.md).
 
@@ -176,7 +178,23 @@ Tài liệu đi kèm: [Đặc tả 5 bài thí nghiệm bóc tách (Ablation Stu
 | **Tuấn** | 1. Cung cấp batch script tự động (`tools/colab_runner.py` / `stitch_harness`) chạy UDIS-D test set (1.106 cặp) trên Colab Tesla T4, trích xuất dữ liệu đo lường thô `telemetry_results.csv` cho 3 chế độ (`Fixed-Best`, `Oracle`, `Adaptive`)<br>2. Chủ trì duy nhất (Single Owner) theo [Đặc tả Ablation Studies](experiments/ablation-studies.md): [**Ablation A1**](experiments/ablation-studies.md#21-ablation-a1-hiệu-quả-của-probe-signal-s1-gradient) (Đo lường hiệu quả và overhead của Probe Signal S1 Gradient so với Blind Escalation)<br>3. Soạn thảo Section 5.1 (Experimental Protocol & Hardware Setup) ghi nhận chi tiết hệ thống đo lường, phần cứng, flags, seeds | - File raw CSV đo đạc trên T4 hoàn chỉnh, không có dữ liệu lỗi/thiếu trường<br>- Bài Ablation A1 có số liệu đối sánh định lượng rõ ràng về overhead probe và số lần retry<br>- Section 5.1 súc tích, minh bạch, đúng chuẩn học thuật |
 | **Đế** | 1. Phân tích telemetry của Controller trên UDIS-D test set: phân bố các nấc thang (ladder distribution), tỉ lệ retry, số inliers phục hồi, và mổ xẻ các ca corner case (thất bại do `BUDGET_EXHAUSTED` hoặc parallax mạnh)<br>2. Chủ trì duy nhất (Single Owner) theo [Đặc tả Ablation Studies](experiments/ablation-studies.md): [**Ablation A2**](experiments/ablation-studies.md#22-ablation-a2-đóng-góp-của-statematch-reuse-trong-s5) (Lợi ích tiết kiệm thời gian của cơ chế tái sử dụng match trong S5 khi tăng $R$)<br>3. Chạy kiểm chứng hình học độc lập trên HPatches (59 chuỗi biến đổi góc nhìn có ground-truth homography), tính Mean Corner Error (MCE) chứng minh tính chính xác hình học<br>4. Soạn thảo draft phân tích Controller cho Section 5.2 và Section 6 (Discussion & Limitations) | - Báo cáo số liệu phân tích Controller rõ ràng, logic, không thiên vị<br>- Bài Ablation A2 có số liệu định lượng cụ thể chứng minh giá trị của cơ chế tái sử dụng match<br>- Bảng kết quả sai số hình học MCE trên HPatches |
 | **Chương** | 1. Chạy công cụ QoR (SSIM, PSNR vùng chồng lấn) trên toàn bộ kết quả UDIS-D test set của 3 chế độ<br>2. Chủ trì duy nhất (Single Owner) 2 bài thí nghiệm bóc tách theo [Đặc tả Ablation Studies](experiments/ablation-studies.md): [**Ablation A4**](experiments/ablation-studies.md#24-ablation-a4-same-homography-blending-trade-off-trong-s6) (Same-Homography Blending: đối sánh chi phí và chất lượng giữa Feather, Multiband 3 và Multiband 5) và [**Ablation A5**](experiments/ablation-studies.md#25-ablation-a5-độ-nhạy-của-ngưỡng-chất-lượng-overlap) (Độ nhạy của ngưỡng chất lượng $\delta_S, \delta_P$)<br>3. Chạy stress-test độ phân giải (Synthetic 720p, 1080p, 4K) và chạy đo latency mở rộng trên L4 / A100 qua tài khoản Colab Pro (Cross-Architecture Study)<br>4. Xuất các biểu đồ vector (Pareto curve, Latency CDF, Bar charts), bảng số liệu LaTeX và chọn 2–3 ảnh so sánh trực quan (visual panorama) | - Báo cáo QoR hoàn tất, trích xuất được bảng latency breakdown và Pareto data<br>- 2 bài Ablation A4 và A5 có số liệu và biểu đồ đối sánh rõ ràng<br>- Dữ liệu so sánh độ trễ vi kiến trúc (T4 vs L4 vs A100) sẵn sàng đưa vào paper<br>- Các biểu đồ vector chuẩn xuất bản, sắc nét |
-| **Thành** | 1. Chủ trì duy nhất (Single Owner) theo [Đặc tả Ablation Studies](experiments/ablation-studies.md): [**Ablation A3**](experiments/ablation-studies.md#23-ablation-a3-tác-động-của-ngân-sách-k-động-trong-s2-s3) (Phân tích chi tiết hành vi của S2 FAST và S3 ORB khi nhận ngân sách $K$ động, đo độ co giãn latency và kiểm chứng zero-allocation)<br>2. Soạn thảo draft tiểu mục Feature Budget Allocation trong Section 5<br>3. Khởi động rà soát sớm văn phong học thuật (loại bỏ triệt để các dấu hiệu AI writing) cho các phần Section 1, 2, 3, 4 đã hoàn thành | - Bài Ablation A3 có bảng đối sánh định lượng thời gian và footprint bộ nhớ theo $K$<br>- Soạn thảo hoàn chỉnh nội dung S2–S3 cho Section 5<br>- Rà soát xong văn phong các section cũ, câu từ súc tích, mạch lạc |
+| **Thành** | 1. Chủ trì duy nhất (Single Owner) theo [Đặc tả Ablation Studies](experiments/ablation-studies.md): [**Ablation A3**](experiments/ablation-studies.md#23-ablation-a3-tác-động-của-ngân-sách-k-động-trong-s2-s3) (Phân tích chi tiết hành vi của S2 FAST và S3 ORB khi nhận ngân sách $K$ động, đo độ co giãn latency và kiểm chứng zero-allocation)<br>2. Soạn thảo draft tiểu mục Feature Budget Allocation trong Section 5<br>3. Khởi động rà soát sớm văn phong học thuật (loại bỏ triệt để các dấu hiệu AI writing) cho các phần Section 1, 2, 3, 4 đã hoàn thành<br>4. Chủ trì [Q00–Q13 quantum offline](research/quantum-integration-tasks.md): adapter, native cover/QUBO, classical controls, QAOA simulator p=1,2, validator và báo cáo; chạy song song nhánh không quantum | - Bài Ablation A3 có bảng đối sánh định lượng thời gian và footprint bộ nhớ theo $K$<br>- Soạn thảo hoàn chỉnh nội dung S2–S3 cho Section 5<br>- Rà soát xong văn phong các section cũ, câu từ súc tích, mạch lạc<br>- Quantum có instance từ sweep, tests, circuit/counts/logs và bảng controls theo gates; zero-feasible được báo negative, thiếu dữ liệu/môi trường thì ghi chưa hoàn thành; không tự kết luận speedup hệ thống |
+
+#### Workstream quantum offline chạy song song
+
+**Chủ trì duy nhất: Thành.** Phạm vi được chốt ngày 02/11 (Thứ 2): chọn catalogue cấu hình `(S,K,R,B_fixed)` bằng QUBO/QAOA offline; không thay kernel, estimator hoặc ABI S1–S6, không gọi quantum backend khi xử lý từng cặp ảnh. QPU không bắt buộc; simulator phải được ghi đúng nhãn. A3 và các task A1–A5 vẫn giữ owner hiện tại.
+
+| Nhánh | Task và owner | Tiêu chí nghiệm thu Phase 3 |
+|---|---|---|
+| **Không quantum** | Tuấn/Đế tiếp tục runtime gốc, Fixed-Best, Oracle và Adaptive; từng owner thực hiện A1–A5. Thành triển khai classical catalogue controls trong tooling offline riêng | Benchmark chính chạy được khi không cài quantum SDK; giữ artifact baseline độc lập, không đợi QAOA hoặc catalogue loader mới |
+| **Quantum offline** | Thành chủ trì Q00–Q13: tiếp nhận sweep development, kiểm dữ liệu, native cover, exact/greedy/CP-SAT/SA/random, QUBO/Ising/reduction, resource admission, QAOA `p=1,2`, validator/repair và báo cáo | Có code/tests, môi trường riêng và tối thiểu một instance từ sweep CUDA còn biến sau reduction, circuit/counts/logs thật, đối chứng cổ điển và phân tích feasibility/cardinality/regret/solver time; raw và repaired tách riêng. Chưa có dữ liệu hoặc môi trường thì ghi BLOCKED/chưa hoàn thành; toy hoặc công thức đơn thuần không đóng task |
+| **Consumer catalogue cổ điển** | Thành bàn giao catalogue có hash/schema; Đế giữ quyền sửa controller, Tuấn giữ harness; Chương review QoR | Nếu kịp có consumer đã kiểm thử, so `W0` runtime gốc, `W1` classical catalogue và `W2` QAOA catalogue bằng cùng consumer/selector family/budget, self-check/reuse/fallback giữa W1/W2. Chưa có consumer thì chỉ nghiệm thu kết quả solver offline, chưa kết luận speedup hệ thống |
+
+Thứ tự của Thành: Q01/Q02/Q10 và tiny tests có thể làm ngay; Q00/Q03 cần raw sweep; Q04–Q12 hoàn thiện theo dependency; Q13 chỉ chạy ứng dụng khi dữ liệu/encoding/resource gates đạt. Không tái triển khai stage CUDA, không đưa Qiskit/Aer/OR-Tools vào requirements hoặc build của pipeline. Handoff chi tiết, artifact và acceptance ở [quantum-integration-tasks.md](research/quantum-integration-tasks.md).
+
+Catalogue được fit từ development; validation chọn tham số, sau đó khóa trước test. Không dùng 1.106 cặp test UDIS-D để chọn catalogue, seed hoặc quantum hyperparameters. Nhánh đầu dùng một quality policy và B cố định được Đế/Chương xác nhận; không nhân toàn bộ campaign quantum theo lưới A5. Catalogue cổ điển cũng là nhánh không quantum và phải tiếp tục được khi QAOA fail.
+
+Quantum phải có thí nghiệm thật hoặc báo trạng thái chưa hoàn thành. QAOA không tìm được nghiệm raw feasible vẫn là negative result hợp lệ nếu circuit/samples/budget và controls đầy đủ; không tự xuất catalogue cổ điển mang nhãn quantum. Không yêu cầu QAOA phải thắng và không viết sẵn claim quantum advantage. Thiếu dữ liệu/tài nguyên hoặc scope quá lớn được báo trong review 05/11 (Thứ 5), không dời lịch các nhánh khác và không đánh quantum hoàn tất bằng kết quả baseline.
 
 Quy định riêng của Phase 3:
 
@@ -192,6 +210,8 @@ Ngày review Phase 3: 05/11 (Thứ 5). Nghiệm thu toàn bộ số liệu đo �
 Deadline dự kiến: 09/11 (Thứ 2).
 
 Mục tiêu chính: Tích hợp toàn bộ số liệu, bảng biểu, đồ thị từ Phase 3 vào `paper/`; viết hoàn chỉnh Section 5 (Experimental Evaluation), Section 6 (Discussion & Limitations), Section 7 (Conclusion); chốt các con số định lượng trong Abstract và hoàn thiện Introduction.
+
+Với quantum, Thành bàn giao phân tích solver có bằng chứng để Chương tổng hợp; chỉ viết kết quả offline nếu chưa có catalogue consumer/e2e. Việc mở rộng consumer và thí nghiệm hệ thống được lập chi tiết sau review Phase 3; không gắn lợi ích catalogue cổ điển thành lợi ích quantum.
 
 ### Phase 5: Rà soát chéo, Chuẩn hóa OASIcs và Nộp bài (ý chính)
 

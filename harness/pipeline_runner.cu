@@ -541,6 +541,8 @@ void PipelineRunner::execute_adaptive_run(
         {probe_scale_a, *pinned_grad_a_},
         {probe_scale_b, *pinned_grad_b_}
     };
+    record->probe_gradient_a = *pinned_grad_a_;
+    record->probe_gradient_b = *pinned_grad_b_;
 
     controller::Knobs current_knobs{};
     Status begin_stat = controller.begin_pair(scene, &current_knobs);

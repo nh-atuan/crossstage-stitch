@@ -13,6 +13,12 @@ import cv2
 from tools.controller.p3_io import integer, measurements, read_csv, sha256, write_json
 
 
+def policy_identity(path: Path | None) -> tuple[str, str | None]:
+    if path is None or str(path) == 'legacy-v1':
+        return 'legacy-v1', None
+    return str(path.resolve()), sha256(path.resolve())
+
+
 def validate_shard(path: Path, pair: str, repeats: int, warmup: int,
                    dataset: str, split: str, seed: int, run_id: str) -> None:
     groups = measurements(path, repeats)
@@ -39,7 +45,8 @@ def gpu_metadata() -> dict:
 def run_campaign(harness: Path, manifest: Path, output: Path, policy_source: Path, *,
                  dataset: str, split: str, modes: list[str], repeats: int = 10,
                  warmup: int = 2, seed: int = 20261101,
-                 fixed: tuple[float, int, int] = (.5, 1000, 256), timeout: int = 600) -> dict:
+                 fixed: tuple[float, int, int] = (.5, 1000, 256), timeout: int = 600,
+                 controller_policy: Path | None = None) -> dict:
     if repeats < 1 or warmup < 0 or seed < 0 or timeout < 1:
         raise ValueError('invalid campaign repeat/warmup/seed/timeout')
     if not modes or len(set(modes)) != len(modes) or set(modes) - {'fixed', 'adaptive'}:
@@ -68,10 +75,12 @@ def run_campaign(harness: Path, manifest: Path, output: Path, policy_source: Pat
                 raise ValueError('prepare P6 PPM inputs to avoid depending on the harness OpenCV build')
             inputs[f'{pair}/{field}'] = sha256(path)
     gpu = gpu_metadata()
+    policy_argument, policy_hash = policy_identity(controller_policy)
     provenance = dict(schema_version='controller-campaign-v1', harness_sha256=sha256(harness),
                       policy_source_sha256=sha256(policy_source), manifest_sha256=sha256(manifest),
                       input_sha256=inputs, dataset=dataset, split=split, modes=modes,
-                      repeats=repeats, warmup=warmup, seed=seed, fixed=list(fixed), gpu=gpu)
+                      repeats=repeats, warmup=warmup, seed=seed, fixed=list(fixed), gpu=gpu,
+                      controller_policy=policy_argument, controller_policy_sha256=policy_hash)
     run_id = 'p3_' + hashlib.sha256(json.dumps(provenance, sort_keys=True).encode()).hexdigest()[:16]
     provenance['run_id'] = run_id
     output.mkdir(parents=True, exist_ok=True)
@@ -105,6 +114,8 @@ def run_campaign(harness: Path, manifest: Path, output: Path, policy_source: Pat
                        '--out', str(partial)]
             if mode == 'fixed':
                 command += ['-S', str(fixed[0]), '-K', str(fixed[1]), '-R', str(fixed[2]), '--blend', 'feather']
+            else:
+                command += ['--controller-policy', policy_argument]
             print(f'{mode}: {pair}; seed={seed}', flush=True)
             with (mode_dir / f'{name}.log').open('w', encoding='utf-8') as log:
                 process = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, timeout=timeout)
@@ -152,11 +163,13 @@ def main() -> None:
     parser.add_argument('--fixed-k', type=int, default=1000)
     parser.add_argument('--fixed-r', type=int, default=256)
     parser.add_argument('--timeout', type=int, default=600)
+    parser.add_argument('--controller-policy', type=Path)
     args = parser.parse_args()
     result = run_campaign(args.harness, args.manifest, args.output, args.policy_source,
                           dataset=args.dataset, split=args.split, modes=args.modes,
                           repeats=args.repeats, warmup=args.warmup, seed=args.seed,
-                          fixed=(args.fixed_s, args.fixed_k, args.fixed_r), timeout=args.timeout)
+                          fixed=(args.fixed_s, args.fixed_k, args.fixed_r), timeout=args.timeout,
+                          controller_policy=args.controller_policy)
     print(json.dumps(result))
 
 

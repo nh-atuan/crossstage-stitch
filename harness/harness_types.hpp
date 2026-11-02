@@ -63,6 +63,8 @@ struct RunRecord {
     double t_controller{0.0};
     double t_d2h{0.0};
     double t_e2e{0.0};
+    double probe_gradient_a{0.0};
+    double probe_gradient_b{0.0};
 
     // Signals S2-S5
     int num_kp_a{0};

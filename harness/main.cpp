@@ -17,6 +17,7 @@
 #include "harness/json_parser.hpp"
 #include "harness/image_loader.hpp"
 #include "harness/pipeline_runner.hpp"
+#include "harness/controller_policy.hpp"
 
 #ifndef STITCH_GIT_REV
 #define STITCH_GIT_REV "HEAD"
@@ -31,7 +32,7 @@ void write_csv_header(std::ostream& out) {
         << "num_kp_a,num_kp_b,num_matches,num_inliers,inlier_ratio,inlier_coverage,reproj_residual,"
         << "h0,h1,h2,h3,h4,h5,h6,h7,h8,"
         << "canvas_pixels,overlap_pixels,blend_mode_effective,num_levels,peak_workspace_bytes,cache_hit,"
-        << "status,fail_stage\n";
+        << "status,fail_stage,probe_gradient_a,probe_gradient_b\n";
 }
 
 void write_csv_row(std::ostream& out, const RunRecord& r) {
@@ -56,7 +57,8 @@ void write_csv_row(std::ostream& out, const RunRecord& r) {
     out << r.canvas_pixels << "," << r.overlap_pixels << ","
         << r.blend_mode_effective << "," << r.num_levels << ","
         << r.peak_workspace_bytes << "," << r.cache_hit << ","
-        << r.status << "," << r.fail_stage << "\n";
+        << r.status << "," << r.fail_stage << "," << std::setprecision(17)
+        << r.probe_gradient_a << "," << r.probe_gradient_b << "\n";
 }
 
 std::string generate_run_id() {
@@ -98,6 +100,7 @@ int main(int argc, char** argv) {
     std::string run_id = generate_run_id();
     std::string mode = "fixed";  // "fixed", "oracle", "adaptive"
     std::string trace_path;
+    std::string controller_policy_path;
     bool reuse_enabled = true;
 
     // Single run options
@@ -115,6 +118,7 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--manifest" && i + 1 < argc) manifest_path = argv[++i];
+        else if (arg == "--controller-policy" && i + 1 < argc) controller_policy_path = argv[++i];
         else if (arg == "--trace-out" && i + 1 < argc) trace_path = argv[++i];
         else if (arg == "--no-reuse") reuse_enabled = false;
         else if (arg == "--configs" && i + 1 < argc) configs_path = argv[++i];
@@ -140,6 +144,7 @@ int main(int argc, char** argv) {
                       << "Modes:\n"
                       << "  --mode <fixed|oracle|adaptive>  Execution mode (default: fixed)\n"
                       << "  --adaptive                      Shortcut for --mode adaptive\n"
+                      << "  --controller-policy <path>      Required adaptive policy JSON, or legacy-v1\n"
                       << "  --trace-out <path>              Per-attempt Controller trace CSV\n"
                       << "  --no-reuse                      A2 control: rerun S4/S5 for R-only retries\n"
                       << "  --oracle                        Shortcut for --mode oracle\n"
@@ -208,35 +213,17 @@ int main(int argc, char** argv) {
 
     // Configure Controller if in adaptive mode
     stitch::controller::Controller controller;
-    const std::vector<stitch::controller::Knobs> default_ladder = {
-        {0.25,  500,  128, stitch::s6::BlendMode::Feather},
-        {0.50, 1000,  128, stitch::s6::BlendMode::Feather},
-        {0.50, 1000,  256, stitch::s6::BlendMode::Feather},
-        {0.75, 2000,  512, stitch::s6::BlendMode::Feather},
-        {1.00, 2000, 1024, stitch::s6::BlendMode::Feather}
-    };
-    const std::vector<stitch::controller::SelfCheck> default_checks = {
-        {15, 0.15, 0.05, 4.0},
-        {20, 0.15, 0.05, 3.5},
-        {25, 0.20, 0.05, 3.0},
-        {30, 0.20, 0.05, 2.5},
-        {35, 0.20, 0.05, 2.0}
-    };
-    const std::vector<stitch::controller::SceneRule> default_rules = {
-        {0.08, 0},
-        {0.04, 1},
-        {0.00, 2}
-    };
-    const stitch::controller::Policy default_policy{
-        0.25,
-        default_rules.data(), default_rules.size(),
-        default_checks.data(), default_checks.size()
-    };
-
+    ControllerPolicy controller_policy;
     if (mode == "adaptive") {
-        if (controller.configure(default_policy) != stitch::Status::OK ||
-            controller.initialize(default_ladder.data(), default_ladder.size()) != stitch::Status::OK) {
-            std::cerr << "Error: failed to configure and initialize Controller.\n";
+        try {
+            if (controller_policy_path.empty())
+                throw std::runtime_error("Adaptive mode requires --controller-policy <path> or explicit legacy-v1");
+            controller_policy = controller_policy_path == "legacy-v1" ? legacy_controller_policy()
+                : parse_controller_policy(JsonValue::parse_file(controller_policy_path));
+            if (controller_policy.configure(controller) != stitch::Status::OK)
+                throw std::runtime_error("Failed to initialize Controller");
+        } catch (const std::exception& error) {
+            std::cerr << "Controller policy error: " << error.what() << "\n";
             return 1;
         }
     }
@@ -280,7 +267,9 @@ int main(int argc, char** argv) {
     std::cout << "Starting benchmark harness:\n"
               << "  Mode: " << mode << "\n"
               << "  Pairs: " << pairs.size() << "\n"
-              << "  Configs: " << (mode == "adaptive" ? default_ladder.size() : configs.size()) << "\n"
+              << "  Configs: " << (mode == "adaptive" ? controller_policy.ladder.size() : configs.size()) << "\n"
+              << "  Policy: " << (mode == "adaptive" ? controller_policy.id : "none") << "\n"
+              << "  Seed: " << seed << "\n"
               << "  Warmup: " << num_warmup << ", Repeats: " << num_repeats << "\n"
               << "  Output: " << out_path << "\n";
 

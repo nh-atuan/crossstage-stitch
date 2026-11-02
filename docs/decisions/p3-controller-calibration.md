@@ -40,6 +40,14 @@ reject trên validation. Kết quả replay là chẩn đoán, không thay laten
 thực tế trên GPU. Freeze policy trước khi xem kết quả validation và không
 sửa threshold theo các ca validation lỗi.
 
+Giới hạn trước validation: tối đa 12 cấu hình được chọn và một reference
+cuối; mỗi gate cần ít nhất bốn positive và không có false accept đã biết
+trên calibration. Tìm tối đa 12 giá trị mỗi trục, có tính sai số làm tròn
+CSV. Rule gradient có tối đa bốn khoảng, mỗi khoảng ít nhất 20 pair; phạt
+thêm 0,05 ms/pair cho mỗi khoảng để tránh chia nhỏ chỉ vì dao động latency.
+Reference cuối chấp nhận model S5 hợp lệ để làm baseline QoR tương đối;
+không đồng nhất nó với ground truth hoặc bảo đảm chất lượng tuyệt đối.
+
 Khi xét retry, nếu S/K không đổi và số match nhỏ hơn `min_inliers` của ứng
 viên thì bỏ ứng viên đó. Quy tắc dựa trên giới hạn `inliers <= matches`,
 không dựa trên nhãn chất lượng hoặc giả định tăng R luôn có lợi. Ứng viên

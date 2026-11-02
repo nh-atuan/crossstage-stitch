@@ -56,6 +56,19 @@ def test_campaign_reuses_verified_checkpoints(tmp_path, monkeypatch):
     assert (arguments[2] / 'adaptive.csv').is_file()
 
 
+def test_campaign_hashes_and_passes_the_loaded_policy(tmp_path, monkeypatch):
+    arguments, options, calls = campaign_fixture(tmp_path, monkeypatch)
+    policy = tmp_path / 'controller-policy.json'
+    policy.write_text('{"fixture":1}')
+    options['controller_policy'] = policy
+    p3_campaign.run_campaign(*arguments, **options)
+    adaptive = calls[1]
+    assert adaptive[adaptive.index('--controller-policy')+1] == str(policy.resolve())
+    policy.write_text('{"fixture":2}')
+    with pytest.raises(ValueError, match='provenance changed'):
+        p3_campaign.run_campaign(*arguments, **options)
+
+
 @pytest.mark.parametrize('target', ['image', 'binary', 'policy', 'checkpoint', 'repeats'])
 def test_campaign_rejects_changed_provenance(tmp_path, monkeypatch, target):
     arguments, options, calls = campaign_fixture(tmp_path, monkeypatch)

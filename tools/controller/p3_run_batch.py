@@ -8,7 +8,7 @@ from pathlib import Path
 import subprocess
 
 from tools.controller.p3_io import measurements, sha256, write_json
-from tools.controller.p3_campaign import gpu_metadata
+from tools.controller.p3_campaign import gpu_metadata, policy_identity
 
 
 def combine(paths: list[Path], destination: Path) -> None:
@@ -31,18 +31,23 @@ def combine(paths: list[Path], destination: Path) -> None:
 
 def run(harness: Path, manifest: Path, output: Path, dataset: str, split: str,
         modes: list[str], batch_size: int = 32, repeats: int = 10,
-        warmup: int = 2, seed: int = 20261101) -> dict:
+        warmup: int = 2, seed: int = 20261101, controller_policy: Path | None = None,
+        fixed: tuple[float, int, int] = (.5, 1000, 256)) -> dict:
     harness, manifest, output = harness.resolve(), manifest.resolve(), output.resolve()
     pairs = json.loads(manifest.read_text())
     if not pairs or batch_size < 1 or repeats < 1 or warmup < 0:
         raise ValueError('invalid cohort or batch parameters')
     if not modes or set(modes) - {'fixed', 'adaptive', 'no_reuse'} or len(modes) != len(set(modes)):
         raise ValueError('invalid modes')
+    if not (0 < fixed[0] <= 1 and 0 < fixed[1] <= 4000 and 0 < fixed[2] <= 2048):
+        raise ValueError('invalid fixed configuration')
+    policy_argument, policy_hash = policy_identity(controller_policy)
     input_hash = {p: {side: sha256((manifest.parent / info[side]).resolve()) for side in ('a', 'b')}
                   for p, info in sorted(pairs.items())}
     metadata = dict(harness_sha256=sha256(harness), manifest_sha256=sha256(manifest),
                     inputs=input_hash, seed=seed, warmup=warmup, repeats=repeats,
-                    dataset=dataset, split=split, modes=modes, batch_size=batch_size, gpu=gpu_metadata())
+                    dataset=dataset, split=split, modes=modes, batch_size=batch_size, gpu=gpu_metadata(),
+                    controller_policy=policy_argument, controller_policy_sha256=policy_hash, fixed=list(fixed))
     run_id = 'p3_' + hashlib.sha256(json.dumps(metadata, sort_keys=True).encode()).hexdigest()[:16]
     metadata['run_id'] = run_id
     output.mkdir(parents=True, exist_ok=True)
@@ -80,7 +85,9 @@ def run(harness: Path, manifest: Path, output: Path, dataset: str, split: str,
                        '--dataset', dataset, '--split', split, '--run-id', run_id,
                        '--warmup', str(warmup), '--repeats', str(repeats)]
             if mode != 'fixed':
-                command += ['--trace-out', str(trace)]
+                command += ['--trace-out', str(trace), '--controller-policy', policy_argument]
+            else:
+                command += ['-S', str(fixed[0]), '-K', str(fixed[1]), '-R', str(fixed[2])]
             if mode == 'no_reuse':
                 command += ['--no-reuse']
             print(f'BATCH {batch + 1}/{len(batches)} {dataset} {mode} pairs={len(cohort)} seed={seed}', flush=True)
@@ -112,6 +119,7 @@ def main():
     parser.add_argument('--seed', type=int, default=20261101)
     parser.add_argument('--warmup', type=int, default=2)
     parser.add_argument('--repeats', type=int, default=10)
+    parser.add_argument('--controller-policy', type=Path)
     args = parser.parse_args()
     print(json.dumps(run(**vars(args))))
 

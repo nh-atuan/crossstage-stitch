@@ -1,5 +1,29 @@
 # Bàn giao Phase 3 của Đế
 
+## Cập nhật 03/11 (Thứ 3)
+
+Đã đo đủ 1.106 cặp UDIS-D và 295 cặp HPatches trên Colab Tesla T4. Đã có
+telemetry, A2, bảng MCE, các ca diagnostic và draft Section 5.2/6. Source đo
+chính thức là `c58d754`; checkpoint và raw CSV đã tải về local, kiểm hash và
+tính lại báo cáo khớp bản T4. Chi tiết và giới hạn ở
+[báo cáo Phase 3](p3-de-evaluation.md).
+
+A2 giữ workspace ở cả hai biến thể để tách lợi ích tránh tính lại, theo
+[quyết định đã chốt](../decisions/p3-de-a2-reuse.md). Đã sửa bảo đảm
+device-ready trước vùng đo và chạy lại campaign. T4 đạt 17/17 CTest,
+382 test Python và memcheck regression upload 0 errors. Draft riêng đã
+compile PDF 2 trang và audit ẩn danh/font pass.
+
+Reuse tiết kiệm thời gian trên cohort R-only retry, nhưng Controller hiện
+tại chưa có lợi thế end-to-end so với Fixed. Bảng HPatches không tự chứng
+minh noninferiority trên toàn cohort. Manuscript chung còn bị chặn bởi file
+`paper/sections/pipeline-s6.tex` thiếu từ trước task này; không dùng build
+draft riêng để tuyên bố manuscript chung đã pass.
+
+Các mục cập nhật 01/11 dưới đây là lịch sử bàn giao, không phải trạng thái
+hiện tại. Phần triển khai, đo và draft của Đế đã có artifact để Nhóm review;
+việc nghiệm thu Phase 3 và kết luận research question thuộc buổi review của Nhóm.
+
 ## Cập nhật sau khi kết nối được T4
 
 Cập nhật 01/11 (Chủ nhật), năm 2026. Code đo đã commit tại `8e1380f`.

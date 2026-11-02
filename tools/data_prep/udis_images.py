@@ -16,8 +16,12 @@ def source_dimensions(data: bytes) -> tuple[int, int]:
     if data.startswith(b"\x89PNG\r\n\x1a\n"):
         if len(data) < 33 or data[12:16] != b"IHDR" or data[8:12] != b"\x00\x00\x00\r":
             raise ValueError("invalid PNG header")
+        if data[24:26] != b"\x08\x02":
+            raise ValueError("require native RGB8 PNG; no palette/alpha/depth coercion")
         return struct.unpack(">II", data[16:24])
     if data.startswith(b"\xff\xd8"):
+        if not data.endswith(b"\xff\xd9"):
+            raise ValueError("truncated JPEG: missing end marker")
         offset = 2
         while offset < len(data):
             if data[offset] != 255:
@@ -40,6 +44,8 @@ def source_dimensions(data: bytes) -> tuple[int, int]:
             if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
                 if length < 8:
                     raise ValueError("truncated JPEG frame")
+                if data[offset + 2] != 8 or data[offset + 7] != 3:
+                    raise ValueError("require native 8-bit three-component JPEG")
                 height, width = struct.unpack(">HH", data[offset + 3:offset + 7])
                 return width, height
             offset += length

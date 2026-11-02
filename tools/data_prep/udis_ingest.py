@@ -161,6 +161,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.verify_only:
             value = verify_manifest(args.output / "data_manifest.json")
+            expected_type = "real" if args.mode == "real" else "synthetic_fixture"
+            if value["evidence_type"] != expected_type:
+                raise ValueError("real/fixture mode does not match frozen data")
         else:
             if any(v is None for v in (args.archive, args.source_receipt, args.split)):
                 raise ValueError("archive, source-receipt and split are required for ingestion")

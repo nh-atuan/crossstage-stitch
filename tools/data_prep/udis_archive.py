@@ -60,6 +60,8 @@ def index_archive(archive: ZipFile, split: str, *, max_member_bytes: int,
     if len(archive.infolist()) > 100_000:
         raise ValueError("archive exceeds entry admission limit")
     for info in archive.infolist():
+        if info.orig_filename != info.filename:
+            raise ValueError("archive name contains a null byte")
         name = info.filename.rstrip("/") if info.is_dir() else info.filename
         safe_path(Path("."), name)
         folded = name.casefold()

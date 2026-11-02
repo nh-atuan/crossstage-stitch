@@ -148,3 +148,31 @@ def test_admission_and_jpeg_round_trip(tmp_path: Path) -> None:
         decode_rgb(encoded(3), 10)
     rgb = decode_rgb(encoded(10, ".jpg"), 100)
     assert np.array_equal(decode_rgb(ppm_bytes(rgb), 100), rgb)
+    with pytest.raises(ValueError, match="end marker"):
+        decode_rgb(encoded(10, ".jpg")[:-2], 100)
+
+
+def test_real_verify_refuses_fixture_and_crc_failure_is_recorded(tmp_path: Path) -> None:
+    archive, source = archive_fixture(tmp_path)
+    output = tmp_path / "valid"
+    ingest(archive, source, output, split="training", mode="fixture")
+    assert main(["--output", str(output), "--verify-only"]) == 2
+    assert main(["--output", str(output), "--mode", "fixture", "--verify-only"]) == 0
+    # Stored ZIP member corruption with unchanged ZIP CRC; receipt hash is re-pinned
+    # solely to isolate CRC checking from the independent archive-hash guard.
+    blob = archive.read_bytes()
+    original = encoded(1)
+    offset = blob.index(original)
+    damaged = bytearray(blob)
+    damaged[offset + len(original) - 1] ^= 1
+    archive.write_bytes(damaged)
+    value = read_json(source)
+    value["sha256"] = sha256(archive)
+    source.write_text(json.dumps(value))
+    failed = tmp_path / "crc-failed"
+    with pytest.raises(ValueError, match="ledger"):
+        ingest(archive, source, failed, split="training", mode="fixture")
+    report = read_json(failed / "ingestion_report.json")
+    assert report["ledger"][0]["status"] == "invalid"
+    assert "CRC" in report["ledger"][0]["errors"][0]
+    assert not (failed / "data_manifest.json").exists()

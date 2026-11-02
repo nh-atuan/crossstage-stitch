@@ -35,7 +35,7 @@ public:
     // Allocate all device buffers and workspaces once outside the measurement window
     void initialize(int max_width, int max_height, int max_k = 4000, int max_r = 2048);
 
-    // Upload image pair A and B to device outside the measurement window
+    // Upload outside the measurement window; return only when device RGB is ready.
     void upload_pair(const HostImageRGB& img_a, const HostImageRGB& img_b);
     void set_reuse_enabled(bool enabled) { reuse_enabled_ = enabled; }
     const AttemptTrace& attempt_trace() const { return trace_; }

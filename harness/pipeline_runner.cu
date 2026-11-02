@@ -260,15 +260,17 @@ void PipelineRunner::upload_pair(const HostImageRGB& img_a, const HostImageRGB& 
 
     dev_img_a_.width = cur_w_a_;
     dev_img_a_.height = cur_h_a_;
-    CUDA_CHECK(cudaMemcpy2D(dev_img_a_.data, dev_img_a_.pitch_bytes,
+    CUDA_CHECK(cudaMemcpy2DAsync(dev_img_a_.data, dev_img_a_.pitch_bytes,
                             img_a.pixels.data(), cur_w_a_ * 3,
-                            cur_w_a_ * 3, cur_h_a_, cudaMemcpyHostToDevice));
+                            cur_w_a_ * 3, cur_h_a_, cudaMemcpyHostToDevice, stream_));
 
     dev_img_b_.width = cur_w_b_;
     dev_img_b_.height = cur_h_b_;
-    CUDA_CHECK(cudaMemcpy2D(dev_img_b_.data, dev_img_b_.pitch_bytes,
+    CUDA_CHECK(cudaMemcpy2DAsync(dev_img_b_.data, dev_img_b_.pitch_bytes,
                             img_b.pixels.data(), cur_w_b_ * 3,
-                            cur_w_b_ * 3, cur_h_b_, cudaMemcpyHostToDevice));
+                            cur_w_b_ * 3, cur_h_b_, cudaMemcpyHostToDevice, stream_));
+    // Device-ready is the start boundary of every timed run, including warmups.
+    CUDA_CHECK(cudaStreamSynchronize(stream_));
 }
 
 void PipelineRunner::execute_run(const HarnessConfig& cfg,

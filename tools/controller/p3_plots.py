@@ -31,7 +31,7 @@ def export_distributions(report: dict, output: Path) -> None:
     ax.set_xscale('symlog', linthresh=1)
     ax.set_xlabel('Mean corner error (original pixels)')
     ax.set_ylabel('Fraction of all HPatches pairs')
-    ax.set_title('Retained homographies; rejected pairs stay in denominator')
+    ax.set_title('Retained homographies\nRejected pairs stay in denominator')
     ax.legend()
     fig.tight_layout()
     for suffix in ('pdf', 'svg'):

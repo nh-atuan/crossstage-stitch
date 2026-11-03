@@ -7,12 +7,13 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import platform
-import random
 import subprocess
 import sys
 import time
+import tempfile
 
 import numpy as np
 
@@ -21,6 +22,9 @@ from tools.s6_reference.geometry import prepare_geometry
 from tools.s6_reference.prepare_mock import _write_fixture
 from tools.s6_reference.reference import MODES, render
 from tools.s6_reference.validate_cuda import inspect_outputs
+from tools.repro.io import atomic_bytes, atomic_json
+from tools.bench.a4_telemetry import write_metrics
+from tools.bench.same_h_protocol import assert_input_identity, registration, publish_registration, verify_registration
 
 ROOT = Path(__file__).resolve().parents[2]
 TIMING_SCOPE = "S6 steady-state: prepared geometry/device buffers; host dispatch plus checked completion; statistics disabled"
@@ -48,6 +52,8 @@ def load_manifest(path):
         raise ValueError('unknown manifest schema/evidence_type')
     if document['split'] not in ('development', 'validation', 'final', 'synthetic'):
         raise ValueError('explicit dataset split required')
+    if (document['evidence_type'] == 'synthetic_fixture') != (document['split'] == 'synthetic'):
+        raise ValueError('synthetic evidence and synthetic split must be declared together')
     pairs = document['pairs']
     if not isinstance(pairs, dict) or not pairs:
         raise ValueError('pairs must be a nonempty object')
@@ -105,7 +111,10 @@ def prepare_pair(directory, a, b, h, modes, budget):
         elif shape != frozen[0] or not np.array_equal(result.mask, frozen[1]):
             raise ValueError('reference changed canvas or union mask across B modes')
         path = directory / (mode + '.bin')
-        _write_fixture(path, a, b, h, MODES.index(mode), result)
+        temporary = path.with_suffix('.bin.partial')
+        _write_fixture(temporary, a, b, h, MODES.index(mode), result)
+        os.link(temporary, path)
+        temporary.unlink()
         files.append(path.resolve())
     verify_frozen(files)
     return files
@@ -128,14 +137,28 @@ def verify_frozen(files):
             frozen = identity
 
 
-def summarize(files, artifacts, timings, warmups, repeats, require_t4):
-    metadata, count = inspect_outputs(files, artifacts, timings, require_t4=require_t4, warmups=warmups, repeats=repeats)
+def summarize(files, artifacts, timings, warmups, repeats, require_t4, contract=None, fixture_aliases=None):
+    metadata, count = inspect_outputs(files, artifacts, timings, require_t4=require_t4, warmups=warmups, repeats=repeats, fixture_aliases=fixture_aliases)
     frozen_mask = None
     for item in metadata:
         mask = (artifacts / (Path(item['fixture']).stem + '.pgm')).read_bytes()
         if frozen_mask is not None and mask != frozen_mask:
             raise ValueError('actual CUDA union masks differ across B modes')
         frozen_mask = mask
+        if contract is not None:
+            for key in ('union_pixels', 'overlap_pixels'):
+                if item[key] != contract['footprints'][key]:
+                    raise ValueError('native coverage differs from locked geometry footprint')
+            if item.get('T') != contract['T'] or not np.array_equal(np.asarray(item.get('inverse_f64')), np.asarray(contract['inverse_f64'])):
+                # Cross-toolchain setup can differ by rounding; compare inverse
+                # with an explicit numerical bound, never change the supplied H.
+                inverse = np.asarray(item.get('inverse_f64'), dtype=float)
+                if item.get('T') != contract['T'] or inverse.shape != (3, 3) or not np.allclose(inverse, contract['inverse_f64'], rtol=1e-12, atol=1e-14):
+                    raise ValueError('native transform differs from locked geometry')
+            if type(item.get('workspace_allocated_bytes')) is not int or item['workspace_allocated_bytes'] != (item['workspace_bytes'] + 256 if item['workspace_bytes'] else 0):
+                raise ValueError('invalid declared workspace allocation bytes')
+            if item.get('memory_scope') != 'workspace_query_and_allocation_not_peak_vram':
+                raise ValueError('missing native memory measurement scope')
         for field in ('geometry_host_ms', 'device_setup_host_ms', 'h2d_host_ms'):
             if not isinstance(item.get(field), (int, float)) or not math.isfinite(item[field]) or item[field] < 0:
                 raise ValueError('missing/invalid native setup timing')
@@ -155,13 +178,14 @@ def summarize(files, artifacts, timings, warmups, repeats, require_t4):
 
 
 def run(manifest, output, *, runner=None, modes=MODES, warmups=2, repeats=10, seed=0,
-        allow_non_t4=False, prepare_only=False, save_images=False, max_reference_mib=512, timeout=600):
+        allow_non_t4=False, prepare_only=False, save_images=False, max_reference_mib=512, timeout=600,
+        mode_order='permuted', registration_path=None):
     if (type(warmups) is not int or type(repeats) is not int or not 0 <= warmups <= 100000 or not 1 <= repeats <= 100000
             or type(seed) is not int or not math.isfinite(max_reference_mib) or max_reference_mib <= 0
             or not math.isfinite(timeout) or timeout <= 0):
         raise ValueError('invalid repetitions, seed, memory budget or timeout')
     modes = tuple(modes)
-    if not modes or len(set(modes)) != len(modes) or any(mode not in MODES for mode in modes):
+    if not modes or len(set(modes)) != len(modes) or any(mode not in MODES for mode in modes) or mode_order not in ('permuted', 'sequential'):
         raise ValueError('select unique implemented B modes')
     manifest, document = load_manifest(manifest)
     output = Path(output).resolve()
@@ -170,6 +194,19 @@ def run(manifest, output, *, runner=None, modes=MODES, warmups=2, repeats=10, se
     if not prepare_only and (runner is None or not Path(runner).is_file()):
         raise ValueError('a built test_s6_cuda runner is required')
     output.mkdir(parents=True, exist_ok=True)
+    if registration_path is None:
+        locked = registration(manifest, document, modes=modes, seed=seed, warmups=warmups,
+                              repeats=repeats, budget=int(max_reference_mib*1024**2), order=mode_order)
+    else:
+        locked = verify_registration(Path(registration_path))
+        expected = {'manifest_sha256': digest(manifest), 'seed': seed, 'warmups': warmups,
+                    'repeats': repeats, 'mode_order': mode_order, 'modes': list(modes),
+                    'evidence_type': document['evidence_type'], 'split': document['split']}
+        if any(locked[key] != value for key, value in expected.items()):
+            raise ValueError('benchmark controls/manifest differ from pre-registration')
+        if [item['pair_id'] for item in locked['pairs']] != sorted(document['pairs']):
+            raise ValueError('cohort differs from pre-registration')
+    registration_sha = publish_registration(output, locked)
     report = {'schema_version': 's6-same-h-report-v1', 'started_utc': datetime.now(timezone.utc).isoformat(),
               'status': 'failed', 'evidence_type': document['evidence_type'],
               'split': document['split'], 'timing_scope': TIMING_SCOPE, 'seed': seed,
@@ -178,24 +215,32 @@ def run(manifest, output, *, runner=None, modes=MODES, warmups=2, repeats=10, se
               'composition_quality': 'not_evaluated', 'alignment_qor': 'same_H_invariant_not_recomputed',
               'python': sys.version, 'platform': platform.platform(), 'numpy': np.__version__, 'pairs': [],
               'source_sha256': {str(path.relative_to(ROOT)): digest(path) for path in (
-                  ROOT/'src/s6/s6.cu', ROOT/'src/s6/geometry.cpp', Path(__file__), ROOT/'tests/test_s6_cuda.cu')}}
+                  ROOT/'src/s6/s6.cu', ROOT/'src/s6/geometry.cpp', ROOT/'src/s6/geometry.hpp',
+                  ROOT/'src/s6/s6.hpp', Path(__file__), ROOT/'tests/test_s6_cuda.cu',
+                  ROOT/'tools/bench/same_h_protocol.py', ROOT/'tools/bench/a4_telemetry.py',
+                  ROOT/'tools/bench/a4_artifacts.py', ROOT/'tools/s6_reference/reference.py',
+                  ROOT/'tools/s6_reference/geometry.py', ROOT/'tools/s6_reference/validate_cuda.py',
+                  ROOT/'tools/qor/evaluate.py', ROOT/'tools/qor/policy-pilot.json')}}
+    report.update(registration_sha256=registration_sha, visual_plan=locked['visual_plan'],
+                  memory_scope=locked['memory_scope'], intersection_check=locked['intersection_check'])
+    report['pairs'] = [dict(contract, status='failed', directory=f'pair_{index:04d}')
+                       for index, contract in enumerate(locked['pairs'])]
     try:
         report['git_rev'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         report['git_dirty'] = bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip())
         if runner:
             report['runner_sha256'] = digest(runner)
-        rng = random.Random(seed)
         for index, (pair_id, entry) in enumerate(sorted(document['pairs'].items())):
-            record = {'pair_id': pair_id, 'status': 'failed'}
-            report['pairs'].append(record)
+            contract = locked['pairs'][index]
+            record = report['pairs'][index]
             directory = output / f'pair_{index:04d}'
             directory.mkdir()
             try:
+                if locked['status'] != 'locked':
+                    raise ValueError(contract.get('error', 'campaign blocked by invalid pre-registration'))
                 a, b, h, provenance = load_pair(manifest.parent, entry)
-                record.update(provenance)
-                order = list(modes)
-                rng.shuffle(order)
-                record['execution_order'] = order
+                assert_input_identity(a, b, h, provenance, contract)
+                order = contract['execution_order']
                 files = prepare_pair(directory/'fixtures', a, b, h, order, int(max_reference_mib*1024**2))
                 record['fixture_sha256'] = {path.name: digest(path) for path in files}
                 if prepare_only:
@@ -210,19 +255,24 @@ def run(manifest, output, *, runner=None, modes=MODES, warmups=2, repeats=10, se
                 record['command'] = command
                 start = time.perf_counter()
                 try:
-                    completed = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout, check=False)
+                    completed = subprocess.run(command, text=True, encoding='utf-8', errors='replace', stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout, check=False)
                     log, code = completed.stdout, completed.returncode
                 except subprocess.TimeoutExpired as exc:
                     log = exc.stdout or b''
                     log = log.decode(errors='replace') if isinstance(log, bytes) else log
                     code = None
                 record.update(runner_wall_ms=(time.perf_counter()-start)*1000, returncode=code)
-                (directory/'runner.log').write_text(log, encoding='utf-8')
+                atomic_bytes(directory/'runner.log', log.encode('utf-8'))
                 if code != 0:
                     raise ValueError(f'native runner failed or timed out: {code}; exit 77 is not a pass')
                 verify_frozen(files)
-                items, count = summarize(files, artifacts, timings, warmups, repeats, not allow_non_t4)
+                items, count = summarize(files, artifacts, timings, warmups, repeats, not allow_non_t4, contract)
+                # Reload after native execution to detect source/H mutation.
+                aa, bb, hh, after = load_pair(manifest.parent, entry)
+                assert_input_identity(aa, bb, hh, after, contract)
                 record.update(status='passed', measurements=items, timing_rows=count)
+                record['timings_sha256'] = digest(timings)
+                record['artifact_sha256'] = {path.name: digest(path) for path in artifacts.iterdir() if path.is_file()}
                 if not save_images:
                     for item in items:
                         for suffix in ('.ppm', '.pgm'):
@@ -230,18 +280,29 @@ def run(manifest, output, *, runner=None, modes=MODES, warmups=2, repeats=10, se
                     record['images_retained'] = False
                 else:
                     record['images_retained'] = True
-            except (OSError, ValueError, RuntimeError, MemoryError) as exc:
+            except (OSError, ValueError, RuntimeError, MemoryError, KeyError, TypeError) as exc:
+                record['status'] = 'failed'
                 record['error'] = str(exc)
+        if digest(manifest) != locked['manifest_sha256']:
+            raise ValueError('manifest changed after pre-registration')
+        if locked['status'] == 'locked':
+            verify_registration(output/'registration.json')
         successful = all(item['status'] == ('prepared' if prepare_only else 'passed') for item in report['pairs'])
         report['status'] = ('prepared' if prepare_only else 'passed') if successful else 'failed'
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError, subprocess.SubprocessError) as exc:
+        report['status'] = 'failed'
+        report['error'] = str(exc)
+        for record in report['pairs']:
+            record.update(status='failed', error='campaign provenance validation failed: ' + str(exc))
     finally:
-        (output/'report.json').write_text(json.dumps(report, indent=2, allow_nan=False)+'\n', encoding='utf-8')
+        write_metrics(output, report)
+        atomic_json(output/'report.json', report)  # Publish the campaign marker last.
     return report
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--manifest', type=Path, required=True)
+    parser.add_argument('--manifest', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--runner', type=Path)
     parser.add_argument('--modes', nargs='+', choices=MODES, default=MODES)
@@ -253,12 +314,34 @@ def main(argv=None):
     parser.add_argument('--allow-non-t4', action='store_true')
     parser.add_argument('--prepare-only', action='store_true')
     parser.add_argument('--save-images', action='store_true')
+    parser.add_argument('--mode-order', choices=('permuted', 'sequential'), default='permuted')
+    parser.add_argument('--registration', type=Path, dest='registration_path')
+    parser.add_argument('--dry-run', action='store_true', help='CPU preparation in a temporary directory; no persistent output or native execution')
+    parser.add_argument('--verify-only', action='store_true', help='Re-verify retained campaign artifacts without executing CUDA')
     args = parser.parse_args(argv)
     try:
-        result = run(**vars(args))
-    except (OSError, ValueError, RuntimeError) as exc:
+        controls = vars(args).copy()
+        dry_run = controls.pop('dry_run')
+        verify_only = controls.pop('verify_only')
+        if dry_run and verify_only:
+            raise ValueError('dry-run and verify-only are mutually exclusive')
+        if verify_only:
+            from tools.bench.a4_artifacts import campaign
+            campaign(args.output)
+            print('verified retained A4 artifacts; no GPU execution')
+            return 0
+        if args.manifest is None:
+            raise ValueError('manifest is required for preparation/execution')
+        controls['prepare_only'] = controls['prepare_only'] or dry_run
+        if dry_run:
+            with tempfile.TemporaryDirectory(prefix='a4-dry-') as directory:
+                controls['output'] = Path(directory) / 'campaign'
+                result = run(**controls)
+        else:
+            result = run(**controls)
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError, subprocess.SubprocessError) as exc:
         parser.exit(2, f'error: {exc}\n')
-    print(f"{result['status']}: {len(result['pairs'])} pairs; evidence in {args.output}")
+    print(f"{result['status']}: {len(result['pairs'])} pairs; " + ('dry-run, no persistent artifacts' if dry_run else f'evidence in {args.output}'))
     return 0 if result['status'] in ('passed', 'prepared') else 2
 
 

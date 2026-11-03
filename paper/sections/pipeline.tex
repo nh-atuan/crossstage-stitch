@@ -18,22 +18,22 @@ them by a downsampling ratio $S \in (0.0, 1.0]$. The conversion applies fixed-po
 to OpenCV's integer path. Resizing uses an area box filter that integrates pixel coverage
 fractions. For dyadic downsampling scales ($S=0.5$ and $S=0.25$), dedicated fast paths
 average $2\times 2$ or $4\times 4$ source pixel blocks without floating-point division.
-Both images (A and B) execute in a single batched kernel launch using the third grid
-dimension ($z \in \{0, 1\}$), eliminating launch latency overhead between the inputs.
-The caller allocates image buffers and workspace upfront; the stage performs zero
+A single batched kernel launch processes both images (A and B), indexed by the third
+grid dimension ($z \in \{0, 1\}$), so the second image adds no launch overhead.
+The caller allocates image buffers and workspace upfront; the stage makes no
 dynamic device allocations inside the measurement window.
 
 % Role: probe gradient reduction for runtime scene awareness.
-To inform initial budget selection in the adaptive controller, S1 also provides a
-lightweight scene probe executed at the configured probe scale ($S_{\text{probe}} \le S$).
-A two-dimensional reduction kernel computes the mean absolute first-order spatial gradient
-$G(I)$ across all horizontal and vertical adjacent pixel pairs according to the definition
-in Section~\ref{sec:controller}. Intra-block sums accumulate using warp-shuffle instructions
-and shared memory, updating a 64-bit device accumulator. A normalization kernel scales the sum
-by total valid edge count and transfers the scalar result to host pinned memory via an
-asynchronous copy on the pipeline stream. On the target GPU, this reduction executes in
-under $0.02$\,ms at typical probe resolutions ($S_{\text{probe}}=0.25$), keeping probe
-overhead well below the $0.1$\,ms contract budget.
+For the controller's initial budget selection, S1 also computes a scene probe at
+the configured probe scale ($S_{\text{probe}} \le S$). A two-dimensional reduction
+kernel computes the mean absolute first-order spatial gradient $G(I)$ over all
+horizontal and vertical adjacent pixel pairs, as defined in
+Section~\ref{sec:controller}. Each block reduces its partial sum with warp shuffles
+and shared memory and adds it to a 64-bit device accumulator. A normalization
+kernel scales the sum by the total valid edge count, and an asynchronous copy on
+the pipeline stream moves the scalar result to pinned host memory. On the target
+GPU, this reduction takes under $0.02$\,ms at typical probe resolutions
+($S_{\text{probe}}=0.25$), well below the $0.1$\,ms contract budget.
 
 \subsection{Keypoint Detection and Description (S2--S3)}
 \label{sec:s2-s3}

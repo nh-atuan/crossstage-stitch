@@ -222,6 +222,22 @@ def main() -> int:
     args.out_dir.mkdir(parents=True, exist_ok=True)
     produced_csvs: List[Path] = []
 
+    # Step 1.5: Build stitch_harness if not compiled
+    if not args.harness.exists() and not args.dry_run:
+        print(f"=== Step 1.5: Harness binary '{args.harness}' not found. Compiling with CMake... ===")
+        build_dir = Path("build")
+        rc_cfg = subprocess.run(["cmake", "-B", str(build_dir), "-DCMAKE_BUILD_TYPE=Release"]).returncode
+        if rc_cfg != 0:
+            print("Error: CMake configuration failed.", file=sys.stderr)
+            return rc_cfg
+        rc_build = subprocess.run(["cmake", "--build", str(build_dir), "--target", "stitch_harness", "-j"]).returncode
+        if rc_build != 0:
+            print("Error: Building stitch_harness failed.", file=sys.stderr)
+            return rc_build
+        if not args.harness.exists():
+            print(f"Error: stitch_harness still not found at '{args.harness}' after build.", file=sys.stderr)
+            return 1
+
     # Step 2: Execute Fixed-Best
     if "fixed_best" in args.modes:
         s_str, k_str, r_str, b_str = [x.strip() for x in args.fixed_best_config.split(",")]

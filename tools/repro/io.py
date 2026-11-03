@@ -8,6 +8,9 @@ import os
 from pathlib import Path, PurePosixPath
 import sys
 import tempfile
+from contextlib import contextmanager
+from collections.abc import Iterator
+from typing import BinaryIO
 from typing import Any
 
 
@@ -68,6 +71,21 @@ def atomic_bytes(path: Path, data: bytes) -> None:
 
 def atomic_json(path: Path, value: Any) -> None:
     atomic_bytes(path, json_bytes(value))
+
+
+@contextmanager
+def atomic_stream(path: Path) -> Iterator[BinaryIO]:
+    """Bounded-memory streaming publication with the same no-clobber contract."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            yield handle
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
 
 
 def require_hash(value: Any) -> str:

@@ -27,17 +27,18 @@ Each hypothesis is scored by the truncated forward-reprojection loss
 where $\pi$ divides by the projective coordinate and $\tau$ is in S1 pixels.
 Equal losses favour the earlier hypothesis. The selected model is refitted
 on its inliers for a caller-specified number of steps, retaining a candidate
-only when it reduces the loss. S5 returns inlier count, ratio, bounding-box
-coverage in A, and forward RMS residual after refinement. Geometry checks
-reject non-finite models and a projective horizon crossing image B.
+only when it reduces the loss. S5 returns the inlier count and ratio, the
+bounding-box coverage in A, and the forward RMS residual after refinement.
+Geometry checks reject non-finite models and models whose projective horizon
+crosses image B.
 
 With half-pixel scale transforms $D_A$ and $D_B$, the rendering homography is
 $H=D_A^{-1}H_sD_B$, mapping original B coordinates to A. The raw search winner
 is stored separately from the refined output. Increasing only $R$ evaluates
 the missing hypothesis indices and refines again; refinement never overwrites
 the continuation state. Reuse checks cover input pointers, capacities, counts,
-scale metadata, generation, seed, threshold, and batch size. The caller resets
-after changes to matches or image features and checks asynchronous completion
-before consuming the pinned host result. Standalone T4 tests check known
+scale metadata, generation, seed, threshold, and batch size. The caller restarts
+the search after matches or image features change and checks asynchronous
+completion before consuming the pinned host result. Standalone T4 tests check known
 transforms, failure statuses, and equality of split and full searches; they do
 not establish adaptive end-to-end performance.

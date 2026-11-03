@@ -22,6 +22,12 @@
 
 namespace stitch::harness {
 
+struct PipelineMemoryPlan {
+    std::size_t device_bytes = 0;
+    std::size_t workspace_bytes = 0;
+    std::size_t s6_workspace_bytes = 0;
+};
+
 class PipelineRunner {
 public:
     PipelineRunner();
@@ -32,7 +38,14 @@ public:
     PipelineRunner& operator=(const PipelineRunner&) = delete;
 
     // Allocate all device buffers and workspaces once outside the measurement window
-    void initialize(int max_width, int max_height, int max_k = 4000, int max_r = 2048);
+    void initialize(int max_width, int max_height, int max_k = 4000, int max_r = 2048,
+                    int canvas_width = 4096, int canvas_height = 4096,
+                    s6::BlendMode workspace_mode = s6::BlendMode::Multiband5,
+                    std::size_t device_reserve = 256u * 1024u * 1024u);
+    static PipelineMemoryPlan query_memory(int width, int height, int k, int r,
+                                          int canvas_width, int canvas_height, s6::BlendMode mode);
+    double last_fixed_gpu_span_ms() const { return last_fixed_gpu_span_ms_; }
+    void synchronize();
 
     // Upload image pair A and B to device outside the measurement window
     void upload_pair(const HostImageRGB& img_a, const HostImageRGB& img_b);
@@ -132,6 +145,9 @@ private:
     double* pinned_grad_b_{nullptr};
 
     bool initialized_{false};
+    int input_capacity_w_ = 0, input_capacity_h_ = 0;
+    int canvas_capacity_w_ = 0, canvas_capacity_h_ = 0;
+    double last_fixed_gpu_span_ms_ = -1;
 };
 
 }  // namespace stitch::harness

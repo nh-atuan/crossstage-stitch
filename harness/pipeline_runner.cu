@@ -11,13 +11,15 @@
 #include <stdexcept>
 
 #include "harness/pipeline_runner.hpp"
+#include "harness/cuda_error.hpp"
+#include "common/admission_control.hpp"
 
 #define CUDA_CHECK(call) do {                                                  \
     const cudaError_t err = (call);                                            \
     if (err != cudaSuccess) {                                                  \
         std::fprintf(stderr, "%s:%d CUDA error: %s\n", __FILE__, __LINE__,     \
                      cudaGetErrorString(err));                                 \
-        throw std::runtime_error(cudaGetErrorString(err));                     \
+        throw CudaError(err);                                                  \
     }                                                                          \
 } while (false)
 
@@ -25,7 +27,6 @@ namespace stitch::harness {
 
 namespace {
 
-constexpr int kMaxCanvasDim = 4096;
 constexpr int kPadding = 64;
 
 const char* status_to_str(Status s) {
@@ -113,8 +114,43 @@ PipelineRunner::~PipelineRunner() {
     if (pinned_grad_b_) cudaFreeHost(pinned_grad_b_);
 }
 
-void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r) {
+PipelineMemoryPlan PipelineRunner::query_memory(int w, int h, int k, int r, int cw, int ch, s6::BlendMode mode) {
+    using namespace admission;
+    dimensions_fit(w, h, w, h, cw, ch);
+    if (k <= 0 || r <= 0 || multiply(cw, ch) > s6::GeometryPolicy{}.max_canvas_pixels) throw Error("ERR_CAPACITY");
+    PipelineMemoryPlan result{};
+    result.device_bytes = add(multiply(2, image_bytes(w, h, 3)), multiply(2, image_bytes(w, h, 1)));
+    result.device_bytes = add(result.device_bytes, add(image_bytes(cw, ch, 3), image_bytes(cw, ch, 1)));
+    // Keypoint arrays/counts, descriptors, matches/count, inlier mask, stats/probe.
+    result.device_bytes = add(result.device_bytes, add(multiply(k, 6*sizeof(float)+64+3*sizeof(int)+1), 3*sizeof(int)+sizeof(s6::RenderStatistics)+32));
+    auto workspace = [&](std::size_t bytes, int count = 1) {
+        result.workspace_bytes = add(result.workspace_bytes, multiply(bytes, count));
+        if (bytes) result.device_bytes = add(result.device_bytes, multiply(add(bytes, 256), count));
+    };
+    auto require = [](Status status) { if (status != Status::OK) throw Error("ERR_CAPACITY"); };
+    std::size_t bytes = 0;
+    require(s2::s2_workspace_bytes(w, h, {20, k, .04f}, &bytes)); workspace(bytes, 2);
+    require(s3::s3_workspace_bytes(w, h, &bytes)); workspace(bytes);
+    require(s4::s4_workspace_bytes(k, k, {.8, false}, &bytes)); workspace(bytes);
+    require(s5::s5_workspace_bytes({r, 0, 64, 1, 3., 0, 1}, &bytes)); workspace(bytes);
+    s6::Geometry g{}; g.width = cw; g.height = ch;
+    g.width_a = g.width_b = w; g.height_a = g.height_b = h;
+    g.inverse[0] = g.inverse[4] = g.inverse[8] = 1;
+    require(s6::s6_workspace_bytes(g, mode, &result.s6_workspace_bytes));
+    workspace(result.s6_workspace_bytes);
+    return result;
+}
+
+void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r,
+                                int canvas_width, int canvas_height, s6::BlendMode workspace_mode,
+                                std::size_t device_reserve) {
     if (initialized_) return;
+    const auto plan = query_memory(max_w, max_h, max_k, max_r, canvas_width, canvas_height, workspace_mode);
+    std::size_t free_bytes = 0, total_bytes = 0;
+    CUDA_CHECK(cudaMemGetInfo(&free_bytes, &total_bytes));
+    admission::fit(plan.device_bytes, free_bytes, device_reserve, "ERR_DEVICE_OOM");
+    input_capacity_w_ = max_w; input_capacity_h_ = max_h;
+    canvas_capacity_w_ = canvas_width; canvas_capacity_h_ = canvas_height;
 
     // Allocate input image buffers
     dev_img_a_.width = max_w;
@@ -185,19 +221,19 @@ void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r) {
     CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_h_res_), sizeof(HomographyResult)));
 
     // S6 Canvas and Mask
-    dev_canvas_.width = kMaxCanvasDim;
-    dev_canvas_.height = kMaxCanvasDim;
-    dev_canvas_.pitch_bytes = kMaxCanvasDim * 3 + kPadding;
+    dev_canvas_.width = canvas_width;
+    dev_canvas_.height = canvas_height;
+    dev_canvas_.pitch_bytes = canvas_width * 3 + kPadding;
     dev_canvas_.format = PixelFormat::RGB8;
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&dev_canvas_.data),
-                          static_cast<std::size_t>(dev_canvas_.pitch_bytes) * kMaxCanvasDim));
+                          static_cast<std::size_t>(dev_canvas_.pitch_bytes) * canvas_height));
 
-    dev_s6_mask_.width = kMaxCanvasDim;
-    dev_s6_mask_.height = kMaxCanvasDim;
-    dev_s6_mask_.pitch_bytes = kMaxCanvasDim + kPadding;
+    dev_s6_mask_.width = canvas_width;
+    dev_s6_mask_.height = canvas_height;
+    dev_s6_mask_.pitch_bytes = canvas_width + kPadding;
     dev_s6_mask_.format = PixelFormat::GRAY8;
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&dev_s6_mask_.data),
-                          static_cast<std::size_t>(dev_s6_mask_.pitch_bytes) * kMaxCanvasDim));
+                          static_cast<std::size_t>(dev_s6_mask_.pitch_bytes) * canvas_height));
 
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&dev_stats_), sizeof(s6::RenderStatistics)));
 
@@ -221,22 +257,8 @@ void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r) {
     CUDA_CHECK(s5::s5_workspace_bytes(max_s5_cfg, &ws_bytes_s5_) == Status::OK ? cudaSuccess : cudaErrorUnknown);
     if (ws_bytes_s5_) CUDA_CHECK(cudaMalloc(&ws_s5_, ws_bytes_s5_ + 256));
 
-    // S6 maximum workspace (for multiband5 on max canvas)
-    s6::Geometry max_geom{};
-    max_geom.width = kMaxCanvasDim;
-    max_geom.height = kMaxCanvasDim;
-    max_geom.width_a = max_w;
-    max_geom.height_a = max_h;
-    max_geom.width_b = max_w;
-    max_geom.height_b = max_h;
-    max_geom.origin_x = 0;
-    max_geom.origin_y = 0;
-    max_geom.denominator_tolerance = 1e-6;
-    max_geom.snap_tolerance = 0.01;
-    max_geom.inverse[0] = 1.0;
-    max_geom.inverse[4] = 1.0;
-    max_geom.inverse[8] = 1.0;
-    CUDA_CHECK(s6::s6_workspace_bytes(max_geom, s6::BlendMode::Multiband5, &ws_bytes_s6_) == Status::OK ? cudaSuccess : cudaErrorUnknown);
+    // Capacity/mode workspace was queried before any large device allocation.
+    ws_bytes_s6_ = plan.s6_workspace_bytes;
     if (ws_bytes_s6_) CUDA_CHECK(cudaMalloc(&ws_s6_, ws_bytes_s6_ + 256));
 
     // S1 probe gradient reduction workspace and pinned host outputs
@@ -247,7 +269,13 @@ void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r) {
     initialized_ = true;
 }
 
+void PipelineRunner::synchronize() { CUDA_CHECK(cudaStreamSynchronize(stream_)); }
+
 void PipelineRunner::upload_pair(const HostImageRGB& img_a, const HostImageRGB& img_b) {
+    if (!initialized_) throw admission::Error("ERR_CAPACITY");
+    admission::dimensions_fit(img_a.width, img_a.height, img_b.width, img_b.height, input_capacity_w_, input_capacity_h_);
+    if (img_a.pixels.size() != admission::multiply(admission::multiply(img_a.width, img_a.height), 3) ||
+        img_b.pixels.size() != admission::multiply(admission::multiply(img_b.width, img_b.height), 3)) throw admission::Error("ERR_INPUT");
     cur_w_a_ = img_a.width;
     cur_h_a_ = img_a.height;
     cur_w_b_ = img_b.width;
@@ -275,6 +303,7 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
                                  int repeat_idx,
                                  int is_warmup,
                                  RunRecord* record) {
+    last_fixed_gpu_span_ms_ = -1;
     record->run_id = run_id;
     record->git_rev = git_rev;
     record->dataset = dataset;
@@ -400,7 +429,7 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
     if (g_stat != Status::OK) {
         const auto t_host_end = std::chrono::steady_clock::now();
         record->t_e2e = std::chrono::duration<double, std::milli>(t_host_end - t_host_start).count();
-        record->status = status_to_str(g_stat);
+        record->status = g_stat == Status::INSUFFICIENT_WORKSPACE ? "ERR_CANVAS_OVERFLOW" : status_to_str(g_stat);
         record->fail_stage = "s6";
 
         float ms = 0.0f;
@@ -413,6 +442,11 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
         return;
     }
 
+    if (geom.width > canvas_capacity_w_ || geom.height > canvas_capacity_h_) {
+        record->status = "ERR_CANVAS_OVERFLOW"; record->fail_stage = "s6";
+        record->t_e2e = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_host_start).count();
+        return;
+    }
     dev_canvas_.width = geom.width;
     dev_canvas_.height = geom.height;
     dev_s6_mask_.width = geom.width;
@@ -436,6 +470,7 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
 
     // Event elapsed times
     float ms = 0.0f;
+    CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start_, ev_s6_)); last_fixed_gpu_span_ms_ = ms;
     cudaEventElapsedTime(&ms, ev_start_, ev_s1_); record->t_s1 = ms;
     cudaEventElapsedTime(&ms, ev_s1_, ev_s2_); record->t_s2 = ms;
     cudaEventElapsedTime(&ms, ev_s2_, ev_s3_); record->t_s3 = ms;
@@ -736,12 +771,17 @@ void PipelineRunner::execute_adaptive_run(
         if (g_stat != Status::OK) {
             const auto t_host_end = std::chrono::steady_clock::now();
             record->t_e2e = std::chrono::duration<double, std::milli>(t_host_end - t_host_start).count();
-            record->status = status_to_str(g_stat);
+            record->status = g_stat == Status::INSUFFICIENT_WORKSPACE ? "ERR_CANVAS_OVERFLOW" : status_to_str(g_stat);
             record->fail_stage = "s6";
             record->t_s6 = 0.0;
             return;
         }
 
+        if (geom.width > canvas_capacity_w_ || geom.height > canvas_capacity_h_) {
+            record->status = "ERR_CANVAS_OVERFLOW"; record->fail_stage = "s6";
+            record->t_e2e = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_host_start).count();
+            return;
+        }
         dev_canvas_.width = geom.width;
         dev_canvas_.height = geom.height;
         dev_s6_mask_.width = geom.width;

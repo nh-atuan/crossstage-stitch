@@ -32,3 +32,8 @@ set_target_properties(stitch_harness PROPERTIES
   CUDA_STANDARD 17
   CUDA_STANDARD_REQUIRED YES
 )
+
+add_executable(stress_multires_cuda stress_multires.cu pipeline_runner.cu)
+target_link_libraries(stress_multires_cuda PRIVATE stitch_common stitch_controller stitch_s1 stitch_s2_s3 stitch_s4 stitch_s5 stitch_s6)
+target_include_directories(stress_multires_cuda PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+set_target_properties(stress_multires_cuda PROPERTIES CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED YES)

@@ -8,6 +8,7 @@
 #include <cstdint>
 
 #include "s2_s3/s2_s3_internal.hpp"
+#include "s2_s3/s2_s3_marks.hpp"
 
 namespace stitch::s2 {
 namespace {
@@ -15,6 +16,7 @@ namespace {
 using s2_s3::detail::kAlignment;
 using s2_s3::detail::kScanItems;
 using s2_s3::detail::S2Layout;
+using s2_s3::detail::S2Marks;
 using s2_s3::detail::SelectParams;
 
 constexpr int kFastRadius = 3;
@@ -317,10 +319,19 @@ Status launch_status() {
     return cudaGetLastError() == cudaSuccess ? Status::OK : Status::CUDA_ERROR;
 }
 
-}  // namespace
+// Records `event` when marks were requested; false on a CUDA error.
+bool mark(const S2Marks* marks, cudaEvent_t S2Marks::*event, cudaStream_t stream) {
+    return !marks || cudaEventRecord(marks->*event, stream) == cudaSuccess;
+}
 
-Status s2_detect(const ImageView& image, const Config& config, Keypoints output,
-                 void* workspace, std::size_t workspace_bytes, cudaStream_t stream) {
+bool mark_all(const S2Marks* marks, cudaStream_t stream) {
+    return mark(marks, &S2Marks::after_fast, stream) &&
+           mark(marks, &S2Marks::after_select, stream) &&
+           mark(marks, &S2Marks::after_harris, stream);
+}
+
+Status detect(const ImageView& image, const Config& config, Keypoints output, void* workspace,
+              std::size_t workspace_bytes, cudaStream_t stream, const S2Marks* marks) {
     if (!s2_s3::detail::valid_image(image) || !s2_s3::detail::valid_s2_config(config) ||
         !output.d_count || reinterpret_cast<std::uintptr_t>(output.d_count) % alignof(int) ||
         output.capacity < config.max_keypoints ||
@@ -328,7 +339,8 @@ Status s2_detect(const ImageView& image, const Config& config, Keypoints output,
         return Status::INVALID_ARGUMENT;
     }
     if (config.max_keypoints == 0 || image.width <= 2 * kEdge || image.height <= 2 * kEdge) {
-        if (cudaMemsetAsync(output.d_count, 0, sizeof(int), stream) != cudaSuccess) {
+        if (cudaMemsetAsync(output.d_count, 0, sizeof(int), stream) != cudaSuccess ||
+            !mark_all(marks, stream)) {
             return Status::CUDA_ERROR;
         }
         return launch_status();
@@ -356,6 +368,7 @@ Status s2_detect(const ImageView& image, const Config& config, Keypoints output,
         return Status::CUDA_ERROR;
     }
     fast_kernel<<<grid, tile, 0, stream>>>(image, config.fast_threshold, scores);
+    if (!mark(marks, &S2Marks::after_fast, stream)) return Status::CUDA_ERROR;
     nms_kernel<<<grid, tile, 0, stream>>>(scores, image.width, image.height, maxima, histogram);
     select_kernel<<<1, 256, 0, stream>>>(histogram, layout.candidates, config.max_keypoints,
                                          params, output.d_count);
@@ -364,11 +377,30 @@ Status s2_detect(const ImageView& image, const Config& config, Keypoints output,
     block_scan_kernel<<<1, kScanThreads, 0, stream>>>(block_counts, layout.blocks, block_offsets);
     scatter_kernel<<<layout.blocks, kScanThreads, 0, stream>>>(maxima, layout.pixels, params,
                                                                block_offsets, keys);
+    if (!mark(marks, &S2Marks::after_select, stream)) return Status::CUDA_ERROR;
     harris_kernel<<<blocks_for(layout.candidates, 128), 128, 0, stream>>>(
         image, config.harris_k, layout.candidates, params, keys);
+    if (!mark(marks, &S2Marks::after_harris, stream)) return Status::CUDA_ERROR;
     rank_kernel<<<blocks_for(layout.candidates, kRankThreads), kRankThreads, 0, stream>>>(
         keys, params, config.max_keypoints, image.width, output);
     return launch_status();
 }
 
+}  // namespace
+
+Status s2_detect(const ImageView& image, const Config& config, Keypoints output,
+                 void* workspace, std::size_t workspace_bytes, cudaStream_t stream) {
+    return detect(image, config, output, workspace, workspace_bytes, stream, nullptr);
+}
+
 }  // namespace stitch::s2
+
+namespace stitch::s2_s3::detail {
+
+Status s2_detect_marked(const ImageView& image, const s2::Config& config, Keypoints output,
+                        void* workspace, std::size_t workspace_bytes, cudaStream_t stream,
+                        const S2Marks& marks) {
+    return s2::detect(image, config, output, workspace, workspace_bytes, stream, &marks);
+}
+
+}  // namespace stitch::s2_s3::detail

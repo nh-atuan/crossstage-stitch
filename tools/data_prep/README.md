@@ -6,16 +6,17 @@ Thư mục `tools/data_prep/` và script [`tools/colab_runner.py`](../colab_runn
 
 Thư mục Google Drive gốc của tác giả UDIS-D (`1kC7KAULd5mZsqaWnY3-rSbQLaZ7LujTY`) gồm 2 gói nén chính thức đã được gắn sẵn File ID trong [`prepare_dev_dataset.py`](prepare_dev_dataset.py):
 
-| Split | File tên gốc | Google Drive File ID | Dung lượng | Số cặp ảnh |
-|---|---|---|---|---|
-| `testing` | `testing.zip` | `1unnBdPg9Vi12-1xXoUdzMub_XUq7yZz0` | ~203 MB | 1.106 cặp |
-| `training` | `training.zip` | `1CTKa42BRdXO2vdYSadaQkvgQ8DR6l49a` | ~1.95 GB | 10.440 cặp |
+| Split | File tên gốc | Google Drive File ID | Dung lượng | Số cặp ảnh | Link tải |
+|---|---|---|---|---|---|---|
+| `testing` | `testing.zip` | `1unnBdPg9Vi12-1xXoUdzMub_XUq7yZz0` | ~203 MB | 1.106 cặp | [Tải testing.zip](https://drive.google.com/file/d/1unnBdPg9Vi12-1xXoUdzMub_XUq7yZz0/view) |
+| `training` | `training.zip` | `1CTKa42BRdXO2vdYSadaQkvgQ8DR6l49a` | ~1.95 GB | 10.440 cặp | [Tải training.zip](https://drive.google.com/file/d/1CTKa42BRdXO2vdYSadaQkvgQ8DR6l49a/view) |
+| Cả thư mục | Thư mục UDIS-D tác giả | `1kC7KAULd5mZsqaWnY3-rSbQLaZ7LujTY` | ~2.15 GB | 11.546 cặp | [Thư mục Drive](https://drive.google.com/drive/folders/1kC7KAULd5mZsqaWnY3-rSbQLaZ7LujTY) |
 
 Khi tải về, script tự động tính mã băm SHA-256 của file nén và ghi file biên nhận `data/p3/testing-source.json` (hoặc `data/p3/training-source.json`) theo đúng schema `udis-source-v1`.
 
 ## 2. Các lệnh chuẩn bị dữ liệu cho từng thành viên
 
-### 2.1. Chỉ tải `testing.zip` gốc và tạo `testing-source.json` (dành cho Chương chạy `udis_ingest.py` / Ablation A4)
+### 2.1. Chỉ tải `testing.zip` gốc và tạo `testing-source.json` (dành cho Chương chạy `tools/bench/same_h.py` / Ablation A4)
 
 ```bash
 python -m tools.data_prep.prepare_dev_dataset \

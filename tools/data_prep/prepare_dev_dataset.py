@@ -48,7 +48,7 @@ def compute_sha256(file_path: Path) -> str:
 
 
 def write_source_receipt(zip_path: Path, split: str, receipt_path: Path) -> Dict[str, str]:
-    """Write a udis-source-v1 JSON receipt compatible with tools/data_prep/udis_ingest.py."""
+    """Write a udis-source-v1 JSON receipt compatible with tools/controller/real_cohort.py and data audit."""
     info = UDIS_GDRIVE_FILES[split]
     digest = compute_sha256(zip_path)
     receipt = {
@@ -56,6 +56,8 @@ def write_source_receipt(zip_path: Path, split: str, receipt_path: Path) -> Dict
         "split": split,
         "author_source_url": UDIS_AUTHOR_URL,
         "download_url": info["url"],
+        "archive_name": info["filename"],
+        "drive_file_id": info["file_id"],
         "sha256": digest,
         "checksum_origin": "user-pinned",
         "checksum_reference": f"Official UDIS-D Google Drive folder {UDIS_FOLDER_ID} ({info['filename']})",

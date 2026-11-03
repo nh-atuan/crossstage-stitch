@@ -64,16 +64,16 @@ threshold in pixel order. Per-block counts, a block scan, and a scatter then
 write the candidates to contiguous slots. The Harris kernel builds a 64-bit key
 from the response and the inverted pixel index, and each candidate finds its
 rank by counting larger keys. All keys are distinct, so every rank below $K$
-owns one output slot. This ranking costs $O(K^2)$ comparisons. That is
-acceptable for the budgets considered here ($K\le 4000$); much larger budgets
-would call for a radix-based selection.
+owns one output slot. This ranking costs $O(K^2)$ comparisons, which is
+acceptable for the budgets used here ($K\le 4000$); much larger budgets would
+need a radix-based selection.
 
 % Role: description; mapping of work to warps and numeric choices.
 S3 smooths the image with a separable $7\times7$ Gaussian ($\sigma=2$) computed
 in FP32 and rounded to 8 bits, the same smoothing OpenCV applies before ORB
 description. One warp handles one keypoint. The orientation is the angle of the
 intensity centroid~\cite{rosin1999corner} over a circular patch of radius 15 on
-the unsmoothed image. Lane~0 alone evaluates the angle and its sine and cosine
+the unsmoothed image. Lane~0 alone computes the angle with its sine and cosine
 and broadcasts them, because FP64 throughput is low on the target GPU. Each lane
 then evaluates eight of the 256 rotated point pairs of the OpenCV pattern on the
 smoothed image and writes one byte. The result is a 32-byte binary
@@ -86,8 +86,8 @@ sizes on the host: $O(WH+K)$ bytes for S2 and $O(WH)$ bytes for S3, for a
 $W\times H$ image. Both sizes are non-decreasing in $W$, $H$, and $K$, so the
 runtime allocates once for the largest scale and budget in its ladder and
 changes $K$ per attempt without reallocation. S3 launches one warp per keypoint
-slot; the caller therefore passes a keypoint view whose capacity equals the
-current $K$ rather than the allocated maximum, which avoids idle warps. Because
+slot. To avoid idle warps, the caller passes a keypoint view whose capacity
+equals the current $K$ rather than the allocated maximum. Because
 the $2K$ preselection depends on $K$, the keypoints for a smaller budget are not
 necessarily a prefix of those for a larger one. Changing $K$ therefore reruns
 S2 through S5 instead of truncating an earlier result.

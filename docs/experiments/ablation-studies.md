@@ -12,7 +12,7 @@
 |---|---|---|---|---|---|
 | **A1** | **Hiệu quả của Probe Signal (S1 Gradient)** | Đo lường xem chi phí probe (~0.07 ms) có thực sự giúp giảm số lần retry và tiết kiệm latency tổng thể hay không | 1. **Adaptive with Probe** (đề xuất)<br>2. **Blind Escalation** (luôn bắt đầu từ nấc 1 nhẹ nhất, thiếu inliers thì leo thang)<br>3. **Conservative High** (luôn chạy nấc tối đa) | - $t_{\text{probe}}$, $t_{\text{controller}}$, $t_{\text{e2e}}$<br>- Số attempt trung bình/pair<br>- Tỉ lệ retry (%) | **Tuấn** |
 | **A2** | **Đóng góp của State/Match Reuse trong S5** | Định lượng thời gian tiết kiệm được khi tăng $R$ nhờ việc tái sử dụng match S4 và inliers S5 cũ | 1. **With Reuse** (đề xuất: giữ nguyên match S4, chỉ mở rộng RANSAC evaluation từ $R_{\text{old}}$ đến $R_{\text{new}}$)<br>2. **No Reuse** (chạy lại toàn bộ S4 matching và S5 RANSAC từ đầu) | - Thời gian chạy lại $t_{\text{retry}}$<br>- Delta latency tiết kiệm được (ms)<br>- Tốc độ cải thiện của attempt 2/3 | **Đế** |
-| **A3** | **Tác động của Ngân sách $K$ động trong S2–S3** | Đo đạc độ co giãn thời gian của FAST/ORB và kiểm chứng tính ổn định bộ nhớ (zero-allocation) | 1. **Fixed pre-allocated buffer** (đề xuất: cấp phát max $K=2000$ một lần, nhận $K$ động)<br>2. **Dynamic re-allocation** (cấp phát lại buffer theo từng $K$)<br>3. Quét $K \in \{500, 1000, 2000\}$ | - Kernel time $t_{s2}$, $t_{s3}$<br>- Memory allocation overhead<br>- Số lượng keypoints hợp lệ | **Thành** |
+| **A3** | **Tác động của Ngân sách $K$ động trong S2–S3** | Đo đạc độ co giãn thời gian của FAST/ORB theo núm vặn $K$ và kiểm chứng tính ổn định bộ nhớ (zero-allocation với view `capacity = K`) | 1. **Fixed pre-allocated buffer** (đề xuất: cấp phát một lần theo $K_{\max}=4000$, truyền view `capacity = K` động theo từng attempt)<br>2. **Dynamic re-allocation / Unbounded capacity** (cấp phát lại theo từng $K$ hoặc giữ `capacity = K_max` cố định)<br>3. Quét $K \in \{500, 1000, 2000, 4000\}$ | - Kernel time $t_{s2}$, $t_{s3}$<br>- Memory allocation / idle-block overhead<br>- Số lượng keypoints hợp lệ | **Thành** |
 | **A4** | **Same-Homography Blending Trade-off (S6)** | Định lượng sự đánh đổi giữa latency render và chất lượng cảm nhận vùng biên (seam quality) | Cố định cùng 1 homography $H$ đã chuẩn hóa:<br>1. **Feather Blending**<br>2. **Multiband 3-level**<br>3. **Multiband 5-level** | - Kernel time $t_{s6}$ (render + pyramid)<br>- VRAM footprint của workspace<br>- Overlap SSIM / PSNR<br>- Hiện tượng seam/ghosting | **Chương** |
 | **A5** | **Độ nhạy của Ngưỡng Chất lượng ($\delta_S, \delta_P$)** | Khảo sát phản ứng của Controller và Oracle khi người dùng siết chặt hoặc nới lỏng dung sai chất lượng | Quét lưới dung sai trên tập test UDIS-D:<br>- $\delta_S \in [0.01, 0.05]$ (bước 0.01)<br>- $\delta_P \in [0.2, 1.0\text{ dB}]$ (bước 0.2 dB) | - Tỉ lệ đạt QoR (pass rate %)<br>- Tỉ lệ các nấc ladder được chọn<br>- Speedup so với Fixed-Best | **Chương** |
 
@@ -78,15 +78,15 @@ flowchart TD
 
 - **Người chủ trì duy nhất:** Thành
 
-- **Bối cảnh:** Khác với các pipeline truyền thống phải cấp phát lại buffer GPU mỗi khi thay đổi số lượng keypoints $K$, kiến trúc S2–S3 của nhóm cấp phát một buffer cố định cho $K_{\max}=2000$ ngay từ đầu (pre-allocated) và chỉ truyền tham số $K$ động vào kernel.
-- **Câu hỏi khoa học:** Thời gian thực thi của FAST và ORB co giãn như thế nào theo các nấc $K \in \{500, 1000, 2000\}$? Cơ chế zero-allocation giúp triệt tiêu hiện tượng jitter ra sao?
+- **Bối cảnh:** Khác với các pipeline truyền thống phải cấp phát lại buffer GPU mỗi khi thay đổi số lượng keypoints $K$, kiến trúc S2–S3 của nhóm cấp phát một bộ buffer/workspace cố định một lần theo $K_{\max}=4000$ và kích thước ảnh lớn nhất ngay từ đầu (pre-allocated), sau đó truyền tham số $K$ động kèm view `Keypoints` có `capacity = K` vào từng attempt (xem [quyết định K động](../decisions/s2-s3-dynamic-k.md)).
+- **Câu hỏi khoa học:** Thời gian thực thi của S2 (FAST + Harris) và S3 (ORB) đánh đổi (trade-off) và co giãn như thế nào khi vặn núm $K \in \{500, 1000, 2000, 4000\}$? Cơ chế zero-allocation kết hợp view `capacity = K` giúp triệt tiêu hiện tượng jitter cấp phát và tránh phóng thừa block ở S3/S4 ra sao?
 - **Phương pháp thực hiện:**
-  - Cố định $S=0.5$, chạy quét qua các giá trị $K \in \{500, 1000, 2000\}$.
-  - Đo đạc kernel time riêng lẻ: $t_{\text{fast}}$ (S2), $t_{\text{harris}}$ (S2), và $t_{\text{orb}}$ (S3).
-  - So sánh độ biến thiên thời gian (variance/jitter) giữa cơ chế cấp phát tĩnh một lần và cơ chế cấp phát động (`cudaMalloc`/`cudaFree` trong vòng lặp đo).
+  - Quét qua các giá trị $K \in \{500, 1000, 2000, 4000\}$ trên lưới tỉ lệ $S \in \{0.25, 0.5, 0.75, 1.0\}$ (hoặc cố định $S=0.5$ cho đường cong chi tiết từng kernel).
+  - Đo đạc thời gian $t_{s2}$, $t_{s3}$ (và chi tiết các bước FAST, Harris rank $O(K^2)$, rBRIEF).
+  - Đối sánh giữa 3 chế độ: (1) cấp phát một lần theo $K_{\max}=4000$ kèm view `capacity = K`, (2) cấp phát một lần nhưng giữ `capacity = K_max` (gây thừa block ở S3 khi $K$ nhỏ), và (3) cấp phát vừa đúng theo từng $K$ (`cudaMalloc`/`cudaFree`).
 - **Đầu ra bàn giao:**
-  - Bảng phân bổ thời gian chi tiết của S2 và S3 theo từng nấc $K$.
-  - Đồ thị đường cong thể hiện sự đánh đổi giữa $K$ và thời gian trích xuất đặc trưng.
+  - Bảng phân bổ thời gian chi tiết của S2 và S3 cùng footprint bộ nhớ theo từng nấc $K \in \{500, 1000, 2000, 4000\}$.
+  - Đồ thị đường cong thể hiện sự đánh đổi (trade-off) giữa ngân sách $K$ và thời gian trích xuất đặc trưng.
 
 ---
 

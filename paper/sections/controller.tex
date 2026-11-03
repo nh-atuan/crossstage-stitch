@@ -13,17 +13,17 @@ provide no adaptive latency or quality result.
 A policy supplies a fixed probe scale, scene rules, and self-check thresholds
 for each ladder position. No numerical policy defaults are embedded in the
 controller. For probe image $I$ with dimensions $w\times h$, the S1 integration
-contract defines normalized mean absolute gradient as
+contract defines the normalized mean absolute gradient as
 \begin{equation}
  G(I)=\frac{\sum_{y=0}^{h-1}\sum_{x=0}^{w-2}|I(x+1,y)-I(x,y)|
  +\sum_{y=0}^{h-2}\sum_{x=0}^{w-1}|I(x,y+1)-I(x,y)|}
  {255\,[h(w-1)+w(h-1)]}.
 \end{equation}
-The controller receives $G_A$, $G_B$, and the probe scale metadata after checked
-GPU completion. It validates the metadata against the configured probe scale
+The controller receives $G_A$, $G_B$, and the probe scale metadata after the
+harness has confirmed GPU completion. It validates the metadata against the configured probe scale
 and forms $g=\min(G_A,G_B)$. Rules have decreasing inclusive lower bounds on $g$
 and specify an initial ladder index. The first matching rule selects the
-configuration. The last lower bound must be zero, covering all valid gradients.
+configuration. The last lower bound must be zero, so every valid gradient matches a rule.
 Rule bounds and indices remain development-set calibration parameters. This
 scalar feature does not directly measure overlap or parallax.
 

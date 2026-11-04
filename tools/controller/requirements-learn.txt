@@ -1,0 +1,2 @@
+# Offline training only; the C++ runtime has no XGBoost dependency.
+xgboost==3.2.0

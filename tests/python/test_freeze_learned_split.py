@@ -23,6 +23,14 @@ def test_holdout_excludes_shared_image_components_and_is_reproducible(tmp_path):
     freeze(source,index,*[other/n for n in ['split.json','restore.json','selected.json']],count=2)
     assert (tmp_path/'split.json').read_bytes()==(other/'split.json').read_bytes()
     assert b'\r\n' in (other/'split.json').read_bytes()
+    history=tmp_path/'history.json'
+    history.write_text(json.dumps(dict(old,validation_pairs=result['validation_pairs'])))
+    newer=tmp_path/'newer';newer.mkdir()
+    next_result=freeze(source,index,*[newer/n for n in ['split.json','restore.json','selected.json']],
+        count=2,excluded_splits=[history],selection_salt='new-campaign')
+    assert not {p['pair_id'] for p in next_result['validation_pairs']}&{
+        p['pair_id'] for p in result['validation_pairs']}
+    assert next_result['excluded_protocol_sha256']
     with pytest.raises(ValueError,match='must not exist'):freeze(*args,count=2)
 
 

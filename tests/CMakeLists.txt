@@ -20,6 +20,12 @@ add_test(NAME test_controller_policy COMMAND test_controller_policy)
 
 # Compile the shared headers with nvcc (sm_75) when CUDA is available.
 if(CMAKE_CUDA_COMPILER)
+  add_executable(test_relational_features controller/test_relational_features.cu ../src/controller/relational_features.cu)
+  target_link_libraries(test_relational_features PRIVATE stitch_common)
+  target_include_directories(test_relational_features PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+  set_target_properties(test_relational_features PROPERTIES CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED YES)
+  add_test(NAME test_relational_features COMMAND test_relational_features)
+  set_tests_properties(test_relational_features PROPERTIES SKIP_RETURN_CODE 77)
   add_executable(test_controller_features controller/test_features.cu ../src/controller/features.cu)
   target_link_libraries(test_controller_features PRIVATE stitch_common)
   target_include_directories(test_controller_features PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../src)

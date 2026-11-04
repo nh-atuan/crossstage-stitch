@@ -27,6 +27,10 @@ add_executable(test_learned_controller "${STITCH_REPO_ROOT}/tests/controller/tes
 target_include_directories(test_learned_controller PRIVATE "${STITCH_REPO_ROOT}/tests")
 target_link_libraries(test_learned_controller PRIVATE stitch_controller)
 add_test(NAME test_learned_controller COMMAND test_learned_controller)
+add_executable(test_ensemble "${STITCH_REPO_ROOT}/tests/controller/test_ensemble.cpp")
+target_include_directories(test_ensemble PRIVATE "${STITCH_REPO_ROOT}/tests")
+target_link_libraries(test_ensemble PRIVATE stitch_controller)
+add_test(NAME test_ensemble COMMAND test_ensemble)
 
 option(STITCH_CONTROLLER_GPU_TESTS "Test Controller with actual S5 CUDA feedback" OFF)
 if(STITCH_CONTROLLER_GPU_TESTS)

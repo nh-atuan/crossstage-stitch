@@ -1,0 +1,69 @@
+{
+  "schema_version": "quantum-protocol-pilot-v1",
+  "status": "proposed-pending-review",
+  "date": "2026-11-04",
+  "owner": "Thanh",
+  "reviewers": {
+    "policy_and_split": "De",
+    "measurement": "Tuan",
+    "B_fixed_and_QoR": "Chuong"
+  },
+  "configuration_space": {
+    "source": "tools/sweep/run_sweep.py::generate_grid_configs",
+    "S": [0.25, 0.5, 0.75, 1.0],
+    "K": [500, 1000, 2000],
+    "R": [128, 256, 512, 1024],
+    "count": 48,
+    "B_fixed": "feather"
+  },
+  "reference_config": "S1.00_K2000_R1024_Bfeather",
+  "quality_policy": {
+    "path": "tools/qor/policy-pilot.json",
+    "version": "qor-pilot-v1",
+    "status": "pilot-not-team-approved",
+    "sha256_lf": "9ca57b19a0840553759140f15b8b0ceb716e9feeaf91396cf3698e255b49bb45"
+  },
+  "split": {
+    "source": "controller-calibration-split-v1 from tools/controller/prepare_calibration.py (PR #16)",
+    "pair_prefix": "udis_train_",
+    "fit_partition": "calibration",
+    "evaluation_partitions": ["validation"],
+    "udis_test_and_hpatches": "not used"
+  },
+  "timing": {"boundary": "t_e2e per docs/conventions.md", "warmup": 2, "repeats": 10,
+             "latency": "median over repeats"},
+  "rho_grid": [0.0, 0.05, 0.10, 0.20],
+  "penalty": {"lambda": 1.0, "alpha": "k_ub + 1, k_ub = validated greedy cover size on the reduced instance",
+              "sensitivity_ratios": [0.5, 1.0, 2.0, 4.0], "ratios_at_or_below_1": "stress-only"},
+  "reduction": {"rules": ["forced_singleton", "duplicate_row", "superset_row", "zero_column",
+                          "duplicate_column"],
+                "ablation": "duplicate_column off"},
+  "admission": {"q_max": 20, "statevector_bytes": "16 * 2^q"},
+  "instance_selection": {
+    "locked_before_solvers": true,
+    "primary": "smallest rho in rho_grid with 0 < q_after <= q_max on the full fit partition",
+    "if_all_q_after_above_q_max": "restricted cohort: order fit pairs by sha256('20261104:' + pair_id), take the first N pairs with N decreasing from |fit| at the smallest rho with q_after > 0, stop at the first N with 0 < q_after <= q_max; record the manifest",
+    "if_all_q_after_zero": "solved_by_reduction; report the limitation; G2 not reached"
+  },
+  "seeds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  "wall_cap_s": 60,
+  "solvers": {
+    "exhaustive": {"max_columns": 20, "timeout_s": 60},
+    "cpsat": {"workers": 1, "seed": 0, "timeout_s": 60},
+    "greedy": {"rule": "max uncovered gain, lowest config_id on ties, then reverse-delete by descending config_id"},
+    "sa": {"restarts": 4, "sweeps": 1000, "betas": "geometric from ln2/max_flip_delta to ln100/min_abs_coefficient"},
+    "random_qubo": {"draws": 413696},
+    "random_y": {"draws": 413696, "cardinality": "uniform[1, n_y]"},
+    "qaoa": {"depths": [1, 2], "inits": 4, "calls_per_init": 100, "shots_per_call": 1024,
+             "confirm_shots": 4096, "optimizer": "SPSA (alpha 0.602, gamma 0.101, A 0.1*iterations, c 0.1, first step 0.2 rad)",
+             "angle_init": "uniform[0, pi/2]", "hamiltonian_scaling": "divide h, J and offset by max |coefficient|",
+             "angle_selection": "final angles of the init with the lowest mean of its last f_plus and f_minus",
+             "simulator": "qiskit-aer AerSimulator statevector, CPU"}
+  },
+  "repair": {
+    "input": "lowest-energy sample of the run (QAOA: confirmation shots)",
+    "rule": "same routine as greedy, on the original incidence",
+    "controls": ["repair-only from an empty catalogue"]
+  },
+  "solution_selection": "smallest raw cover-feasible catalogue among all samples in budget, lexicographic tie-break"
+}

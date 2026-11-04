@@ -3,7 +3,8 @@
 - Người quyết định: Đế, yêu cầu triển khai trong phiên làm việc.
 - Ngày: 04/11 (Thứ 4), năm 2026.
 - Phase 3, deadline chung 05/11 (Thứ 5).
-- Trạng thái: Đang triển khai và kiểm chứng.
+- Trạng thái: Đã triển khai và đo trên Colab T4; chưa đạt lợi thế latency
+  dưới cùng QoR. Xem [báo cáo kết quả](../reports/controller-learned-features.md).
 
 ## Bối cảnh và lựa chọn
 

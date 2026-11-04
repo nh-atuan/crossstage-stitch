@@ -1,5 +1,17 @@
 # Bàn giao Phase 3 của Đế
 
+## Cập nhật 04/11 (Thứ 4): feature và gate
+
+Đã triển khai probe nhiều feature, gate sau S5 có photometric/hình học và
+phân bố inlier, cây chọn cấu hình và chi phí/retry target từ transition đo
+trên T4. Source đo `47256d4`; 21 CTest, 409 test Python PASS, memcheck feature
+0 errors. Khóa và đo 50 component training mới ngoài pool development cũ.
+
+Biến thể p80 chọn cấu hình rẻ cho 22/50 pair, có 48 QoR PASS, một FAIL và
+một reference unknown. V2/strict/p90 có 49 PASS và một unknown. Chưa có
+speedup dưới cùng QoR; không thay baseline hoặc cập nhật kết luận paper
+bằng kết quả này. Chi tiết ở [báo cáo feature/gate](controller-learned-features.md).
+
 ## Cập nhật 04/11 (Thứ 4)
 
 Đã hoàn thành phần hiệu chỉnh Controller bổ sung theo yêu cầu của Đế:

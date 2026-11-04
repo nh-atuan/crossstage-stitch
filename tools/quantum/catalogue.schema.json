@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "quantum-catalogue-v1",
+  "type": "object",
+  "required": ["schema_version", "label", "size", "configurations", "fallback_id",
+               "instance_sha256", "rho", "split", "scope", "source_sha256", "provenance",
+               "catalogue_sha256"],
+  "properties": {
+    "schema_version": {"const": "quantum-catalogue-v1"},
+    "label": {"enum": ["classical", "quantum", "hybrid_quantum_classical_repair", "heuristic",
+                       "hybrid_heuristic_classical_repair", "repair_only"]},
+    "size": {"type": "integer", "minimum": 1},
+    "configurations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["config_id", "S", "K", "R", "B"],
+        "properties": {
+          "config_id": {"type": "string"},
+          "S": {"type": "number"},
+          "K": {"type": "integer"},
+          "R": {"type": "integer"},
+          "B": {"type": "string"}
+        }
+      }
+    },
+    "fallback_id": {"type": ["string", "null"]},
+    "instance_sha256": {"type": "string"},
+    "rho": {"type": "number", "minimum": 0},
+    "split": {"type": "string"},
+    "scope": {"enum": ["full", "restricted"]},
+    "source_sha256": {"type": "string"},
+    "provenance": {"type": "object"},
+    "catalogue_sha256": {"type": "string"}
+  }
+}

@@ -768,8 +768,10 @@ void PipelineRunner::execute_adaptive_run(
             }
             feature_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
             record->t_features+=feature_ms;
-            record->gate_features=feedback.features;record->features_present=feedback.features_present;
         }
+        // A reference fallback intentionally skips the gate. Its final feature
+        // row must not retain observations from the rejected cheap candidate.
+        record->gate_features=feedback.features;record->features_present=feedback.features_present;
         Status obs_stat = controller.observe(feedback, &decision);
         const auto t_obs_e = std::chrono::steady_clock::now();
         ctrl_time_ms += std::chrono::duration<double, std::milli>(t_obs_e - t_obs_s).count();

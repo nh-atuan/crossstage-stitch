@@ -20,6 +20,9 @@ add_test(NAME test_controller_policy COMMAND test_controller_policy)
 
 # Compile the shared headers with nvcc (sm_75) when CUDA is available.
 if(CMAKE_CUDA_COMPILER)
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  add_test(NAME test_harness_seed COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_harness_seed.py $<TARGET_FILE:stitch_harness>)
   add_executable(test_harness_upload test_harness_upload.cu ../harness/pipeline_runner.cu)
   target_include_directories(test_harness_upload PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
   target_link_libraries(test_harness_upload PRIVATE stitch_common stitch_controller

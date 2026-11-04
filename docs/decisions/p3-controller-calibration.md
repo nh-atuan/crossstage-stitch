@@ -64,6 +64,15 @@ không dựa trên nhãn chất lượng hoặc giả định tăng R luôn có 
 
 ## Fallback và nghiệm thu
 
+Cập nhật 04/11 (Thứ 4), năm 2026: kiểm raw phát hiện harness chưa truyền seed
+CLI vào các phần tử đọc từ `--configs`; đường single-config và adaptive đã
+nhận seed. Đã dừng grid trước bước fit và validation. Giữ các batch seed 0
+làm diagnostic, không dùng chúng để nghiệm thu protocol seed 20261101.
+Sửa tại harness, thêm regression chạy binary thật cho cả fixed/oracle và
+kiểm identity/seed/repeat của từng shard trước khi chạy batch tiếp theo.
+Fitter từ chối cả trường hợp mọi dòng đồng nhất nhưng dùng sai seed.
+Không sửa cột seed trong CSV để hợp thức hóa dữ liệu đã đo; chạy lại grid.
+
 Nếu validation không chứng minh được lợi ích dưới cùng QoR, báo kết quả đó;
 không nới QoR, bỏ pair lỗi hoặc tune trên validation/test. Policy cũ và kết
 quả cũ là baseline có provenance riêng, không ghi đè checkpoint đã bàn giao.

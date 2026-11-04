@@ -14,6 +14,7 @@ from tools.controller.fit_scene_rules import fit as fit_rules
 from tools.controller.scene_features import pair_gradient
 
 REFERENCE = 'S1.00_K2000_R1024_Bfeather'
+RANSAC_SEED = 20261101
 
 
 def digest(path):
@@ -47,8 +48,8 @@ def load_samples(runs_path, audit_path, manifest_path, split_path):
             seeds.add(int(row['seed']))
             if row['is_warmup'] == '0':
                 grouped[row['pair_id'], row['config_id']].append(row)
-    if len(seeds) != 1:
-        raise ValueError('mixed RANSAC seeds')
+    if seeds != {RANSAC_SEED}:
+        raise ValueError('RANSAC seed differs from the frozen calibration protocol')
     samples = {}
     for identity, rows in grouped.items():
         sample = dict(rows[0])

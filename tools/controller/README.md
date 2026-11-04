@@ -25,6 +25,8 @@ Sweep và validation yêu cầu Colab T4, build Release `sm_75`, seed RANSAC
 20261101, hai warmup và mười repeat. CLI sweep không tự sinh ảnh synthetic
 khi manifest thiếu. Không ghi đè output hoàn chỉnh. Khi runtime bị thu hồi,
 giữ checkpoint và kiểm lại nguồn trước khi chạy campaign mới.
+Mỗi shard được kiểm đủ pair/config/repeat và seed ngay sau khi harness
+trả về; fitter cũng từ chối seed khác protocol, kể cả khi CSV đồng nhất.
 
 `fit_checks` tìm self-check dạng bốn ngưỡng hiện có, không đổi predicate
 SSIM/PSNR/coverage offline. Chỉ giữ các gate không có false accept đã biết

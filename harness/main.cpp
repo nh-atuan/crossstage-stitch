@@ -209,6 +209,7 @@ int main(int argc, char** argv) {
             cfg.seed = seed;
             configs.push_back(cfg);
         }
+        for (auto& config : configs) config.seed = seed;
     }
 
     // Configure Controller if in adaptive mode

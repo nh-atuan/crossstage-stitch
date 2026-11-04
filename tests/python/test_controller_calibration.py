@@ -13,6 +13,7 @@ from tools.controller.fit_scene_rules import fit as fit_rules
 from tools.controller.prepare_calibration import decode_member, freeze_split
 from tools.controller.scene_features import quarter_gradient
 from tools.controller.validate_policy import evaluate
+from tools.controller.sweep_calibration import validate_shard
 
 
 def metric(count=40, ratio=.8, coverage=.3, residual=1., status='OK'):
@@ -125,6 +126,31 @@ def test_calibration_refuses_leakage_and_stale_audits(tmp_path, change):
         paths[1].write_text(json.dumps(audit))
     with pytest.raises(ValueError):
         load_samples(*paths)
+
+
+def test_calibration_rejects_a_uniform_but_wrong_seed(tmp_path):
+    paths = calibration_fixture(tmp_path)
+    paths[0].write_text(paths[0].read_text().replace('20261101', '0'))
+    audit = json.loads(paths[1].read_text())
+    audit['inputs_sha256']['runs'] = digest(paths[0])
+    paths[1].write_text(json.dumps(audit))
+    with pytest.raises(ValueError, match='RANSAC seed'):
+        load_samples(*paths)
+
+
+@pytest.mark.parametrize('corruption', ['none', 'seed', 'duplicate', 'missing'])
+def test_grid_is_checked_before_the_next_batch(tmp_path, corruption):
+    rows = [dict(pair_id='p', config_id='a', repeat_idx=i, is_warmup=0,
+                 dataset='udis_d', split='calibration', seed=20261101) for i in range(2)]
+    if corruption == 'seed': rows[0]['seed'] = 0
+    elif corruption == 'duplicate': rows.append(rows[0])
+    elif corruption == 'missing': rows.pop()
+    path = tmp_path/'grid.csv'
+    with path.open('w', newline='') as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0])); writer.writeheader(); writer.writerows(rows)
+    if corruption == 'none': validate_shard(path, ['p'], ['a'], repeats=2, warmup=0)
+    else:
+        with pytest.raises(ValueError): validate_shard(path, ['p'], ['a'], repeats=2, warmup=0)
 
 
 def test_replay_skips_an_impossible_r_only_attempt():

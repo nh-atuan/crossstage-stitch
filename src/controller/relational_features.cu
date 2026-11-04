@@ -93,20 +93,22 @@ __global__ void patch_kernel(ImageView a,ImageView b,Matrix inverse,double* out)
     }
 }
 __global__ void statistics_kernel(Keypoints a,Keypoints b,Matches m,const std::uint8_t* mask,
-    HomographyResult h,ScaleInfo sa,ScaleInfo sb,const s4::Top2* forward,double* out) {
+    HomographyResult h,ScaleInfo sa,ScaleInfo sb,const s4::Top2* forward,double* out,unsigned groups) {
     // One deterministic collector: at most 4000 matches; no floating atomics.
     int residual_hist[257]={},distance_hist[257]={},counts[16]={};double sums[16]={};
     int inliers=0;double distance_sum=0;
     for (int i=0;i<h.num_matches;++i) {
         const int ia=m.idx_a[i],ib=m.idx_b[i];
         if (ia<0 || ib<0 || ia>=a.capacity || ib>=b.capacity) continue;
-        const double distance=fmin(256.,fmax(0.,double(m.distance[i])));
-        distance_sum+=distance;++distance_hist[int(distance)];
-        if (!mask[i]) continue;
-        const double x=b.x[ib]/sb.sx,y=b.y[ib]/sb.sy,z=h.H[6]*x+h.H[7]*y+h.H[8];
+        if (groups&matching_relations) {
+            const double distance=fmin(256.,fmax(0.,double(m.distance[i])));
+            distance_sum+=distance;++distance_hist[int(distance)];
+        }
+        if (!(groups&geometry_relations) || !mask[i]) continue;
+        const double x=(b.x[ib]+.5)/sb.sx-.5,y=(b.y[ib]+.5)/sb.sy-.5,z=h.H[6]*x+h.H[7]*y+h.H[8];
         if (!isfinite(z) || fabs(z)<1e-12) continue;
         const double u=(h.H[0]*x+h.H[1]*y+h.H[2])/z,v=(h.H[3]*x+h.H[4]*y+h.H[5])/z;
-        const double e=hypot(u-a.x[ia]/sa.sx,v-a.y[ia]/sa.sy);
+        const double e=hypot(u-((a.x[ia]+.5)/sa.sx-.5),v-((a.y[ia]+.5)/sa.sy-.5));
         if (!isfinite(e)) continue;
         ++residual_hist[min(256,int(e*8))];++inliers;
         const int tile=max(0,min(3,int(a.x[ia]*4/sa.work_w)))+4*max(0,min(3,int(a.y[ia]*4/sa.work_h)));
@@ -121,7 +123,7 @@ __global__ void statistics_kernel(Keypoints a,Keypoints b,Matches m,const std::u
     out[3]=regions?sqrt(fmax(0.,sq/regions-(sum/regions)*(sum/regions))):0;
     out[4]=distance_sum/fmax(1.,double(h.num_matches))/256.;out[5]=dp90/256.;
     double ratio_sum=0;int ratios=0,ambiguous=0;
-    if (forward) for(int j=0;j<a.capacity;++j) {
+    if (forward && (groups&matching_relations)) for(int j=0;j<a.capacity;++j) {
         const auto p=forward[j];
         if(p.first_index<0 || p.second_index<0 || !isfinite(p.second_distance))continue;
         const double ratio=p.second_distance>0?p.first_distance/p.second_distance:1.;
@@ -142,7 +144,7 @@ Status pair_relations(const ImageView& a,const ImageView& b,double* output,cudaS
 }
 Status alignment_relations(const ImageView& a,const ImageView& b,const Keypoints& ka,const Keypoints& kb,
     const Matches& matches,const std::uint8_t* mask,const HomographyResult& h,const ScaleInfo& sa,
-    const ScaleInfo& sb,const s4::Top2* forward,double* output,cudaStream_t stream) {
+    const ScaleInfo& sb,const s4::Top2* forward,double* output,cudaStream_t stream,unsigned groups) {
     Matrix inverse{};
     if (!valid_image(a) || !valid_image(b) || !output || !mask || !matches.idx_a || !matches.idx_b ||
         !matches.distance || !ka.x || !ka.y || !kb.x || !kb.y || h.status!=Status::OK ||
@@ -150,9 +152,12 @@ Status alignment_relations(const ImageView& a,const ImageView& b,const Keypoints
         kb.capacity<1 || kb.capacity>4000 || !std::isfinite(sa.sx) || !std::isfinite(sa.sy) ||
         !std::isfinite(sb.sx) || !std::isfinite(sb.sy) || sa.sx<=0 || sa.sy<=0 || sb.sx<=0 || sb.sy<=0 ||
         sa.work_w<=0 || sa.work_h<=0 || !invert(h.H,&inverse)) return Status::INVALID_ARGUMENT;
-    statistics_kernel<<<1,1,0,stream>>>(ka,kb,matches,mask,h,sa,sb,forward,output);
+    if (groups>7) return Status::INVALID_ARGUMENT;
+    if (cudaMemsetAsync(output,0,alignment_relation_count*sizeof(double),stream)!=cudaSuccess) return Status::CUDA_ERROR;
+    if (groups&(matching_relations|geometry_relations))
+        statistics_kernel<<<1,1,0,stream>>>(ka,kb,matches,mask,h,sa,sb,forward,output,groups);
     if (cudaGetLastError()!=cudaSuccess) return Status::CUDA_ERROR;
-    patch_kernel<<<1,32,0,stream>>>(a,b,inverse,output);
+    if (groups&photometric_relations) patch_kernel<<<1,32,0,stream>>>(a,b,inverse,output);
     return cudaGetLastError()==cudaSuccess?Status::OK:Status::CUDA_ERROR;
 }
 }  // namespace stitch::controller

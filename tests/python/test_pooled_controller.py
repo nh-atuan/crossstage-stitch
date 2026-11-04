@@ -57,3 +57,22 @@ def test_replay_counts_false_accept_and_charges_rejected_attempt_before_fallback
     assert strict['cost'][1]==pytest.approx(1.+.1+10.+.5)
     _,selected=tune(grid,prediction)
     assert selected['false_accept']==0
+
+
+def test_feature_ablation_keeps_post_s5_observations_out_of_initial_selector():
+    from tools.controller.pooled_data import feature_columns
+    assert feature_columns('existing')==list(range(33))
+    assert feature_columns('all')==list(range(39))
+    assert feature_columns('matching')==feature_columns('geometry')==feature_columns('photo')==list(range(33))
+    assert set(feature_columns('matching',True))-set(range(57))==set(range(67,71))
+    assert set(feature_columns('geometry',True))-set(range(57))==set(range(63,67))
+    assert set(feature_columns('photo',True))-set(range(57))==set(range(71,77))
+
+
+def test_export_column_mapping_preserves_xgboost_predictions():
+    from tools.controller import boosted_model as bm
+    x=np.linspace(-2,2,160).reshape(-1,1)
+    model=bm.fit(x,(x[:,0]>.2).astype(float),classifier=True,rounds=12)
+    exported=bm.export(model,transform='sigmoid',columns=[2],input_features=4)
+    full=np.zeros((len(x),4));full[:,2]=x[:,0]
+    assert np.allclose(bm.predict(exported,full,raw=True),bm.margins(model,x),atol=2e-6)

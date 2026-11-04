@@ -6,6 +6,7 @@
 namespace stitch::controller {
 constexpr int pair_relation_count=6;
 constexpr int alignment_relation_count=14;
+constexpr unsigned matching_relations=1,geometry_relations=2,photometric_relations=4;
 // Output: peak NCC, peak gap, normalized dx/dy, zero-shift NCC, peak overlap.
 Status pair_relations(const ImageView& a, const ImageView& b, double* output,
                       cudaStream_t stream);
@@ -17,5 +18,6 @@ Status pair_relations(const ImageView& a, const ImageView& b, double* output,
 Status alignment_relations(const ImageView& a, const ImageView& b,
     const Keypoints& ka, const Keypoints& kb, const Matches& matches,
     const std::uint8_t* mask, const HomographyResult& h, const ScaleInfo& sa,
-    const ScaleInfo& sb, const s4::Top2* forward, double* output, cudaStream_t stream);
+    const ScaleInfo& sb, const s4::Top2* forward, double* output, cudaStream_t stream,
+    unsigned groups=7);
 }  // namespace stitch::controller

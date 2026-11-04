@@ -41,6 +41,15 @@ int main() {
     CHECK(host[4]==8./256 && host[5]==8./256 && host[6]==.5 && host[7]==0);
     CHECK(std::abs(host[8]-1)<1e-12 && std::abs(host[9]-1)<1e-12);
     CHECK(host[10]<1e-12 && host[11]>.999999 && host[12]==1 && host[13]<1e-12);
+    Keypoints scaled=kp;cudaMalloc(&scaled.x,64);cudaMalloc(&scaled.y,64);
+    std::vector<float> sx=x,sy=y;
+    for(int i=0;i<16;++i){sx[i]=.5f*(sx[i]+.5f)-.5f;sy[i]=.5f*(sy[i]+.5f)-.5f;}
+    cudaMemcpy(scaled.x,sx.data(),64,cudaMemcpyHostToDevice);cudaMemcpy(scaled.y,sy.data(),64,cudaMemcpyHostToDevice);
+    ScaleInfo half{};make_scale_info(64,64,.5,&half);
+    CHECK(controller::alignment_relations(a,a,scaled,kp,m,dm,h,half,scale,df,device,nullptr)==Status::OK);
+    CHECK(cudaMemcpy(host,device,sizeof(host),cudaMemcpyDeviceToHost)==cudaSuccess);
+    CHECK(host[0]==0 && host[1]==0 && host[2]<1e-12);
+    cudaFree(scaled.x);cudaFree(scaled.y);
     h.H[8]=0;CHECK(controller::alignment_relations(a,a,kp,kp,m,dm,h,scale,scale,df,device,nullptr)==Status::INVALID_ARGUMENT);
     cudaFree(a.data);cudaFree(device);cudaFree(kp.x);cudaFree(kp.y);cudaFree(m.idx_a);cudaFree(m.idx_b);
     cudaFree(m.distance);cudaFree(dm);cudaFree(df);

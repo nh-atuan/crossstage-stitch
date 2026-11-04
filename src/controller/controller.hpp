@@ -68,7 +68,11 @@ public:
     // Forbidden while awaiting feedback. Invalid input changes nothing.
     Status configure(const Policy& policy) noexcept;
     double probe_scale() const noexcept;
-    bool uses_learned_features() const noexcept { return configured_ && policy_.selector.count != 0; }
+    bool uses_learned_features() const noexcept { return configured_ && (policy_.selector.count != 0 || policy_.pooled); }
+    bool uses_pair_relations() const noexcept { return configured_ && policy_.pooled && policy_.pooled->pair_relations; }
+    unsigned relation_mask() const noexcept { return configured_ && policy_.pooled ? policy_.pooled->relation_mask : 0; }
+    bool needs_gate_features() const noexcept { return uses_learned_features() &&
+        (!policy_.pooled || ladder_position_!=policy_.pooled->reference_index); }
 
     // Borrows the immutable ladder until the next successful configure/initialize.
     Status initialize(const Knobs* ladder, std::size_t count) noexcept;
@@ -85,6 +89,7 @@ private:
     std::size_t count_ = 0;
     std::size_t ladder_position_ = 0;
     Phase phase_ = Phase::Uninitialized;
+    std::array<double,39> pooled_context_{};
 };
 
 namespace detail {

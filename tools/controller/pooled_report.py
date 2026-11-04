@@ -33,8 +33,8 @@ def report(summary_path,split_path,output):
         'Đã khóa 50 component training mới, loại cả hai cohort validation đã xem và toàn calibration. '
         'Chưa chạy đánh giá policy trên tập này. Đã phục hồi ảnh trên Colab; không dùng nhãn holdout để học.', '',
         'Feature CUDA quan hệ hai ảnh đã có module và fixture riêng. Chưa tích hợp các feature này '
-        'vào fitter/harness, chưa có ablation lợi ích hoặc chi phí E2E. Policy JSON v4 hiện là artifact '
-        'huấn luyện; loader/runtime hiện tại chưa hỗ trợ nó. Chưa thay policy mặc định.', '',
+        'xong vào phép đo fitter/harness; chưa có ablation lợi ích hoặc chi phí E2E. Loader/inference v4 '
+        'đã được triển khai và đang kiểm chứng tích hợp trên T4. Chưa thay policy mặc định.', '',
         'Cần chốt source sau cập nhật main, tích hợp loader/inference/feature, kiểm parity và thu feature '
         'calibration, rồi mới so ablation và chạy tập kiểm tra đã khóa. Nếu source mới thay output '
         'H/status/count, phải sinh lại nhãn; không trộn ngầm kết quả hai binary.', '',

@@ -8,7 +8,7 @@ import numpy as np
 import xgboost
 from tools.controller import boosted_model as bm
 from tools.controller.calibrate import digest
-from tools.controller.pooled_data import load, subset
+from tools.controller.pooled_data import load, subset, feature_columns
 from tools.controller.pooled_policy import predictions, replay, tune
 
 SPECS = [(2,64),(3,64),(2,128)]
@@ -20,7 +20,7 @@ def folds(groups, count=5, salt='pooled-outer-v4'):
     return np.array([assignment[p] for p in groups])
 
 
-def fit_candidate(grid, depth, rounds):
+def fit_candidate(grid, depth, rounds, feature_set='existing'):
     assignment=folds(grid.groups,3,'pooled-fit-calibration-v4')
     fit_indices=np.flatnonzero(assignment!=0);cal_indices=np.flatnonzero(assignment==0)
     if set(grid.groups[fit_indices]) & set(grid.groups[cal_indices]):
@@ -29,19 +29,21 @@ def fit_candidate(grid, depth, rounds):
     models={}
     for name,features in [('pre_quality','pre'),('post_quality','post'),('latency','pre')]:
         classifier=name!='latency'
-        x=getattr(fit,features).reshape(-1,getattr(fit,features).shape[-1])
+        full_x=getattr(fit,features).reshape(-1,getattr(fit,features).shape[-1])
+        columns=feature_columns(feature_set,name=='post_quality');x=full_x[:,columns]
         y=fit.truth.reshape(-1).astype(float) if classifier else np.log(fit.latency.reshape(-1))
         keep=fit.present.reshape(-1) if name=='post_quality' else np.ones(len(y),bool)
         model=bm.fit(x[keep],y[keep],classifier=classifier,depth=depth,rounds=rounds)
-        xcal=getattr(cal,features).reshape(-1,x.shape[1])
+        full_xcal=getattr(cal,features).reshape(-1,full_x.shape[1]);xcal=full_xcal[:,columns]
         calibration=None
         if classifier:
             valid=cal.present.reshape(-1) if name=='post_quality' else np.ones(len(xcal),bool)
             calibration=bm.calibrate(bm.margins(model,xcal[valid]),cal.truth.reshape(-1)[valid])
-        exported=bm.export(model,transform='sigmoid' if classifier else 'exp',calibration=calibration)
+        exported=bm.export(model,transform='sigmoid' if classifier else 'exp',calibration=calibration,
+            columns=columns,input_features=full_x.shape[1])
         # Catch float conversion, branch direction, base-score and leaf errors
         # before any exported model can reach C++ or a holdout measurement.
-        difference=np.max(np.abs(bm.predict(exported,xcal,raw=True)-bm.margins(model,xcal)))
+        difference=np.max(np.abs(bm.predict(exported,full_xcal,raw=True)-bm.margins(model,xcal)))
         if difference>2e-5:raise ValueError(f'export margin mismatch: {difference}')
         models[name]=exported
     selected,trial=tune(cal,predictions(models,cal))
@@ -52,23 +54,23 @@ def fit_candidate(grid, depth, rounds):
     return models,selected,audit
 
 
-def fit_pipeline(grid):
+def fit_pipeline(grid,feature_set='existing'):
     trials=[]
     for depth,rounds in SPECS:
-        models,thresholds,audit=fit_candidate(grid,depth,rounds)
+        models,thresholds,audit=fit_candidate(grid,depth,rounds,feature_set)
         trials.append((audit['calibration_mean_ms'],depth,rounds,models,thresholds,audit))
     chosen=min(trials,key=lambda x:x[:3])
     return chosen[3],chosen[4],dict(selected=chosen[5],alternatives=[t[5] for t in trials])
 
 
-def train(*,runs,audit,manifest,split,configs,features,output):
+def train(*,runs,audit,manifest,split,configs,features,output,feature_set='existing'):
     if output.exists():raise ValueError('refusing to replace frozen training output')
     grid=load(runs,audit,manifest,split,configs,features)
     output.mkdir(parents=True)
     inputs={name:digest(path) for name,path in [('runs',runs),('audit',audit),('manifest',manifest),
         ('split',split),('configs',configs),('features',features)]}
     (output/'freeze.json').write_text(json.dumps(dict(inputs_sha256=inputs,seed=bm.SEED,
-        xgboost_version=xgboost.__version__,specs=SPECS,outer_folds=5,
+        xgboost_version=xgboost.__version__,specs=SPECS,outer_folds=5,feature_set=feature_set,
         protocol='Group every configuration of an image component. Fit, probability calibration, threshold and hyperparameter selection all exclude outer evaluation groups.'),indent=2)+'\n')
     assignment=folds(grid.groups)
     result=[];ledger=[]
@@ -76,7 +78,7 @@ def train(*,runs,audit,manifest,split,configs,features,output):
         train_indices=np.flatnonzero(assignment!=fold);test_indices=np.flatnonzero(assignment==fold)
         fit,test=subset(grid,train_indices),subset(grid,test_indices)
         if set(fit.groups)&set(test.groups):raise ValueError('outer component leakage')
-        models,thresholds,fit_report=fit_pipeline(fit)
+        models,thresholds,fit_report=fit_pipeline(fit,feature_set)
         observed=replay(test,predictions(models,test),**thresholds)
         (output/f'fold-{fold}.json').write_text(json.dumps(dict(fit=fit_report,thresholds=thresholds,
             models=models,evaluation_pairs=test.pairs),indent=2)+'\n')
@@ -90,15 +92,17 @@ def train(*,runs,audit,manifest,split,configs,features,output):
                 estimated_ms=float(observed['cost'][i]),reference_ms=float(test.latency[i,test.reference]),
                 oracle=test.configs[oracle],oracle_ms=float(test.latency[i,oracle])))
         print('POOLED_OUTER',json.dumps(result[-1]),flush=True)
-    models,thresholds,final_fit=fit_pipeline(grid)
+    models,thresholds,final_fit=fit_pipeline(grid,feature_set)
     reference=grid.reference
     # Keep every measured configuration. Only two attempts can execute, so the
     # candidate count is independent of the bounded attempt-trace capacity.
     order=[i for i in range(len(grid.configs)) if i!=reference]+[reference]
     definitions=[grid.definitions[i] for i in order]
     protocol=json.loads(split.read_text())
-    policy=dict(schema_version='controller-policy-v4',feature_schema='controller-features-v1',
-        policy_id='udis-development-v4-pooled-existing-features',probe_scale=.25,
+    policy=dict(schema_version='controller-policy-v4',feature_schema='controller-features-v2',
+        policy_id='udis-development-v4-pooled-'+feature_set,probe_scale=.25,
+        pair_relations=feature_set in ['pair','all'],
+        relation_mask=dict(existing=0,pair=0,matching=1,geometry=2,photo=4,all=7)[feature_set],
         ladder=definitions,reference_index=len(definitions)-1,models=models,**thresholds,
         self_checks=[dict(min_inliers=4,min_inlier_ratio=0.,min_inlier_coverage=0.,max_residual_s1=1e300)]*len(definitions),
         scene_rules=[dict(min_pair_gradient=0.,first_index=len(definitions)-1)],
@@ -123,6 +127,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for name in ['runs','audit','manifest','split','configs','features','output']:
         parser.add_argument('--'+name,type=Path,required=True)
+    parser.add_argument('--feature-set',choices=['existing','pair','matching','geometry','photo','all'],default='existing')
     train(**vars(parser.parse_args()))
 
 

@@ -1,5 +1,6 @@
 #include "check.hpp"
 #include "harness/controller_policy.hpp"
+#include "common/geometry.hpp"
 
 using namespace stitch::harness;
 
@@ -44,5 +45,34 @@ int main() {
     value.obj_val["selector"].arr_val[0].obj_val["left"].num_val=0;invalid(value);
     value.obj_val["selector"].arr_val[0].obj_val["left"].num_val=1;
     value.obj_val["gates"].arr_val[0].arr_val[0].obj_val["value"].num_val=2;invalid(value);
+    auto pooled=fixture();pooled.obj_val["schema_version"].str_val="controller-policy-v4";
+    pooled.obj_val["feature_schema"]=JsonValue::parse("\"controller-features-v2\"");
+    pooled.obj_val["reference_index"]=JsonValue::parse("1");
+    pooled.obj_val["pre_threshold"]=JsonValue::parse("0.8");
+    pooled.obj_val["gate_threshold"]=JsonValue::parse("0.95");
+    pooled.obj_val["extra_ms"]=JsonValue::parse("0.5");
+    pooled.obj_val["pair_relations"]=JsonValue::parse("false");
+    pooled.obj_val["relation_mask"]=JsonValue::parse("0");
+    pooled.obj_val["models"]=JsonValue::parse(R"({
+      "pre_quality":{"features":39,"bias":0,"transform":"sigmoid","calibration":{"slope":1,"intercept":0},"trees":[[{"leaf":5}]]},
+      "post_quality":{"features":77,"bias":0,"transform":"sigmoid","calibration":{"slope":1,"intercept":0},"trees":[[{"leaf":2}]]},
+      "latency":{"features":39,"bias":0,"transform":"exp","calibration":{"slope":1,"intercept":0},"trees":[[{"feature":31,"threshold":0.5,"left":1,"right":2},{"leaf":0.69314718},{"leaf":2.30258509}]]}})");
+    auto model=parse_controller_policy(pooled);auto copy=model;
+    CHECK(copy.configure(controller)==stitch::Status::OK);
+    stitch::ScaleInfo scale{};CHECK(stitch::make_scale_info(100,100,.25,&scale)==stitch::Status::OK);
+    stitch::controller::SceneSignals scene{{scale,.1},{scale,.1},{},true};
+    stitch::controller::Knobs first{};
+    CHECK(controller.begin_pair(scene,&first)==stitch::Status::OK && first.K==500);
+    stitch::HomographyResult h{};h.status=stitch::Status::OK;h.num_matches=h.num_inliers=10;
+    h.inlier_ratio=1;h.inlier_coverage=.5;h.reproj_residual=.1;
+    h.H[0]=h.H[4]=h.H[8]=h.H_s[0]=h.H_s[4]=h.H_s[8]=1;
+    stitch::controller::Feedback feedback{first,stitch::Status::OK,h,{},true};
+    stitch::controller::Decision decision{};
+    CHECK(controller.observe(feedback,&decision)==stitch::Status::OK);
+    CHECK(decision.action==stitch::controller::Action::RETRY && decision.next.K==2000);
+    CHECK(!controller.needs_gate_features());
+    feedback.executed=decision.next;feedback.features_present=false;
+    CHECK(controller.observe(feedback,&decision)==stitch::Status::OK && decision.action==stitch::controller::Action::ACCEPT);
+    pooled.obj_val["models"].obj_val["latency"].obj_val["trees"].arr_val[0].arr_val[0].obj_val["left"].num_val=0;invalid(pooled);
     std::puts("Controller policy loader tests passed (synthetic configuration)");
 }

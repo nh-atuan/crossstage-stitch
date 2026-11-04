@@ -16,8 +16,8 @@ int main() {
     CHECK(cudaMalloc(&a.data,rgb.size())==cudaSuccess);CHECK(cudaMalloc(&g.data,gray.size())==cudaSuccess);
     CHECK(cudaMemcpy(a.data,rgb.data(),rgb.size(),cudaMemcpyHostToDevice)==cudaSuccess);
     CHECK(cudaMemcpy(g.data,gray.data(),gray.size(),cudaMemcpyHostToDevice)==cudaSuccess);
-    double *device=nullptr,*host=nullptr;cudaMalloc(&device,controller::scene_feature_count*sizeof(double));
-    cudaMallocHost(&host,controller::scene_feature_count*sizeof(double));
+    double *device=nullptr,*host=nullptr;cudaMalloc(&device,controller::gate_feature_count*sizeof(double));
+    cudaMallocHost(&host,controller::gate_feature_count*sizeof(double));
     CHECK(controller::extract_scene(g,g,device,host,nullptr)==Status::OK);CHECK(cudaDeviceSynchronize()==cudaSuccess);
     CHECK(std::abs(host[0]-6./255)<1e-12);CHECK(host[0]==host[1]);
     CHECK(host[2]<host[5] && host[3]>0);

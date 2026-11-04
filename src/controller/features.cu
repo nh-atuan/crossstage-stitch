@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include "controller/features.hpp"
+#include "controller/relational_features.hpp"
 
 namespace stitch::controller {
 namespace {
@@ -121,17 +122,21 @@ bool inverse(const double* h, Matrix* out) {
     return true;
 }
 }  // namespace
-Status extract_scene(const ImageView& a, const ImageView& b, double* device, double* pinned, cudaStream_t stream) {
+Status extract_scene(const ImageView& a, const ImageView& b, double* device, double* pinned, cudaStream_t stream, bool relations) {
     if (!a.data || !b.data || !device || !pinned || a.width<2 || b.width<2 || a.height<2 || b.height<2 ||
         a.format!=PixelFormat::GRAY8 || b.format!=PixelFormat::GRAY8) return Status::INVALID_ARGUMENT;
     scene_kernel<<<10,threads,0,stream>>>(a,b,device);
+    if (cudaGetLastError()!=cudaSuccess) return Status::CUDA_ERROR;
+    if (cudaMemsetAsync(device+26,0,pair_relation_count*sizeof(double),stream)!=cudaSuccess) return Status::CUDA_ERROR;
+    if (relations && pair_relations(a,b,device+26,stream)!=Status::OK) return Status::CUDA_ERROR;
     if (cudaGetLastError()!=cudaSuccess || cudaMemcpyAsync(pinned,device,scene_feature_count*sizeof(double),cudaMemcpyDeviceToHost,stream)!=cudaSuccess)
         return Status::CUDA_ERROR;
     return Status::OK;
 }
 Status extract_gate(const ImageView& a, const ImageView& b, const Keypoints& ka, const Keypoints& kb,
                     const Matches& matches, const std::uint8_t* mask, const HomographyResult& h,
-                    const ScaleInfo& sa, const ScaleInfo& sb, double* device, double* pinned, cudaStream_t stream) {
+                    const ScaleInfo& sa, const ScaleInfo& sb, double* device, double* pinned, cudaStream_t stream,
+                    const s4::Top2* forward, unsigned relation_mask) {
     Matrix inv{};
     if (!a.data || !b.data || !device || !pinned || !mask || h.status!=Status::OK ||
         h.num_matches<4 || h.num_matches>matches.capacity || !inverse(h.H,&inv)) return Status::INVALID_ARGUMENT;
@@ -155,6 +160,10 @@ Status extract_gate(const ImageView& a, const ImageView& b, const Keypoints& ka,
     if (cudaMemcpyAsync(device,pinned,sizeof(base),cudaMemcpyHostToDevice,stream)!=cudaSuccess) return Status::CUDA_ERROR;
     photo_kernel<<<1,threads,0,stream>>>(a,b,inv,device);
     inlier_kernel<<<1,threads,0,stream>>>(ka,kb,matches,mask,h.num_matches,sa.work_w,sa.work_h,sb.work_w,sb.work_h,device);
+    if (cudaGetLastError()!=cudaSuccess || cudaMemsetAsync(device+24,0,alignment_relation_count*sizeof(double),stream)!=cudaSuccess)
+        return Status::CUDA_ERROR;
+    if (relation_mask && alignment_relations(a,b,ka,kb,matches,mask,h,sa,sb,forward,device+24,stream,relation_mask)!=Status::OK)
+        return Status::CUDA_ERROR;
     if (cudaGetLastError()!=cudaSuccess || cudaMemcpyAsync(pinned,device,gate_feature_count*sizeof(double),cudaMemcpyDeviceToHost,stream)!=cudaSuccess)
         return Status::CUDA_ERROR;
     return Status::OK;

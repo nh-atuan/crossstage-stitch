@@ -49,7 +49,9 @@ def calibrate(margin, y):
     return dict(slope=float(result.x[0]), intercept=float(result.x[1]))
 
 
-def export(model, *, transform, calibration=None):
+def export(model, *, transform, calibration=None, columns=None, input_features=None):
+    columns=list(range(model.num_features())) if columns is None else columns
+    if len(columns)!=model.num_features():raise ValueError('model column map mismatch')
     trees = []
     for encoded in model.get_dump(dump_format='json'):
         nodes = []
@@ -61,13 +63,13 @@ def export(model, *, transform, calibration=None):
             else:
                 children = {n['nodeid']: n for n in source['children']}
                 left, right = visit(children[source['yes']]), visit(children[source['no']])
-                nodes[index] = dict(feature=int(source['split'].removeprefix('f')),
+                nodes[index] = dict(feature=int(columns[int(source['split'].removeprefix('f'))]),
                     threshold=float(np.float32(source['split_condition'])), left=left, right=right)
             return index
         visit(json.loads(encoded))
         trees.append(nodes)
     # The trainer explicitly fixes .5 logistic / zero regression base scores.
-    return dict(features=model.num_features(), bias=0., trees=trees, transform=transform,
+    return dict(features=input_features or model.num_features(), bias=0., trees=trees, transform=transform,
                 calibration=calibration or dict(slope=1., intercept=0.))
 
 

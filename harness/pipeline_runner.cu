@@ -247,8 +247,9 @@ void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r) {
     CUDA_CHECK(cudaMalloc(&d_ws_probe_, 32));
     CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_grad_a_), sizeof(double)));
     CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_grad_b_), sizeof(double)));
-    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_features_), controller::scene_feature_count*sizeof(double)));
-    CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_features_), controller::scene_feature_count*sizeof(double)));
+    constexpr auto feature_count=std::max(controller::scene_feature_count,controller::gate_feature_count);
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_features_), feature_count*sizeof(double)));
+    CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_features_), feature_count*sizeof(double)));
 
     initialized_ = true;
 }
@@ -281,7 +282,7 @@ void PipelineRunner::upload_pair(const HostImageRGB& img_a, const HostImageRGB& 
         dev_gray_a_.width=a.work_w;dev_gray_a_.height=a.work_h;
         dev_gray_b_.width=b.work_w;dev_gray_b_.height=b.work_h;
         if (s1::s1_preprocess(dev_img_a_,dev_img_b_,.25,&dev_gray_a_,&dev_gray_b_,&a,&b,stream_)!=Status::OK ||
-            controller::extract_scene(dev_gray_a_,dev_gray_b_,d_features_,pinned_features_,stream_)!=Status::OK)
+            controller::extract_scene(dev_gray_a_,dev_gray_b_,d_features_,pinned_features_,stream_,true)!=Status::OK)
             throw std::runtime_error("Scene feature collection failed");
         CUDA_CHECK(cudaStreamSynchronize(stream_));
         std::copy_n(pinned_features_,controller::scene_feature_count,collected_scene_.begin());
@@ -426,8 +427,11 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
 
     if (collect_features_) {
         const auto begin=std::chrono::steady_clock::now();
-        const auto status=controller::extract_gate(dev_img_a_,dev_img_b_,kp_a_,kp_b_,matches_,d_inlier_mask_,
-            *pinned_h_res_,scale_a,scale_b,d_features_,pinned_features_,stream_);
+        const s4::Top2* forward=nullptr;
+        if(s4::s4_forward_neighbors(kp_view_a.capacity,kp_view_b.capacity,s4_cfg,ws_s4_,ws_bytes_s4_,&forward)!=Status::OK)
+            throw std::runtime_error("Missing matching feature observations");
+        const auto status=controller::extract_gate(dev_img_a_,dev_img_b_,kp_view_a,kp_view_b,matches_,d_inlier_mask_,
+            *pinned_h_res_,scale_a,scale_b,d_features_,pinned_features_,stream_,forward,7);
         if (status==Status::CUDA_ERROR) throw std::runtime_error("Gate feature CUDA error");
         CUDA_CHECK(cudaStreamSynchronize(stream_));
         if (status==Status::OK) {
@@ -560,7 +564,7 @@ void PipelineRunner::execute_adaptive_run(
     }
 
     const bool learned=controller.uses_learned_features();
-    Status probe_grad = learned ? controller::extract_scene(dev_gray_a_,dev_gray_b_,d_features_,pinned_features_,stream_) :
+    Status probe_grad = learned ? controller::extract_scene(dev_gray_a_,dev_gray_b_,d_features_,pinned_features_,stream_,controller.uses_pair_relations()) :
         s1::s1_compute_gradient(dev_gray_a_, dev_gray_b_, d_ws_probe_,pinned_grad_a_, pinned_grad_b_, stream_);
     if (probe_grad != Status::OK) {
         record->status = status_to_str(probe_grad);
@@ -748,10 +752,14 @@ void PipelineRunner::execute_adaptive_run(
         const auto t_obs_s = std::chrono::steady_clock::now();
         controller::Feedback feedback{current_knobs, s5_stat, *pinned_h_res_};
         double feature_ms=0.;
-        if (learned && s5_stat==Status::OK && pinned_h_res_->status==Status::OK) {
+        if (controller.needs_gate_features() && s5_stat==Status::OK && pinned_h_res_->status==Status::OK) {
             const auto begin=std::chrono::steady_clock::now();
-            const auto status=controller::extract_gate(dev_img_a_,dev_img_b_,kp_a_,kp_b_,matches_,d_inlier_mask_,
-                *pinned_h_res_,scale_a,scale_b,d_features_,pinned_features_,stream_);
+            const s4::Top2* forward=nullptr;
+            if((controller.relation_mask()&1) && s4::s4_forward_neighbors(kp_view_a.capacity,kp_view_b.capacity,
+                    s4::Config{.8,false},ws_s4_,ws_bytes_s4_,&forward)!=Status::OK)
+                throw std::runtime_error("Missing adaptive matching observations");
+            const auto status=controller::extract_gate(dev_img_a_,dev_img_b_,kp_view_a,kp_view_b,matches_,d_inlier_mask_,
+                *pinned_h_res_,scale_a,scale_b,d_features_,pinned_features_,stream_,forward,controller.relation_mask());
             if (status==Status::CUDA_ERROR) throw std::runtime_error("Gate feature CUDA error");
             CUDA_CHECK(cudaStreamSynchronize(stream_));
             if (status==Status::OK) {

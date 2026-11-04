@@ -61,5 +61,7 @@ struct PooledModels {
     EnsembleView pre_quality{}, post_quality{}, latency{};
     double pre_threshold{}, gate_threshold{}, extra_ms{};
     std::size_t reference_index{};
+    bool pair_relations{};
+    unsigned relation_mask{};
 };
 }  // namespace stitch::controller

@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include "controller/tree.hpp"
+#include "controller/ensemble.hpp"
 
 namespace stitch::controller {
 
@@ -29,6 +30,7 @@ struct Policy {
     std::size_t gate_count{};
     const std::size_t* retry_targets{};
     std::size_t retry_target_count{};
+    const PooledModels* pooled{};
 };
 
 namespace detail {

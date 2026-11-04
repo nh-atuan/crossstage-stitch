@@ -4,7 +4,7 @@
 - **Người quyết định:** Thành.
 - **Ngày ghi nhận:** 03/11 (Thứ 3), năm 2026. Cập nhật 04/11 (Thứ 4): lưới đo theo đặc tả mới (mục 2.6), harness đã truyền view (mục 1).
 - **Phase:** Phase 3.
-- **Trạng thái:** Đã chọn. Code đã có (event marks, bench `s2_s3_a3_bench`, script `tools/s2_s3/a3_report.py`). Mới kiểm chứng phần host: build host-only, kiểm cú pháp phần host của bench và test, test Python. Chưa build CUDA, chưa chạy trên Colab T4, chưa có số đo.
+- **Trạng thái:** Đã chọn và đã đo trên Colab T4 ngày 04/11 (Thứ 4). Kết quả và các điểm lệch so với kế hoạch ghi ở [kết quả A3](../stages/s2-s3-a3-ablation.md). Marks overhead vượt ngưỡng ở 76/96 ô, nên fallback ở mục 4 được áp dụng: các pha chỉ báo dưới dạng tỉ lệ.
 
 ## 1. Bối cảnh
 
@@ -102,7 +102,15 @@ Ngày 03/11 (Thứ 3), trên máy Windows của Thành (không có nvcc):
 | `pytest` của S2/S3 (`test_s2_s3_a3_report.py`, `test_s2_s3_dynamic_timings.py`, `test_s2_s3_reference.py`) | 33 passed (chạy lại sau rebase ngày 04/11) |
 | `test_s2_s3_a3_plot.py` (dữ liệu của đồ thị) và chạy thử `a3_plot.py` trên CSV giả | 2 passed; PDF vẽ đúng |
 
-Chưa kiểm chứng (cần Colab T4): build CUDA; 41 golden của Phase 1 sau refactor; CTest `s2_s3_a3_bench_smoke`; compute-sanitizer; toàn bộ số đo. Kết quả sẽ ghi trong `docs/stages/s2-s3-a3-ablation.md`.
+Ngày 04/11 (Thứ 4), trên Colab T4, commit `7009103` (chi tiết ở [kết quả A3](../stages/s2-s3-a3-ablation.md), mục 3 và 5):
+
+| Kiểm tra | Kết quả |
+|---|---|
+| Build CUDA `src/s2_s3` và CTest | 3/3 pass, gồm `s2_s3_a3_bench_smoke` |
+| Hồi quy golden sau refactor | 41/41 khớp từng bit (ảnh Oxford thay bằng cặp UDIS-D `002429`), dynamic K checks pass |
+| compute-sanitizer memcheck và initcheck trên bench | 0 lỗi, 0 byte rò rỉ |
+| Hai lượt bench | 0/144 median lệch quá max(5%, 0,005 ms); không có đảo thứ tự mode vượt ngưỡng |
+| Build toàn repo và CTest | 16/16 pass |
 
 ## 6. Nguồn
 

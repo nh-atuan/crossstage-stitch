@@ -17,10 +17,13 @@ SIDES = {"input1": "a", "input2": "b"}
 SUFFIXES = {".jpg", ".jpeg", ".png", ".ppm"}
 
 
+REQUIRED_KEYS = {"schema_version", "split", "author_source_url", "download_url", "sha256",
+                 "checksum_origin", "checksum_reference"}
+OPTIONAL_KEYS = {"archive_name", "drive_file_id"}
+
+
 def validate_source_metadata(source: Any, split: str, mode: str) -> None:
-    keys = {"schema_version", "split", "author_source_url", "download_url", "sha256",
-            "checksum_origin", "checksum_reference"}
-    if not isinstance(source, dict) or set(source) != keys or source["schema_version"] != SOURCE_SCHEMA:
+    if not isinstance(source, dict) or not (REQUIRED_KEYS <= set(source) <= (REQUIRED_KEYS | OPTIONAL_KEYS)) or source["schema_version"] != SOURCE_SCHEMA:
         raise ValueError("invalid source receipt schema")
     if source["split"] != split or split not in SPLITS:
         raise ValueError("archive split does not match source receipt")

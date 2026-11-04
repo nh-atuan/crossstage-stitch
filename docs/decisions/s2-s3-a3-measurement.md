@@ -2,18 +2,18 @@
 
 - **Task:** Phase 3, task 1 của Thành trong [kế hoạch](../plan.md), mục 8: Ablation A3 theo [đặc tả ablation](../experiments/ablation-studies.md), mục 2.3.
 - **Người quyết định:** Thành.
-- **Ngày ghi nhận:** 03/11 (Thứ 3), năm 2026.
+- **Ngày ghi nhận:** 03/11 (Thứ 3), năm 2026. Cập nhật 04/11 (Thứ 4): lưới đo theo đặc tả mới (mục 2.6), harness đã truyền view (mục 1).
 - **Phase:** Phase 3.
 - **Trạng thái:** Đã chọn. Code đã có (event marks, bench `s2_s3_a3_bench`, script `tools/s2_s3/a3_report.py`). Mới kiểm chứng phần host: build host-only, kiểm cú pháp phần host của bench và test, test Python. Chưa build CUDA, chưa chạy trên Colab T4, chưa có số đo.
 
 ## 1. Bối cảnh
 
-Đặc tả A3 hỏi thời gian của FAST và ORB co giãn thế nào theo K ∈ {500, 1000, 2000}, và việc cấp phát một lần giúp tránh jitter ra sao. Đặc tả ghi K_max = 2000 cho buffer cấp phát sẵn, yêu cầu đo `t_fast`, `t_harris` (S2) và `t_orb` (S3), so với cấp phát lại (`cudaMalloc`/`cudaFree` trong vòng lặp đo).
+Bản đặc tả A3 trước commit `7e5e9d7` hỏi thời gian của FAST và ORB co giãn thế nào theo K ∈ {500, 1000, 2000}, và việc cấp phát một lần giúp tránh jitter ra sao. Đặc tả ghi K_max = 2000 cho buffer cấp phát sẵn, yêu cầu đo `t_fast`, `t_harris` (S2) và `t_orb` (S3), so với cấp phát lại (`cudaMalloc`/`cudaFree` trong vòng lặp đo).
 
 Ba điểm trong code không khớp với đặc tả:
 
 - Harness cấp phát theo `max_k = 4000` (`runner.initialize(2048, 2048, 4000, 2048)` trong `harness/main.cpp`), không phải 2000.
-- [Quyết định K động](s2-s3-dynamic-k.md) mục 4 bắt buộc caller truyền view `Keypoints.capacity = K`, vì với `capacity = K_max`, S3 chậm vượt ngưỡng ở K = 1000 trên T4. Harness trên `main` hiện vẫn truyền `capacity = max_k`. Đặc tả không nhắc tới view này.
+- [Quyết định K động](s2-s3-dynamic-k.md) mục 4 bắt buộc caller truyền view `Keypoints.capacity = K`, vì với `capacity = K_max`, S3 chậm vượt ngưỡng ở K = 1000 trên T4. Khi ghi quyết định này (03/11), harness trên `main` vẫn truyền `capacity = max_k` và đặc tả không nhắc tới view. Ngày 03/11, Tuấn đã sửa cả hai: harness truyền view từ commit `960f1b1`, đặc tả A3 được cập nhật ở commit `7e5e9d7`.
 - `s2_detect` và `s3_describe` là hai lời gọi, mỗi lời gọi launch nhiều kernel. Caller chỉ đo được tổng của từng stage.
 
 Ràng buộc sẵn có: stage không cấp phát và không đồng bộ ([quy ước chung](../conventions.md), mục 4); thời gian đo bằng CUDA event, 2 warmup và 10 lần đo, median theo cặp rồi median và p95 trên các cặp (mục 7).
@@ -30,7 +30,7 @@ Mỗi attempt chạy S2 rồi S3 trên một ảnh, theo ba mode xen kẽ nhau t
 | `max` | Như `view` | 4000, như harness hiện tại |
 | `realloc` | `cudaFree` rồi `cudaMalloc` vừa đúng ảnh và K ở mỗi attempt | K |
 
-K của mỗi ảnh được quay vòng 500 → 1000 → 2000, nên K đổi ở mọi attempt và `realloc` phải cấp lại mỗi lần. Đây là trường hợp bất lợi nhất cho `realloc`. Khi Controller chỉ tăng R, K giữ nguyên, nên một cài đặt `realloc` hợp lý sẽ không cấp lại; số đo vì vậy là cận trên của chi phí cấp phát lại.
+K của mỗi ảnh được quay vòng 500 → 1000 → 2000 → 4000, nên K đổi ở mọi attempt và `realloc` phải cấp lại mỗi lần. Đây là trường hợp bất lợi nhất cho `realloc`. Khi Controller chỉ tăng R, K giữ nguyên, nên một cài đặt `realloc` hợp lý sẽ không cấp lại; số đo vì vậy là cận trên của chi phí cấp phát lại.
 
 ### 2.2. Đo từng pha bằng event marks nội bộ
 
@@ -61,7 +61,16 @@ Với mỗi ảnh và mỗi K, cả ba mode, có và không marks, phải cho c�
 
 ### 2.6. Dữ liệu
 
-25 cặp pilot UDIS-D lấy từ tập train do Đế freeze (`tools/controller/real_cohort.py`, seed 20261030), tức 50 ảnh, ở S ∈ {0.5, 1.0}. Golden sinh bằng `tools/s2_s3/export_timing_golden.py --scales 0.5 1.0 --ks 500 1000 2000`. S = 0.5 theo đặc tả. S = 1.0 được thêm vì ảnh UDIS-D khoảng 512×512, nên ở S = 0.5 (256×256) nhiều ảnh có thể không đủ 2K maxima và K lớn bị bão hòa. Bench ghi số keypoint thật (`count`) và số candidate (`maxima_selected`) để đo tình trạng này.
+25 cặp pilot UDIS-D lấy từ tập train do Đế freeze (`tools/controller/real_cohort.py`, seed 20261030), tức 50 ảnh. Ảnh được lấy từ `training.zip` gốc. Trước khi dùng, kiểm tra lại cohort trên archive: kích thước file, SHA-256 của central directory, và `select_cohort` phải trả về đúng `pilot_pair_ids`.
+
+Lưới đo là K ∈ {500, 1000, 2000, 4000} × S ∈ {0.25, 0.5, 0.75, 1.0}, theo đặc tả A3 sau commit `7e5e9d7`. Thành chốt lưới này ngày 04/11 (Thứ 4), thay cho lưới 3 K × S ∈ {0.5, 1.0} ghi ngày 03/11. Golden sinh bằng `tools/s2_s3/export_timing_golden.py` với lưới mặc định, đúng bằng lưới trên.
+
+Có hai điểm cần lưu ý:
+
+- Ở K = 4000, `view` và `max` có cùng capacity.
+- Ảnh UDIS-D khoảng 512×512, nên ở S nhỏ nhiều ảnh không đủ 2K maxima và K lớn bị bão hòa. Bench ghi số keypoint thật (`count`) và số candidate (`maxima_selected`) để đo tình trạng này.
+
+Đồ thị K theo thời gian vẽ bằng `tools/s2_s3/a3_plot.py`. Script import matplotlib bên trong hàm vẽ, chỉ chạy trên Colab và không thêm vào `tools/requirements.txt`.
 
 ## 3. Trade-off và phương án phụ
 
@@ -90,7 +99,8 @@ Ngày 03/11 (Thứ 3), trên máy Windows của Thành (không có nvcc):
 |---|---|
 | Build host-only `src/s2_s3` và CTest host | Pass (1/1) |
 | Kiểm cú pháp `g++ -fsyntax-only` của `tests/test_s2_s3_cuda.cu` và `tests/s2_s3/a3_budget_bench.cu` với một `cuda_runtime.h` giả chỉ khai báo các hàm được dùng | Pass; mới chỉ kiểm phần host, chưa phải build CUDA |
-| `pytest` của S2/S3 (`test_s2_s3_a3_report.py`, `test_s2_s3_dynamic_timings.py`, `test_s2_s3_reference.py`) | 33 passed |
+| `pytest` của S2/S3 (`test_s2_s3_a3_report.py`, `test_s2_s3_dynamic_timings.py`, `test_s2_s3_reference.py`) | 33 passed (chạy lại sau rebase ngày 04/11) |
+| `test_s2_s3_a3_plot.py` (dữ liệu của đồ thị) và chạy thử `a3_plot.py` trên CSV giả | 2 passed; PDF vẽ đúng |
 
 Chưa kiểm chứng (cần Colab T4): build CUDA; 41 golden của Phase 1 sau refactor; CTest `s2_s3_a3_bench_smoke`; compute-sanitizer; toàn bộ số đo. Kết quả sẽ ghi trong `docs/stages/s2-s3-a3-ablation.md`.
 

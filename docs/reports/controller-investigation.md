@@ -789,4 +789,3 @@ Nguồn kỹ thuật ngoài repo, truy cập 05/11 (Thứ 5), năm 2026:
 - [XGBoost parameters](https://xgboost.readthedocs.io/en/stable/parameter.html): đối chiếu mục tiêu học, depth và regularization. Trang stable có thể thuộc version mới hơn; tham số thực chạy theo `boosted_model.py` và environment checkpoint 3.2.0.
 - [XGBoost Model IO](https://xgboost.readthedocs.io/en/stable/tutorials/saving_model.html): objective/base score và cấu trúc model; exporter riêng cần kiểm parity, không coi JSON tùy ý là model chuẩn của thư viện.
 - [Probability calibration](https://scikit-learn.org/stable/modules/calibration.html): ý nghĩa xác suất đã hiệu chỉnh và nhu cầu dữ liệu tách khỏi booster fit; repo dùng sigmoid fitter riêng, không gọi scikit-learn ở runtime.
-

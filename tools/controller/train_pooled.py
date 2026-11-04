@@ -63,12 +63,16 @@ def fit_pipeline(grid,feature_set='existing'):
     return chosen[3],chosen[4],dict(selected=chosen[5],alternatives=[t[5] for t in trials])
 
 
-def train(*,runs,audit,manifest,split,configs,features,output,feature_set='existing'):
+def train(*,runs,audit,manifest,split,configs,features,output,feature_set='existing',feature_cost=None):
     if output.exists():raise ValueError('refusing to replace frozen training output')
     grid=load(runs,audit,manifest,split,configs,features)
+    if feature_cost:
+        measurement=json.loads(feature_cost.read_text())['groups'][feature_set]
+        grid.feature_ms[:]=measurement['median_gate_ms']
     output.mkdir(parents=True)
     inputs={name:digest(path) for name,path in [('runs',runs),('audit',audit),('manifest',manifest),
         ('split',split),('configs',configs),('features',features)]}
+    if feature_cost:inputs['feature_cost']=digest(feature_cost)
     (output/'freeze.json').write_text(json.dumps(dict(inputs_sha256=inputs,seed=bm.SEED,
         xgboost_version=xgboost.__version__,specs=SPECS,outer_folds=5,feature_set=feature_set,
         protocol='Group every configuration of an image component. Fit, probability calibration, threshold and hyperparameter selection all exclude outer evaluation groups.'),indent=2)+'\n')
@@ -128,6 +132,7 @@ def main():
     for name in ['runs','audit','manifest','split','configs','features','output']:
         parser.add_argument('--'+name,type=Path,required=True)
     parser.add_argument('--feature-set',choices=['existing','pair','matching','geometry','photo','all'],default='existing')
+    parser.add_argument('--feature-cost',type=Path)
     train(**vars(parser.parse_args()))
 
 

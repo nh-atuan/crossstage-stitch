@@ -79,12 +79,18 @@ def predict(exported, x, raw=False):
         raise ValueError('invalid exported model inputs')
     result = np.full(len(x), exported['bias'], dtype=np.float32)
     for nodes in exported['trees']:
-        for row, values in enumerate(x):
-            index = 0
-            while 'leaf' not in nodes[index]:
-                node = nodes[index]
-                index = node['left'] if values[node['feature']] < node['threshold'] else node['right']
-            result[row] += np.float32(nodes[index]['leaf'])
+        feature=np.array([node.get('feature',-1) for node in nodes])
+        threshold=np.array([node.get('threshold',0.) for node in nodes],dtype=np.float32)
+        left=np.array([node.get('left',-1) for node in nodes]);right=np.array([node.get('right',-1) for node in nodes])
+        leaf=np.array([node.get('leaf',0.) for node in nodes],dtype=np.float32)
+        index=np.zeros(len(x),dtype=int)
+        for _ in range(len(nodes)):
+            active=np.flatnonzero(feature[index]>=0)
+            if not len(active):break
+            current=index[active]
+            index[active]=np.where(x[active,feature[current]]<threshold[current],left[current],right[current])
+        else:raise ValueError('exported tree does not terminate')
+        result+=leaf[index]
     if raw:
         return result
     result = result.astype(float)

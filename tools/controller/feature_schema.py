@@ -14,6 +14,15 @@ GATE = ['matches_fraction', 'inliers_fraction', 'inlier_ratio', 'inlier_bbox_cov
         'overlap_contrast_a', 'overlap_contrast_b', 'normalized_warp_mae',
         'occupied_cells_a', 'occupied_cells_b', 'largest_cell_a', 'largest_cell_b',
         'spatial_entropy_a', 'spatial_entropy_b']
+PAIR_RELATION=['pair_peak_ncc','pair_peak_gap','pair_translation_x','pair_translation_y',
+               'pair_zero_shift_ncc','pair_peak_overlap']
+ALIGNMENT_RELATION=['inlier_residual_p50','inlier_residual_p90','regional_residual_max_mean',
+    'regional_residual_std','match_distance_mean','match_distance_p90','neighbor_ratio_mean',
+    'neighbor_ambiguous_fraction','patch_ssim_mean','patch_ssim_min','edge_mae','edge_cosine',
+    'valid_patch_fraction','patch_normalized_mae_p90']
+CONFIGURATION=['config_scale','config_k_fraction','config_r_fraction']
+POOLED_PRE=SELECTOR+CONFIGURATION+PAIR_RELATION
+POOLED_POST=SELECTOR+CONFIGURATION+GATE+PAIR_RELATION+ALIGNMENT_RELATION
 
 
 def selector_features(scene):

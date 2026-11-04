@@ -4,11 +4,13 @@
 #include <cmath>
 #include "common/types.hpp"
 #include "s4/s4.hpp"
+#include "controller/relational_features.hpp"
 
 namespace stitch::controller {
 constexpr int scene_feature_count = 32;
 constexpr int selector_feature_count = 30;
 constexpr int gate_feature_count = 38;
+constexpr int feature_device_count = gate_feature_count+relation_workspace_count;
 using SceneFeatures = std::array<double, scene_feature_count>;
 using GateFeatures = std::array<double, gate_feature_count>;
 inline std::array<double,selector_feature_count> selector_features(const SceneFeatures& scene) noexcept {
@@ -18,7 +20,8 @@ inline std::array<double,selector_feature_count> selector_features(const SceneFe
     return values;
 }
 
-// Caller provides max(scene_feature_count,gate_feature_count) device/pinned doubles.
+// Caller provides feature_device_count device doubles and gate_feature_count
+// pinned doubles. Without relational collection, 38 device doubles suffice.
 Status extract_scene(const ImageView& a, const ImageView& b, double* device,
                      double* pinned, cudaStream_t stream, bool relations=false);
 Status extract_gate(const ImageView& a, const ImageView& b,

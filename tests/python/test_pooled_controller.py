@@ -55,12 +55,17 @@ def test_replay_counts_false_accept_and_charges_rejected_attempt_before_fallback
     strict=replay(grid,prediction,pre_threshold=0.,gate_threshold=.9)
     assert strict['false_accept']==0 and strict['retry']==1
     assert strict['cost'][1]==pytest.approx(1.+.1+10.+.5)
+    expensive_probe=replay(grid,prediction,pre_threshold=0.,gate_threshold=.9,probe_ms=4.)
+    assert np.allclose(expensive_probe['cost']-strict['cost'],3.5)
     _,selected=tune(grid,prediction)
     assert selected['false_accept']==0
 
 
 def test_feature_ablation_keeps_post_s5_observations_out_of_initial_selector():
     from tools.controller.pooled_data import feature_columns
+    from tools.controller.feature_schema import POOLED_PRE,POOLED_POST
+    assert len(POOLED_PRE)==39 and len(POOLED_POST)==77
+    assert POOLED_POST[67]=='match_distance_mean' and POOLED_POST[71]=='patch_ssim_mean'
     assert feature_columns('existing')==list(range(33))
     assert feature_columns('all')==list(range(39))
     assert feature_columns('matching')==feature_columns('geometry')==feature_columns('photo')==list(range(33))

@@ -22,7 +22,7 @@ def evaluate(harness,manifest,split,quality_policy,policies,output):
         raise ValueError('fresh holdout differs from frozen protocol')
     for name,path in policies.items():
         model=json.loads(path.read_text())
-        if name.startswith('v3') and (model['provenance']['input_sha256']['split']!=digest(split)
+        if name.startswith(('v3','v4')) and (model['provenance']['input_sha256']['split']!=digest(split)
                 or model['provenance']['quality_policy_sha256']!=digest(quality_policy)):
             raise ValueError('policy differs from the frozen calibration protocol')
     output.mkdir(parents=True)

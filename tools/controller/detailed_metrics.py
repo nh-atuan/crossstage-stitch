@@ -102,7 +102,7 @@ def summarize(paths,qor_path,quality_policy,prefixed=True):
         limits='QoR summaries include PASS and FAIL with available metrics, report n for each metric. Conditional speedup does not establish full-cohort quality preservation.'),groups,outcomes,times
 
 
-def oracle_comparison(oracle,groups,outcomes,times,trace_path,policy_path):
+def oracle_comparison(oracle,groups,outcomes,times,trace_path,policy_path,mode='v3_p80'):
     audit=json.loads((oracle/'audit.json').read_text())
     # The full grid has 48 configs per pair, so ingest it by configuration.
     ledger={(x['pair_id'],x['config_id']):x for x in audit['ledger']}
@@ -111,12 +111,12 @@ def oracle_comparison(oracle,groups,outcomes,times,trace_path,policy_path):
     for x in csv.DictReader(trace_path.open(newline='')):
         if x['is_warmup']=='0' and x['repeat_idx']=='0':attempts[x['pair_id']].append(x)
     records=[]
-    for pair,rows in sorted(groups['v3_p80'].items()):
+    for pair,rows in sorted(groups[mode].items()):
         actual=rows[0];trace=sorted(attempts[pair],key=lambda x:int(x['attempt_idx']));first=trace[0]
         initial=f"S{float(first['S']):.2f}_K{first['K']}_R{first['R']}_Bfeather"
         chosen=actual['config_id'];optimum=best[pair];target=optimum['config_id']
         record=dict(pair_id=pair,initial_config=initial,final_config=chosen,oracle_config=target,
-            quality_status=outcomes['v3_p80'][pair],attempts=len(trace),controller_e2e_ms=times['v3_p80'][pair],
+            quality_status=outcomes[mode][pair],attempts=len(trace),controller_e2e_ms=times[mode][pair],
             oracle_ms=optimum['median_e2e_ms'],initial_exact_oracle=None,final_exact_oracle=None,
             chosen_fixed_ms=ledger[pair,chosen]['median_e2e_ms'])
         if target is not None:
@@ -149,14 +149,14 @@ def oracle_comparison(oracle,groups,outcomes,times,trace_path,policy_path):
         oracle_restricted_to_policy=dict(latency=distribution(r['median_e2e_ms'] for r in restricted),ledger=restricted),
         configuration_regret_ms=distribution(r.get('configuration_regret_ms') for r in known),
         configuration_ratio_to_oracle=distribution(r.get('configuration_ratio_to_oracle') for r in known),
-        controller_over_oracle_joint_pass=paired_speedup([r['controller_e2e_ms'] for r in passing],[r['oracle_ms'] for r in passing]),
-        reference_over_oracle=paired_speedup([times['reference'][r['pair_id']] for r in known],[r['oracle_ms'] for r in known]),
+        controller_over_oracle_joint_pass=paired_speedup([r['controller_e2e_ms'] for r in passing],[r['oracle_ms'] for r in passing]) if passing else None,
+        reference_over_oracle=paired_speedup([times['reference'][r['pair_id']] for r in known],[r['oracle_ms'] for r in known]) if known else None,
         oracle_latency=distribution(r['oracle_ms'] for r in known),ledger=records,
         oracle_qor_metrics=oracle_metrics,
         mean_latency_decomposition_joint_pass=dict(pairs=len(passing),oracle_ms=statistics.mean(r['oracle_ms'] for r in passing),
             chosen_configuration_fixed_ms=statistics.mean(r['chosen_fixed_ms'] for r in passing),controller_e2e_ms=statistics.mean(r['controller_e2e_ms'] for r in passing),
             configuration_gap_ms=statistics.mean(r['configuration_regret_ms'] for r in passing),
-            e2e_minus_chosen_fixed_ms=statistics.mean(r['controller_e2e_ms']-r['chosen_fixed_ms'] for r in passing)),
+            e2e_minus_chosen_fixed_ms=statistics.mean(r['controller_e2e_ms']-r['chosen_fixed_ms'] for r in passing)) if passing else None,
         limits='Oracle is selected after the sweep, with no online search cost. Exact config agreement is sensitive to timing ties; regret is only reported for QoR-valid configurations.')
     return result
 

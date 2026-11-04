@@ -128,7 +128,7 @@ Status extract_scene(const ImageView& a, const ImageView& b, double* device, dou
     scene_kernel<<<10,threads,0,stream>>>(a,b,device);
     if (cudaGetLastError()!=cudaSuccess) return Status::CUDA_ERROR;
     if (cudaMemsetAsync(device+26,0,pair_relation_count*sizeof(double),stream)!=cudaSuccess) return Status::CUDA_ERROR;
-    if (relations && pair_relations(a,b,device+26,stream)!=Status::OK) return Status::CUDA_ERROR;
+    if (relations && pair_relations(a,b,device+26,device+gate_feature_count,stream)!=Status::OK) return Status::CUDA_ERROR;
     if (cudaGetLastError()!=cudaSuccess || cudaMemcpyAsync(pinned,device,scene_feature_count*sizeof(double),cudaMemcpyDeviceToHost,stream)!=cudaSuccess)
         return Status::CUDA_ERROR;
     return Status::OK;
@@ -162,7 +162,7 @@ Status extract_gate(const ImageView& a, const ImageView& b, const Keypoints& ka,
     inlier_kernel<<<1,threads,0,stream>>>(ka,kb,matches,mask,h.num_matches,sa.work_w,sa.work_h,sb.work_w,sb.work_h,device);
     if (cudaGetLastError()!=cudaSuccess || cudaMemsetAsync(device+24,0,alignment_relation_count*sizeof(double),stream)!=cudaSuccess)
         return Status::CUDA_ERROR;
-    if (relation_mask && alignment_relations(a,b,ka,kb,matches,mask,h,sa,sb,forward,device+24,stream,relation_mask)!=Status::OK)
+    if (relation_mask && alignment_relations(a,b,ka,kb,matches,mask,h,sa,sb,forward,device+24,device+gate_feature_count,stream,relation_mask)!=Status::OK)
         return Status::CUDA_ERROR;
     if (cudaGetLastError()!=cudaSuccess || cudaMemcpyAsync(pinned,device,gate_feature_count*sizeof(double),cudaMemcpyDeviceToHost,stream)!=cudaSuccess)
         return Status::CUDA_ERROR;

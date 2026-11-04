@@ -248,7 +248,7 @@ void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r) {
     CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_grad_a_), sizeof(double)));
     CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_grad_b_), sizeof(double)));
     constexpr auto feature_count=std::max(controller::scene_feature_count,controller::gate_feature_count);
-    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_features_), feature_count*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_features_), controller::feature_device_count*sizeof(double)));
     CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_features_), feature_count*sizeof(double)));
 
     initialized_ = true;

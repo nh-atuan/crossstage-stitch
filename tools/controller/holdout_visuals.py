@@ -11,7 +11,7 @@ from tools.qor import evaluate as canonical
 from tools.qor.report import read_qor
 
 
-def export(manifest,oracle,quality_policy,output):
+def export(manifest,oracle,quality_policy,output,mode='v3_p80'):
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
@@ -21,16 +21,28 @@ def export(manifest,oracle,quality_policy,output):
     records={}
     for row in csv.DictReader((oracle/'grid.csv').open(newline='')):
         if row['is_warmup']=='0' and row['repeat_idx']=='0':records[row['pair_id'],row['config_id']]=row
-    adaptive=read_runs(oracle/'v3_p80.csv');labels=read_qor(oracle/'qor.csv');policy=canonical.load_policy(quality_policy)
+    adaptive=read_runs(oracle/(mode+'.csv'));labels=read_qor(oracle/'qor.csv');policy=canonical.load_policy(quality_policy)
     traces={}
-    for row in csv.DictReader((oracle/'v3_p80-attempts.csv').open(newline='')):
+    for row in csv.DictReader((oracle/(mode+'-attempts.csv')).open(newline='')):
         if row['is_warmup']=='0' and row['repeat_idx']=='0':traces.setdefault(row['pair_id'],[]).append(row)
     retry=sorted(p for p,rows in traces.items() if len(rows)>1)
     # Predeclared diagnostic categories: successful cheap stop, known SSIM false
     # accept, and the median-latency retry. No model is updated from these images.
-    retry_median=float(np.median([np.median([float(r['t_e2e']) for r in adaptive[p]]) for p in retry]))
-    retry_pair=min(retry,key=lambda p:(abs(float(np.median([float(r['t_e2e']) for r in adaptive[p]]))-retry_median),p))
-    cases=[('cheap-pass','udis_train_001606'),('ssim-failure','udis_train_003317'),('retry',retry_pair)]
+    def middle(ids):
+        center=float(np.median([np.median([float(r['t_e2e']) for r in adaptive[p]]) for p in ids]))
+        return min(ids,key=lambda p:(abs(float(np.median([float(r['t_e2e']) for r in adaptive[p]]))-center),p))
+    if mode=='v3_p80':cases=[('cheap-pass','udis_train_001606'),('ssim-failure','udis_train_003317'),('retry',middle(retry))]
+    else:
+        grid_labels={(x['pair_id'],x['config_id']):x['all_repeats_pass'] for x in audit['ledger']}
+        valid=[p for p in sorted(adaptive) if chosen[p] is not None and adaptive[p][0]['status']=='OK']
+        cheap=[p for p in valid if adaptive[p][0]['config_id']!=REFERENCE and grid_labels[p,adaptive[p][0]['config_id']]]
+        failures=[p for p in valid if not grid_labels[p,adaptive[p][0]['config_id']]]
+        retried=[p for p in valid if p in retry]
+        cases=[]
+        for name,ids in [('cheap-pass',cheap),('qor-failure',failures),('retry',retried),('reference-start',valid)]:
+            unused=[p for p in ids if p not in {p for _,p in cases}]
+            if unused:cases.append((name,middle(unused)))
+            if len(cases)==3:break
     output.mkdir(parents=True);ledger=[]
     for category,pair in cases:
         a=canonical._read_image(manifest.parent/pairs[pair]['a']);b=canonical._read_image(manifest.parent/pairs[pair]['b'])
@@ -62,7 +74,7 @@ def export(manifest,oracle,quality_policy,output):
         ledger.append(dict(pair_id=pair,category=category,preview=name,controller_config=controller['config_id'],
             oracle_config=optimum['config_id'],reference_config=REFERENCE,metrics=[{k:r[k] for k in ['ssim_overlap','psnr_overlap','overlap_coverage']} for r in reports]))
     result=dict(cases=ledger,metric_parity='passed_at_1e-12',
-        inputs_sha256={name:digest(path) for name,path in [('manifest',manifest),('grid',oracle/'grid.csv'),('controller',oracle/'v3_p80.csv'),('qor',oracle/'qor.csv')]},
+        inputs_sha256={name:digest(path) for name,path in [('manifest',manifest),('grid',oracle/'grid.csv'),('controller',oracle/(mode+'.csv')),('qor',oracle/'qor.csv')]},
         limits='Alignment previews for canonical QoR, not S6 panorama compositions. Black pixels show image support boundaries; heatmap is photometric error, not SSIM.')
     (output/'previews.json').write_text(json.dumps(result,indent=2,allow_nan=False)+'\n')
     return result
@@ -72,6 +84,7 @@ def main():
     import argparse
     p=argparse.ArgumentParser(description=__doc__)
     for name in ['manifest','oracle','quality-policy','output']:p.add_argument('--'+name,type=Path,required=True)
+    p.add_argument('--mode',default='v3_p80')
     export(**vars(p.parse_args()))
 
 if __name__=='__main__':main()

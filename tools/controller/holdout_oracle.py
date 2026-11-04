@@ -14,6 +14,15 @@ from tools.controller.audit_sweep import audit_sweep
 from tools.sweep.run_sweep import generate_grid_configs
 
 
+def verify_successful_policy(row,fixed):
+    if row['status']!='OK':return
+    if any(row[k]!=fixed[k] for k in ['config_id','status','fail_stage','num_matches','num_inliers','seed']):
+        raise ValueError('successful policy differs from its fixed configuration')
+    if not np.array_equal([float(row[f'h{i}']) for i in range(9)],
+                          [float(fixed[f'h{i}']) for i in range(9)],equal_nan=True):
+        raise ValueError('policy reuse changed fixed-configuration homography')
+
+
 def sweep(harness,manifest,split,quality_policy,policies,previous,output):
     if output.exists():raise ValueError('holdout Oracle output already exists')
     protocol=json.loads(split.read_text());pairs=json.loads(manifest.read_text())
@@ -57,6 +66,11 @@ def sweep(harness,manifest,split,quality_policy,policies,previous,output):
                 raise ValueError('a frozen policy outcome changed')
             if not np.array_equal([float(row[f'h{i}']) for i in range(9)],[float(before[f'h{i}']) for i in range(9)],equal_nan=True):
                 raise ValueError('a frozen policy homography changed')
+    fixed={(x['pair_id'],x['config_id'],x['repeat_idx']):x for x in csv.DictReader((output/'grid.csv').open()) if x['is_warmup']=='0'}
+    for mode in policies:
+        if not mode.startswith('v4'):continue
+        for row in csv.DictReader((output/(mode+'.csv')).open()):
+            if row['is_warmup']=='0':verify_successful_policy(row,fixed[row['pair_id'],row['config_id'],row['repeat_idx']])
     cache=evaluate_files(manifest,output/'grid.csv',quality_policy,output/'qor.csv',REFERENCE)
     (output/'qor-cache.json').write_text(json.dumps(cache,indent=2)+'\n')
     audit=audit_sweep(output/'grid.csv',output/'qor.csv',quality_policy,manifest,configs,repeats=10)

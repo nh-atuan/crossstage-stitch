@@ -1,5 +1,63 @@
 # Công cụ offline cho Controller
 
+## Policy học từ feature nhiều chiều
+
+Theo [quyết định feature/gate](../../docs/decisions/p3-controller-learned-features.md),
+`controller-policy-v3` dùng 26 thống kê probe của hai ảnh và bốn chênh lệch
+mean theo vùng để chọn điểm bắt đầu. Gate sau S5 dùng 24 feature: các metric
+S5, hình học H, photometric trên lưới 64 × 64, occupancy/entropy inlier ở
+cả A và B. Feature photometric dùng A/B và H đang có, không đọc reference.
+Các kernel Controller có workspace được cấp phát trước vùng đo. Chi phí
+feature, synchronization và cây đều nằm trong end-to-end adaptive.
+
+`small_tree` học cây cost-sensitive có giới hạn và xuất mảng node dùng quy
+tắc `<=` giống C++. Không thêm dependency inference. Gate chia năm fold
+theo pair/component, không chia theo repeat/config. Chọn depth 2 hoặc 3,
+ít nhất tám mẫu ở lá; chỉ lá thuần positive trong tập fit được ACCEPT.
+Selector depth tối đa ba, ít nhất 20 pair ở lá, có penalty chia nhánh.
+Precision ngoài fold là điều kiện chọn gate, chưa phải bảo đảm trên ảnh mới.
+
+`retry_cost` đo các chuỗi đổi R, K và S trên 32 pair calibration chọn bằng
+hash. Fit hệ số không âm từ stage cần chạy lại và phần R tăng thêm; giữ
+tám pair để kiểm sai số trước khi fit cuối trên 32 pair. Policy học target
+retry tiến về phía sau theo chi phí, có thể chuyển thẳng fallback. Loader
+từ chối target lùi hoặc vượt giới hạn để không tạo chu trình.
+
+Tập validation v2 đã được xem nên chỉ dùng đối chiếu. `freeze_learned_split`
+khóa 50 component training mới ngoài toàn bộ pool cũ bằng index CRC/size;
+không dùng kết quả QoR hoặc latency để chọn. Tệp JSON tái tạo dùng CRLF cố
+định để khớp bytes của protocol đã khóa. CRC/size chỉ kiểm trùng ảnh, chưa
+chứng nhận scene disjointness chính thức.
+
+```bash
+python -m tools.controller.freeze_learned_split --old-split results/controller-v2/split.json --index-path build/udis-training-index.json --split results/controller-v3/split.json --restore-split results/controller-v3/restore-split.json --selected-index results/controller-v3/selected-index.json
+python -m tools.controller.prepare_calibration --split results/controller-v3/restore-split.json --index results/controller-v3/selected-index.json --output results/controller-v3/holdout-data
+python -m tools.controller.learned_measure --harness build/t4/harness/stitch_harness --manifest results/controller-v2/data/calibration.json --configs results/controller-v2/grid/configs.json --original-runs results/controller-v2/grid/runs.csv --output results/controller-v3/observations
+```
+
+`learned_measure` kiểm H/status/count/seed khớp grid gốc; NaN của model lỗi
+phải khớp NaN tương ứng, không được coi là H hợp lệ. CSV thu feature chỉ
+dùng quan sát; latency và nhãn QoR vẫn lấy từ sweep lặp đã kiểm chứng.
+Không dùng latency fixed có bật `--features-out` làm baseline.
+
+Sau khi đo `retry_cost.collect` và tạo `cost-model.json` bằng `retry_cost.fit`:
+
+```bash
+python -m tools.controller.learned_calibrate --runs results/controller-v2/grid/runs.csv --audit results/controller-v2/grid/audit.json --manifest results/controller-v2/data/calibration.json --split results/controller-v3/split.json --configs results/controller-v2/grid/configs.json --features results/controller-v3/observations/features.csv --cost-model results/controller-v3/transitions/cost-model.json --output results/controller-v3/strict/policy.json
+python -m tools.controller.evaluate_learned --harness build/t4/harness/stitch_harness --manifest results/controller-v3/holdout-data/validation.json --split results/controller-v3/split.json --quality-policy results/controller-v2/quality-policy.json --policies results/controller-v3/policies.json --output results/controller-v3/validation
+```
+
+`policies.json` ánh xạ tên mode sang đường dẫn policy tính từ thư mục chứa
+JSON. Dùng đúng bytes của `quality-policy.json` đã khóa; JSON tương đương
+nhưng khác newline vẫn có SHA-256 khác. Freeze tất cả model, input image
+hashes, binary, split, seed và QoR
+policy trước phép đo holdout; đảo thứ tự mode theo batch. Có thể thu biến
+thể diagnostic với `--minimum-precision 0.90` hoặc `0.80`, nhưng không đổi
+ngưỡng SSIM/PSNR. Phải báo mọi biến thể đã khóa, gồm pair FAIL và reference
+unknown. Chỉ khuyến nghị thay baseline nếu không mất pair QoR PASS trong
+phép đo. Latency trên tập cùng PASS là số có điều kiện, không thay chứng
+cứ chất lượng toàn cohort.
+
 ## Hiệu chỉnh policy từ development
 
 Theo [quyết định calibration](../../docs/decisions/p3-controller-calibration.md),

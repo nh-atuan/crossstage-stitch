@@ -11,7 +11,7 @@ from tools.controller.audit_sweep import audit_sweep
 from tools.controller.calibrate import REFERENCE, RANSAC_SEED, digest
 from tools.controller.p3_campaign import gpu_metadata
 from tools.controller.p3_run_batch import combine
-from tools.qor.evaluate import evaluate_files
+from tools.controller.calibration_qor import evaluate_files
 from tools.sweep.run_sweep import generate_grid_configs
 
 
@@ -69,7 +69,8 @@ def sweep(harness, manifest, split_path, quality_policy, output):
         shards.append(destination)
         print('CALIBRATION_PAIRS', min(start+10, len(keys)), '/', len(keys), flush=True)
     combine(shards, output/'runs.csv')
-    evaluate_files(manifest, output/'runs.csv', quality_policy, output/'qor.csv', REFERENCE)
+    cache = evaluate_files(manifest, output/'runs.csv', quality_policy, output/'qor.csv', REFERENCE)
+    (output/'qor-cache.json').write_text(json.dumps(cache, indent=2)+'\n')
     audit = audit_sweep(output/'runs.csv', output/'qor.csv', quality_policy, manifest, configs, repeats=10)
     (output/'audit.json').write_text(json.dumps(audit, indent=2, allow_nan=False)+'\n')
     (output/'complete.json').write_text(json.dumps(dict(status='completed', pairs=len(pairs)))+'\n')

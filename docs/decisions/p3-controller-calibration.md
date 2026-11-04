@@ -73,6 +73,14 @@ kiểm identity/seed/repeat của từng shard trước khi chạy batch tiếp 
 Fitter từ chối cả trường hợp mọi dòng đồng nhất nhưng dùng sai seed.
 Không sửa cột seed trong CSV để hợp thức hóa dữ liệu đã đo; chạy lại grid.
 
+Cùng ngày, bổ sung cache có giới hạn cho bước chấm QoR offline. Cache dùng
+toàn bộ bytes, shape, dtype và policy làm khóa cho các hàm thuần của
+evaluator chuẩn; input mới vẫn gọi chính các hàm đó. Trả bản sao kết quả
+để giữ hành vi với dữ liệu mutable. Không sửa evaluator thuộc phần QoR,
+không thay ngưỡng hoặc phép tính metric. Test đối chiếu CSV từng byte và
+kiểm alias/input mutation. Chi phí chấm QoR offline nằm ngoài latency
+pipeline; lợi ích cache này không được cộng vào speedup controller.
+
 Nếu validation không chứng minh được lợi ích dưới cùng QoR, báo kết quả đó;
 không nới QoR, bỏ pair lỗi hoặc tune trên validation/test. Policy cũ và kết
 quả cũ là baseline có provenance riêng, không ghi đè checkpoint đã bàn giao.

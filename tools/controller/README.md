@@ -28,6 +28,14 @@ giữ checkpoint và kiểm lại nguồn trước khi chạy campaign mới.
 Mỗi shard được kiểm đủ pair/config/repeat và seed ngay sau khi harness
 trả về; fitter cũng từ chối seed khác protocol, kể cả khi CSV đồng nhất.
 
+Chấm QoR dùng cache có giới hạn ở process đánh giá: kết quả geometry,
+valid mask và metric chỉ được dùng lại khi toàn bộ input khớp chính xác.
+Cache gọi các hàm chuẩn trong `tools.qor.evaluate` trên mỗi input mới và
+trả bản sao để tránh alias dữ liệu mutable. Test đối chiếu output CSV từng
+byte, gồm reference failure. Không chạy hai evaluation trong cùng process
+đồng thời khi context cache còn mở. `qor-cache.json` ghi số hit/miss, hash
+source evaluator/cache, quality policy và output để truy lại phép tính.
+
 `fit_checks` tìm self-check dạng bốn ngưỡng hiện có, không đổi predicate
 SSIM/PSNR/coverage offline. Chỉ giữ các gate không có false accept đã biết
 trên calibration, có ít nhất bốn positive. Xét tối đa 12 giá trị mỗi trục

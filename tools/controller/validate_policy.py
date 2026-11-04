@@ -12,9 +12,10 @@ import cv2
 import numpy as np
 
 from tools.controller.calibrate import REFERENCE, digest
+from tools.controller.calibration_qor import evaluate_files
 from tools.controller.p3_run_batch import run
 from tools.controller.scene_features import pair_gradient
-from tools.qor.evaluate import evaluate_files, evaluate_pair, load_policy, quality_decision
+from tools.qor.evaluate import evaluate_pair, load_policy, quality_decision
 from tools.qor.report import read_qor
 
 
@@ -57,7 +58,8 @@ def evaluate(manifest, model_path, split_path, runs_by_mode, traces_by_mode, qua
                 modes[mode] = by_pair
     qor_path = output/'qor.csv'
     reference = 'reference|'+REFERENCE
-    evaluate_files(manifest, merged, quality_policy, qor_path, reference)
+    cache = evaluate_files(manifest, merged, quality_policy, qor_path, reference)
+    (output/'qor-cache.json').write_text(json.dumps(cache, indent=2)+'\n')
     labels = read_qor(qor_path)
     policy = load_policy(quality_policy)
     quality, summaries, latencies = {}, {}, {}

@@ -17,9 +17,15 @@ struct ControllerPolicy {
     std::vector<controller::Knobs> ladder;
     std::vector<controller::SelfCheck> checks;
     std::vector<controller::SceneRule> rules;
+    std::vector<controller::TreeNode> selector;
+    std::vector<std::vector<controller::TreeNode>> gate_nodes;
+    mutable std::vector<controller::TreeView> gates;
 
     Status configure(controller::Controller& target) const {
-        const controller::Policy policy{probe_scale, rules.data(), rules.size(), checks.data(), checks.size()};
+        gates.clear();
+        for (const auto& nodes : gate_nodes) gates.push_back({nodes.data(), nodes.size()});
+        const controller::Policy policy{probe_scale, rules.data(), rules.size(), checks.data(), checks.size(),
+            {selector.data(), selector.size()}, gates.empty() ? nullptr : gates.data(), gates.size()};
         const auto status = target.configure(policy);
         return status == Status::OK ? target.initialize(ladder.data(), ladder.size()) : status;
     }
@@ -43,11 +49,24 @@ inline int integer(const JsonValue& parent, const char* name, int maximum) {
         throw std::runtime_error(std::string("Invalid policy integer: ") + name);
     return static_cast<int>(result);
 }
+inline std::vector<controller::TreeNode> tree(const JsonValue& array) {
+    if (array.type != JsonValue::Array || array.arr_val.empty() || array.arr_val.size() > 127)
+        throw std::runtime_error("Invalid bounded tree");
+    std::vector<controller::TreeNode> nodes;
+    for (const auto& value : array.arr_val) {
+        if (value.obj_val.count("value"))
+            nodes.push_back({-1, 0., -1, -1, integer(value, "value", 15)});
+        else nodes.push_back({integer(value, "feature", controller::scene_feature_count-1),
+            number(value, "threshold"), integer(value, "left", 126), integer(value, "right", 126), -1});
+    }
+    return nodes;
+}
 }  // namespace policy_detail
 
 inline ControllerPolicy parse_controller_policy(const JsonValue& root) {
     using namespace policy_detail;
-    if (field(root, "schema_version", JsonValue::String).str_val != "controller-policy-v2")
+    const auto schema = field(root, "schema_version", JsonValue::String).str_val;
+    if (schema != "controller-policy-v2" && schema != "controller-policy-v3")
         throw std::runtime_error("Unsupported controller policy schema");
     ControllerPolicy policy;
     policy.id = field(root, "policy_id", JsonValue::String).str_val;
@@ -68,6 +87,14 @@ inline ControllerPolicy parse_controller_policy(const JsonValue& root) {
     for (const auto& entry : field(root, "scene_rules", JsonValue::Array).arr_val) {
         policy.rules.push_back({number(entry, "min_pair_gradient"),
             static_cast<std::size_t>(integer(entry, "first_index", 15))});
+    }
+    if (schema == "controller-policy-v3") {
+        if (field(root,"feature_schema",JsonValue::String).str_val != "controller-features-v1")
+            throw std::runtime_error("Unknown Controller feature layout");
+        policy.selector = tree(field(root, "selector", JsonValue::Array));
+        for (const auto& entry : field(root, "gates", JsonValue::Array).arr_val)
+            policy.gate_nodes.push_back(tree(entry));
+        for (const auto& nodes : policy.gate_nodes) policy.gates.push_back({nodes.data(), nodes.size()});
     }
     controller::Controller validation;
     if (policy.configure(validation) != Status::OK)

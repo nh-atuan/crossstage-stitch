@@ -14,6 +14,8 @@ struct AttemptRecord {
     int previous_R{}, eligible_R_old{};
     std::uint64_t generation{};
     double t_s4{}, t_s5{}, t_attempt{};
+    controller::GateFeatures features{};
+    double t_features{};
 };
 struct AttemptTrace {
     std::array<AttemptRecord, 16> records{};
@@ -37,6 +39,7 @@ inline const char* reason_name(controller::Reason reason) {
     case Reason::HIGH_RESIDUAL: return "HIGH_RESIDUAL";
     case Reason::DEGENERATE_MODEL: return "DEGENERATE_MODEL";
     case Reason::EXECUTION_ERROR: return "EXECUTION_ERROR";
+    case Reason::QUALITY_PREDICTOR_REJECTED: return "QUALITY_PREDICTOR_REJECTED";
     default: return "BUDGET_EXHAUSTED";
     }
 }
@@ -44,7 +47,9 @@ inline void write_attempt_header(std::ostream& out) {
     out << "run_id,git_rev,dataset,split,pair_id,repeat_idx,is_warmup,seed,attempt_idx,"
            "S,K,R,previous_R,eligible_R_old,generation,num_matches,num_inliers,inlier_ratio,"
            "inlier_coverage,reproj_residual,homography_status,action,reason,t_s4,t_s5,t_attempt,"
-           "h0,h1,h2,h3,h4,h5,h6,h7,h8\n";
+           "h0,h1,h2,h3,h4,h5,h6,h7,h8,t_features";
+    for (int i=0;i<controller::gate_feature_count;++i) out << ",gate_" << i;
+    out << '\n';
 }
 inline void write_attempt_rows(std::ostream& out, const RunRecord& run, const AttemptTrace& trace) {
     out << std::setprecision(17);
@@ -60,6 +65,8 @@ inline void write_attempt_rows(std::ostream& out, const RunRecord& run, const At
             << action_name(a.decision.action) << ',' << reason_name(a.decision.reason) << ','
             << a.t_s4 << ',' << a.t_s5 << ',' << a.t_attempt;
         for (double value : h.H) out << ',' << value;
+        out << ',' << a.t_features;
+        for (double value:a.features) out << ',' << value;
         out << '\n';
     }
 }

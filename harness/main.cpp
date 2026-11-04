@@ -100,6 +100,7 @@ int main(int argc, char** argv) {
     std::string run_id = generate_run_id();
     std::string mode = "fixed";  // "fixed", "oracle", "adaptive"
     std::string trace_path;
+    std::string features_path;
     std::string controller_policy_path;
     bool reuse_enabled = true;
 
@@ -120,6 +121,7 @@ int main(int argc, char** argv) {
         if (arg == "--manifest" && i + 1 < argc) manifest_path = argv[++i];
         else if (arg == "--controller-policy" && i + 1 < argc) controller_policy_path = argv[++i];
         else if (arg == "--trace-out" && i + 1 < argc) trace_path = argv[++i];
+        else if (arg == "--features-out" && i + 1 < argc) features_path = argv[++i];
         else if (arg == "--no-reuse") reuse_enabled = false;
         else if (arg == "--configs" && i + 1 < argc) configs_path = argv[++i];
         else if (arg == "--out" && i + 1 < argc) out_path = argv[++i];
@@ -146,6 +148,7 @@ int main(int argc, char** argv) {
                       << "  --adaptive                      Shortcut for --mode adaptive\n"
                       << "  --controller-policy <path>      Required adaptive policy JSON, or legacy-v1\n"
                       << "  --trace-out <path>              Per-attempt Controller trace CSV\n"
+                      << "  --features-out <path>           Collect Controller observations (fixed timings diagnostic)\n"
                       << "  --no-reuse                      A2 control: rerun S4/S5 for R-only retries\n"
                       << "  --oracle                        Shortcut for --mode oracle\n"
                       << "Batch options:\n"
@@ -232,6 +235,7 @@ int main(int argc, char** argv) {
     // Initialize pipeline runner with maximum bounds
     PipelineRunner runner;
     runner.set_reuse_enabled(reuse_enabled);
+    runner.set_collect_features(!features_path.empty() && mode!="adaptive");
     try {
         int max_width = 2048, max_height = 2048;
         const auto directory = manifest_path.empty() ? std::string{} : get_parent_dir(manifest_path);
@@ -254,6 +258,23 @@ int main(int argc, char** argv) {
         return 1;
     }
     write_csv_header(csv_out);
+    std::ofstream features_out;
+    if (!features_path.empty()) {
+        features_out.open(features_path);
+        if (!features_out) return 1;
+        features_out << "pair_id,config_id,seed,repeat_idx,is_warmup,features_present,t_features";
+        for (int i=0;i<stitch::controller::scene_feature_count;++i) features_out << ",scene_" << i;
+        for (int i=0;i<stitch::controller::gate_feature_count;++i) features_out << ",gate_" << i;
+        features_out << '\n';
+    }
+    const auto write_features=[&](const RunRecord& r) {
+        if (!features_out.is_open()) return;
+        features_out << std::setprecision(17) << r.pair_id << ',' << r.config_id << ',' << r.seed << ','
+            << r.repeat_idx << ',' << r.is_warmup << ',' << r.features_present << ',' << r.t_features;
+        for (double v:r.scene_features) features_out << ',' << v;
+        for (double v:r.gate_features) features_out << ',' << v;
+        features_out << '\n';
+    };
     std::ofstream trace_out;
     if (!trace_path.empty()) {
         if (mode != "adaptive") {
@@ -299,12 +320,14 @@ int main(int argc, char** argv) {
                 RunRecord rec;
                 runner.execute_adaptive_run(controller, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, w, 1, seed, &rec);
                 write_csv_row(csv_out, rec);
+                write_features(rec);
                 if (trace_out.is_open()) write_attempt_rows(trace_out, rec, runner.attempt_trace());
             }
             for (int r = 0; r < num_repeats; ++r) {
                 RunRecord rec;
                 runner.execute_adaptive_run(controller, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, r, 0, seed, &rec);
                 write_csv_row(csv_out, rec);
+                write_features(rec);
                 if (trace_out.is_open()) write_attempt_rows(trace_out, rec, runner.attempt_trace());
                 total_runs++;
             }
@@ -317,11 +340,13 @@ int main(int argc, char** argv) {
                     RunRecord rec;
                     runner.execute_run(cfg, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, w, 1, &rec);
                     write_csv_row(csv_out, rec);
+                    write_features(rec);
                 }
                 for (int r = 0; r < num_repeats; ++r) {
                     RunRecord rec;
                     runner.execute_run(cfg, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, r, 0, &rec);
                     write_csv_row(csv_out, rec);
+                    write_features(rec);
                     total_runs++;
                 }
                 csv_out.flush();

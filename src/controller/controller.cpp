@@ -40,6 +40,15 @@ Status Controller::initialize(const Knobs* ladder, std::size_t count) noexcept {
 Status Controller::begin_pair(const SceneSignals& scene, Knobs* first) noexcept {
     if (phase_ != Phase::Idle || !first || !detail::valid_scene(scene, policy_.probe_scale))
         return Status::INVALID_ARGUMENT;
+    if (policy_.selector.count) {
+        if (!scene.features_present) return Status::INVALID_ARGUMENT;
+        const int selected = predict_tree(policy_.selector, scene.features.data(), scene_feature_count);
+        if (selected < 0 || selected >= static_cast<int>(count_)) return Status::INVALID_ARGUMENT;
+        ladder_position_ = static_cast<std::size_t>(selected);
+        *first = ladder_[ladder_position_];
+        phase_ = Phase::AwaitingFeedback;
+        return Status::OK;
+    }
     const double gradient = std::min(scene.a.mean_abs_gradient, scene.b.mean_abs_gradient);
     for (std::size_t i = 0; i < policy_.scene_rule_count; ++i) {
         const auto& rule = policy_.scene_rules[i];
@@ -66,6 +75,11 @@ Status Controller::observe(const Feedback& feedback, Decision* decision) noexcep
     } else {
         result.reason = detail::self_check_reason(feedback.homography,
                                                  policy_.self_checks[ladder_position_]);
+        if (policy_.selector.count && result.reason == Reason::SELF_CHECK_PASSED) {
+            if (!feedback.features_present || predict_tree(policy_.gates[ladder_position_],
+                    feedback.features.data(), gate_feature_count) != 1)
+                result.reason = Reason::QUALITY_PREDICTOR_REJECTED;
+        }
         if (result.reason == Reason::SELF_CHECK_PASSED) {
             result.action = Action::ACCEPT;
             phase_ = Phase::Finished;

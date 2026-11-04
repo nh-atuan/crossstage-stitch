@@ -111,6 +111,8 @@ PipelineRunner::~PipelineRunner() {
     if (d_ws_probe_) cudaFree(d_ws_probe_);
     if (pinned_grad_a_) cudaFreeHost(pinned_grad_a_);
     if (pinned_grad_b_) cudaFreeHost(pinned_grad_b_);
+    if (d_features_) cudaFree(d_features_);
+    if (pinned_features_) cudaFreeHost(pinned_features_);
 }
 
 void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r) {
@@ -245,6 +247,8 @@ void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r) {
     CUDA_CHECK(cudaMalloc(&d_ws_probe_, 32));
     CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_grad_a_), sizeof(double)));
     CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_grad_b_), sizeof(double)));
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_features_), controller::scene_feature_count*sizeof(double)));
+    CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_features_), controller::scene_feature_count*sizeof(double)));
 
     initialized_ = true;
 }
@@ -271,6 +275,17 @@ void PipelineRunner::upload_pair(const HostImageRGB& img_a, const HostImageRGB& 
                             cur_w_b_ * 3, cur_h_b_, cudaMemcpyHostToDevice, stream_));
     // Device-ready is the start boundary of every timed run, including warmups.
     CUDA_CHECK(cudaStreamSynchronize(stream_));
+    if (collect_features_) {
+        ScaleInfo a{},b{};
+        make_scale_info(cur_w_a_,cur_h_a_,.25,&a);make_scale_info(cur_w_b_,cur_h_b_,.25,&b);
+        dev_gray_a_.width=a.work_w;dev_gray_a_.height=a.work_h;
+        dev_gray_b_.width=b.work_w;dev_gray_b_.height=b.work_h;
+        if (s1::s1_preprocess(dev_img_a_,dev_img_b_,.25,&dev_gray_a_,&dev_gray_b_,&a,&b,stream_)!=Status::OK ||
+            controller::extract_scene(dev_gray_a_,dev_gray_b_,d_features_,pinned_features_,stream_)!=Status::OK)
+            throw std::runtime_error("Scene feature collection failed");
+        CUDA_CHECK(cudaStreamSynchronize(stream_));
+        std::copy_n(pinned_features_,controller::scene_feature_count,collected_scene_.begin());
+    }
 }
 
 void PipelineRunner::execute_run(const HarnessConfig& cfg,
@@ -296,6 +311,7 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
     record->R = cfg.R;
     record->blend_mode = cfg.blend_mode_str;
     record->blend_mode_effective = cfg.blend_mode_str;
+    if (collect_features_) record->scene_features=collected_scene_;
 
     // Reset counts on stream
     CUDA_CHECK(cudaMemsetAsync(d_kp_count_a_, 0, sizeof(int), stream_));
@@ -400,6 +416,18 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
         return;
     }
 
+    if (collect_features_) {
+        const auto begin=std::chrono::steady_clock::now();
+        const auto status=controller::extract_gate(dev_img_a_,dev_img_b_,kp_a_,kp_b_,matches_,d_inlier_mask_,
+            *pinned_h_res_,scale_a,scale_b,d_features_,pinned_features_,stream_);
+        if (status==Status::CUDA_ERROR) throw std::runtime_error("Gate feature CUDA error");
+        CUDA_CHECK(cudaStreamSynchronize(stream_));
+        if (status==Status::OK) {
+            std::copy_n(pinned_features_,controller::gate_feature_count,record->gate_features.begin());
+            record->features_present=true;
+        }
+        record->t_features=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
+    }
     // Stage 6: Prepare geometry and render canvas
     s6::Geometry geom{};
     s6::GeometryPolicy geom_policy{};
@@ -523,8 +551,9 @@ void PipelineRunner::execute_adaptive_run(
         return;
     }
 
-    Status probe_grad = s1::s1_compute_gradient(dev_gray_a_, dev_gray_b_, d_ws_probe_,
-                                               pinned_grad_a_, pinned_grad_b_, stream_);
+    const bool learned=controller.uses_learned_features();
+    Status probe_grad = learned ? controller::extract_scene(dev_gray_a_,dev_gray_b_,d_features_,pinned_features_,stream_) :
+        s1::s1_compute_gradient(dev_gray_a_, dev_gray_b_, d_ws_probe_,pinned_grad_a_, pinned_grad_b_, stream_);
     if (probe_grad != Status::OK) {
         record->status = status_to_str(probe_grad);
         record->fail_stage = "s1";
@@ -537,9 +566,13 @@ void PipelineRunner::execute_adaptive_run(
     float probe_s1_ms = 0.0f;
     cudaEventElapsedTime(&probe_s1_ms, ev_start_, ev_s1_);
 
+    if (learned) {
+        *pinned_grad_a_=pinned_features_[0];*pinned_grad_b_=pinned_features_[1];
+        std::copy_n(pinned_features_,controller::scene_feature_count,record->scene_features.begin());
+    }
     controller::SceneSignals scene{
         {probe_scale_a, *pinned_grad_a_},
-        {probe_scale_b, *pinned_grad_b_}
+        {probe_scale_b, *pinned_grad_b_},record->scene_features,learned
     };
     record->probe_gradient_a = *pinned_grad_a_;
     record->probe_gradient_b = *pinned_grad_b_;
@@ -699,6 +732,21 @@ void PipelineRunner::execute_adaptive_run(
         // Feedback observation
         const auto t_obs_s = std::chrono::steady_clock::now();
         controller::Feedback feedback{current_knobs, s5_stat, *pinned_h_res_};
+        double feature_ms=0.;
+        if (learned && s5_stat==Status::OK && pinned_h_res_->status==Status::OK) {
+            const auto begin=std::chrono::steady_clock::now();
+            const auto status=controller::extract_gate(dev_img_a_,dev_img_b_,kp_a_,kp_b_,matches_,d_inlier_mask_,
+                *pinned_h_res_,scale_a,scale_b,d_features_,pinned_features_,stream_);
+            if (status==Status::CUDA_ERROR) throw std::runtime_error("Gate feature CUDA error");
+            CUDA_CHECK(cudaStreamSynchronize(stream_));
+            if (status==Status::OK) {
+                std::copy_n(pinned_features_,controller::gate_feature_count,feedback.features.begin());
+                feedback.features_present=true;
+            }
+            feature_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
+            record->t_features+=feature_ms;
+            record->gate_features=feedback.features;record->features_present=feedback.features_present;
+        }
         Status obs_stat = controller.observe(feedback, &decision);
         const auto t_obs_e = std::chrono::steady_clock::now();
         ctrl_time_ms += std::chrono::duration<double, std::milli>(t_obs_e - t_obs_s).count();
@@ -716,6 +764,7 @@ void PipelineRunner::execute_adaptive_run(
         trace.previous_R = prev_r;
         trace.eligible_R_old = eligible_r_old;
         trace.generation = current_gen;
+        trace.features=feedback.features;trace.t_features=feature_ms;
         trace.t_s4 = total_s4_ms - s4_before;
         trace.t_s5 = total_s5_ms - s5_before;
         trace.t_attempt = std::chrono::duration<double, std::milli>(

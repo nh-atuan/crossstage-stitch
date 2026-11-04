@@ -20,10 +20,16 @@ add_test(NAME test_controller_policy COMMAND test_controller_policy)
 
 # Compile the shared headers with nvcc (sm_75) when CUDA is available.
 if(CMAKE_CUDA_COMPILER)
+  add_executable(test_controller_features controller/test_features.cu ../src/controller/features.cu)
+  target_link_libraries(test_controller_features PRIVATE stitch_common)
+  target_include_directories(test_controller_features PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+  set_target_properties(test_controller_features PROPERTIES CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED YES)
+  add_test(NAME test_controller_features COMMAND test_controller_features)
+  set_tests_properties(test_controller_features PROPERTIES SKIP_RETURN_CODE 77)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
   add_test(NAME test_harness_seed COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/test_harness_seed.py $<TARGET_FILE:stitch_harness>)
-  add_executable(test_harness_upload test_harness_upload.cu ../harness/pipeline_runner.cu)
+  add_executable(test_harness_upload test_harness_upload.cu ../harness/pipeline_runner.cu ../src/controller/features.cu)
   target_include_directories(test_harness_upload PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
   target_link_libraries(test_harness_upload PRIVATE stitch_common stitch_controller
     stitch_s1 stitch_s2_s3 stitch_s4 stitch_s5 stitch_s6)

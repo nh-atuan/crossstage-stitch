@@ -1,6 +1,7 @@
 #include "controller/policy.hpp"
 
 #include <cmath>
+#include "controller/features.hpp"
 
 namespace stitch::controller::detail {
 namespace {
@@ -27,6 +28,12 @@ bool valid_policy(const Policy& p) noexcept {
             c.max_residual_s1 < 0.0)
             return false;
     }
+    if (p.selector.count) {
+        if (!valid_tree(p.selector, scene_feature_count, static_cast<int>(p.self_check_count)) ||
+            !p.gates || p.gate_count != p.self_check_count) return false;
+        for (std::size_t i = 0; i < p.gate_count; ++i)
+            if (!valid_tree(p.gates[i], gate_feature_count, 2)) return false;
+    } else if (p.gates || p.gate_count) return false;
     return true;
 }
 }  // namespace stitch::controller::detail

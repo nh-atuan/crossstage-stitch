@@ -38,6 +38,7 @@ public:
     // Upload outside the measurement window; return only when device RGB is ready.
     void upload_pair(const HostImageRGB& img_a, const HostImageRGB& img_b);
     void set_reuse_enabled(bool enabled) { reuse_enabled_ = enabled; }
+    void set_collect_features(bool enabled) { collect_features_ = enabled; }
     const AttemptTrace& attempt_trace() const { return trace_; }
 
     // Execute one fixed/oracle run without any cudaMalloc in the measurement window
@@ -66,6 +67,10 @@ public:
 
 private:
     bool reuse_enabled_{true};
+    bool collect_features_{};
+    controller::SceneFeatures collected_scene_{};
+    double* d_features_{};
+    double* pinned_features_{};
     AttemptTrace trace_{};
     int allocated_width_{}, allocated_height_{};
     cudaStream_t stream_{nullptr};

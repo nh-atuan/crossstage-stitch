@@ -4,6 +4,7 @@
 #include <cstddef>
 #include "common/types.hpp"
 #include "controller/policy.hpp"
+#include "controller/features.hpp"
 #include "s6/s6.hpp"
 
 namespace stitch::controller {
@@ -23,12 +24,16 @@ struct ImageSceneSignals {
 struct SceneSignals {
     ImageSceneSignals a;
     ImageSceneSignals b;
+    SceneFeatures features{};
+    bool features_present{};
 };
 
 struct Feedback {
     Knobs executed;
     Status execution_status;
     HomographyResult homography;
+    GateFeatures features{};
+    bool features_present{};
 };
 
 enum class Action : int { ACCEPT = 0, RETRY = 1, REJECT = 2 };
@@ -42,7 +47,8 @@ enum class Reason : int {
     HIGH_RESIDUAL,
     DEGENERATE_MODEL,
     EXECUTION_ERROR,
-    BUDGET_EXHAUSTED
+    BUDGET_EXHAUSTED,
+    QUALITY_PREDICTOR_REJECTED
 };
 
 struct Decision {
@@ -62,6 +68,7 @@ public:
     // Forbidden while awaiting feedback. Invalid input changes nothing.
     Status configure(const Policy& policy) noexcept;
     double probe_scale() const noexcept;
+    bool uses_learned_features() const noexcept { return configured_ && policy_.selector.count != 0; }
 
     // Borrows the immutable ladder until the next successful configure/initialize.
     Status initialize(const Knobs* ladder, std::size_t count) noexcept;

@@ -1,0 +1,40 @@
+\subsection{Feature Budget Allocation}
+\label{sec:feature-budget}
+% Role: component evidence for K as a per-attempt knob; not an end-to-end result.
+\begin{table}[t]
+\centering
+\caption{S2 and S3 on one T4 for one image, median over the 50 images of the
+25 pilot pairs (ms). ``kept'' is the median number of keypoints returned.
+$\Delta$S3~max is the S3 time with a keypoint view of capacity
+$K_{\max}=4000$ minus the time with capacity $K$. $\Delta$host~realloc is the
+host time of an attempt that frees and reallocates all S2/S3 buffers minus
+that of an attempt using buffers allocated once.}
+\label{tab:s2-s3-a3}
+\small
+\input{tables/s2-s3-a3}
+\end{table}
+Table~\ref{tab:s2-s3-a3} times S2 and S3 alone on the 50 images
+($512\times512$) of the 25 pilot pairs from the UDIS-D training split, with 2
+warmups and 10 repeats per image and budget. S2 time depends mainly on the
+image size; at $S=1$ it grows from 0.077 to 0.086\,ms across all budgets. S3
+time follows the number of keypoints kept: 0.058\,ms for 500 and 0.123\,ms for
+1801.5. These images run out of corners early. At $S=0.25$ no image yields 500
+keypoints, and at $S=0.5$ the median stays at 582 keypoints for every budget
+from 1000 up. At a small scale, raising $K$ costs little time and adds few
+features. CUDA events placed between kernels changed the stage totals by up to
+12\%, so we use them only for shares. At $S=1$, the ranking kernel takes 18\%
+of S2 at $K=500$ and about 27\% at $K\ge1000$, and the descriptor kernel takes
+70--86\% of S3.
+
+Allocating once for the largest budget is cheap when each attempt passes a view
+of capacity $K$. A view of the full allocation slows S3 by 0.007\,ms at
+$K=1000$ and by at most 0.001\,ms at the other budgets. Reallocating every
+attempt adds 0.031--0.041\,ms per image for $S\le0.75$ and 0.178--0.189\,ms at
+$S=1$. Over 4000 consecutive attempts per mode, it also raised the p95 of host
+time from 0.25 to 0.41\,ms in one run and to 0.50\,ms in a second run.
+
+In the full pipeline on the 25 pairs at $S=0.5$, $R=256$, and feather blending, S2 and S3
+together take about 0.19\,ms of a median end-to-end time of 3.18\,ms at $K=500$
+and 3.48\,ms at $K=1000$. A larger budget costs time mainly in S4 and S5 on
+pairs with many keypoints: the S4 median rises from 0.186 to 0.260\,ms, and its
+p95 from 0.187 to 1.185\,ms at $K=2000$.

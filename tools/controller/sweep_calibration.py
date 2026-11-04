@@ -15,7 +15,7 @@ from tools.controller.calibration_qor import evaluate_files
 from tools.sweep.run_sweep import generate_grid_configs
 
 
-def validate_shard(path, pairs, configs, repeats=10, warmup=2):
+def validate_shard(path, pairs, configs, repeats=10, warmup=2, split='calibration'):
     expected = {(pair, config, str(w), str(i)) for pair in pairs for config in configs
                 for w, count in [(1, warmup), (0, repeats)] for i in range(count)}
     observed = set()
@@ -24,7 +24,7 @@ def validate_shard(path, pairs, configs, repeats=10, warmup=2):
             key = tuple(row[k] for k in ('pair_id', 'config_id', 'is_warmup', 'repeat_idx'))
             if key not in expected or key in observed:
                 raise ValueError('duplicate or out-of-cohort grid measurement')
-            if (row['dataset'] != 'udis_d' or row['split'] != 'calibration'
+            if (row['dataset'] != 'udis_d' or row['split'] != split
                     or row['seed'] != str(RANSAC_SEED)):
                 raise ValueError('grid seed or partition differs from the frozen protocol')
             observed.add(key)

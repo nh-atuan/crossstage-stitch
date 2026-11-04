@@ -1,5 +1,35 @@
 # Công cụ offline cho Controller
 
+## Báo cáo chi tiết và Oracle holdout
+
+`holdout_oracle` chỉ đánh giá policy đã khóa, không fit. Quét 48 cấu hình
+trên manifest holdout, chạy lại v2/p80 xen kẽ batch để đối chiếu latency gần
+cùng thời điểm; kiểm H/status/count của policy khớp campaign trước. Chấm
+QoR canonical và giữ reference failure. Không dùng grid mới để sửa gate.
+
+`detailed_metrics` sinh mean, median, std, p95 và min/max trên pair-median;
+giữ riêng mean của tất cả lượt đo. Speedup dùng cùng các pair PASS ở cả hai
+mode, báo tỷ số mean/median và median/geometric mean của tỷ số paired.
+Bootstrap 95% resample theo pair, 10.000 lần, seed 20261101. Không coi repeat
+cùng pair là các mẫu độc lập.
+
+Báo thêm metric QoR và mẫu số của từng metric, độ lệch S/K/R với Oracle,
+configuration regret và upper bound Oracle giới hạn trong đúng ladder.
+Metric thiếu và PSNR vô hạn được ghi rõ. `holdout_visuals` dùng H đo và cùng
+geometry/interpolation của evaluator để xuất ảnh alignment, kiểm metric
+khớp CSV trong 1e-12. Đây là preview alignment để kiểm QoR; pipeline blend
+S6 chưa được đánh giá trực quan bằng các preview này.
+
+```bash
+python -m tools.controller.holdout_oracle --harness build/t4/harness/stitch_harness --manifest results/controller-v3/holdout-data/validation.json --split results/controller-v3/split.json --quality-policy results/controller-v3/quality-policy.json --policies results/controller-v3/frozen-policies.json --previous results/controller-v3/validation --output results/controller-v3/oracle
+python -m tools.controller.detailed_metrics --campaign results/controller-v3-t4-20261104/final-checkpoint --old-campaign results/controller-v2-t4-20261104/final-checkpoint --oracle results/controller-v3-t4-20261104/oracle-checkpoint/oracle --output results/controller-v3-t4-20261104/detailed-report-complete
+python -m tools.controller.detailed_export --report results/controller-v3-t4-20261104/detailed-report-complete/detailed-statistics.json --output docs/reports/controller-detailed-statistics.md
+```
+
+Exporter tài liệu dùng layout artifact của campaign này. Lệnh tạo output
+thống kê mới, không ghi đè kết quả cũ. Không so ratio của hai nhóm pair khác
+nhau hoặc trộn campaign gốc với lượt đo Oracle bổ sung thành cùng một lượt.
+
 ## Policy học từ feature nhiều chiều
 
 Theo [quyết định feature/gate](../../docs/decisions/p3-controller-learned-features.md),

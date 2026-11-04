@@ -1,5 +1,15 @@
 # Bàn giao Phase 3 của Đế
 
+## Cập nhật 04/11 (Thứ 4): thống kê và Oracle holdout
+
+Đã bổ sung mean/std/p95, QoR distributions, speedup paired, chín pair của
+median 13,4955 ms và ảnh alignment. Quét Oracle 48 cấu hình trên đúng 50 pair
+holdout mới bằng binary/policy đã khóa; 49 pair có reference hợp lệ.
+Không fit lại policy. Cấu hình cuối P80 trùng Oracle 2/49, chỉ 4/49 đáp án
+Oracle có trong ladder P80. Chi tiết và CSV từng pair ở
+[báo cáo thống kê](controller-detailed-statistics.md). Policy chưa đạt lợi
+thế latency dưới cùng QoR; không thay kết luận paper bằng upper bound Oracle.
+
 ## Cập nhật 04/11 (Thứ 4): feature và gate
 
 Đã triển khai probe nhiều feature, gate sau S5 có photometric/hình học và

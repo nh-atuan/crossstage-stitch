@@ -46,7 +46,9 @@ int main() {
     std::printf("First-probe upload consistency passed for 96 alternating pairs; seed=%llu\n",
                 static_cast<unsigned long long>(seed));
     {
-        HostImageRGB image{64,64,std::vector<std::uint8_t>(64*64*3)};
+        // ORB reserves 31 pixels at each edge; retain enough interior for S5.
+        constexpr int fixture_size=256;
+        HostImageRGB image{fixture_size,fixture_size,std::vector<std::uint8_t>(fixture_size*fixture_size*3)};
         std::uint32_t state=static_cast<std::uint32_t>(seed);
         for(auto& value:image.pixels){state^=state<<13;state^=state>>17;state^=state<<5;value=state&255;}
         BoostNode confidence[]={{-1,-1,-1,0.f,10.f}},rejection[]={{-1,-1,-1,0.f,0.f}};
@@ -59,9 +61,15 @@ int main() {
         Policy pooled{.25,&fallback,1,relaxed,2};pooled.pooled=&models;
         Controller adaptive;CHECK(adaptive.configure(pooled)==Status::OK);
         CHECK(adaptive.initialize(choices,2)==Status::OK);
-        PipelineRunner small;small.initialize(64,64,2000,1024);small.upload_pair(image,image);
+        PipelineRunner small;small.initialize(fixture_size,fixture_size,2000,1024);small.upload_pair(image,image);
         RunRecord result;
         small.execute_adaptive_run(adaptive,"feature-fallback-fixture","fixture","synthetic","test","identity",0,0,seed,&result);
+        std::printf("Pooled fallback fixture: status=%s stage=%s attempts=%d\n",result.status.c_str(),result.fail_stage.c_str(),small.attempt_trace().count);
+        for(int i=0;i<small.attempt_trace().count;++i) {
+            const auto& attempt=small.attempt_trace().records[i];
+            std::printf("attempt=%d K=%d matches=%d inliers=%d H_status=%d action=%d reason=%d\n",i,attempt.knobs.K,
+                attempt.homography.num_matches,attempt.homography.num_inliers,int(attempt.homography.status),int(attempt.decision.action),int(attempt.decision.reason));
+        }
         CHECK(result.status=="OK" && small.attempt_trace().count==2);
         CHECK(small.attempt_trace().records[0].features[2]>0.);
         CHECK(!result.features_present && result.t_features>0.);

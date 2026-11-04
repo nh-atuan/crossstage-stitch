@@ -1,13 +1,21 @@
 // Feature layout is shared by CUDA collection, exported trees and telemetry.
 #pragma once
 #include <array>
+#include <cmath>
 #include "common/types.hpp"
 
 namespace stitch::controller {
 constexpr int scene_feature_count = 26;
+constexpr int selector_feature_count = 30;
 constexpr int gate_feature_count = 24;
 using SceneFeatures = std::array<double, scene_feature_count>;
 using GateFeatures = std::array<double, gate_feature_count>;
+inline std::array<double,selector_feature_count> selector_features(const SceneFeatures& scene) noexcept {
+    std::array<double,selector_feature_count> values{};
+    for (int i=0;i<scene_feature_count;++i) values[i]=scene[i];
+    for (int tile=0;tile<4;++tile) values[26+tile]=std::abs(scene[2+tile*3]-scene[14+tile*3]);
+    return values;
+}
 
 // Caller provides 26/24 device doubles and pinned host doubles. No allocation.
 Status extract_scene(const ImageView& a, const ImageView& b, double* device,

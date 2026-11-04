@@ -27,6 +27,8 @@ struct Policy {
     TreeView selector{};
     const TreeView* gates{};
     std::size_t gate_count{};
+    const std::size_t* retry_targets{};
+    std::size_t retry_target_count{};
 };
 
 namespace detail {

@@ -20,12 +20,14 @@ struct ControllerPolicy {
     std::vector<controller::TreeNode> selector;
     std::vector<std::vector<controller::TreeNode>> gate_nodes;
     mutable std::vector<controller::TreeView> gates;
+    std::vector<std::size_t> retry_targets;
 
     Status configure(controller::Controller& target) const {
         gates.clear();
         for (const auto& nodes : gate_nodes) gates.push_back({nodes.data(), nodes.size()});
         const controller::Policy policy{probe_scale, rules.data(), rules.size(), checks.data(), checks.size(),
-            {selector.data(), selector.size()}, gates.empty() ? nullptr : gates.data(), gates.size()};
+            {selector.data(), selector.size()}, gates.empty() ? nullptr : gates.data(), gates.size(),
+            retry_targets.empty() ? nullptr : retry_targets.data(), retry_targets.size()};
         const auto status = target.configure(policy);
         return status == Status::OK ? target.initialize(ladder.data(), ladder.size()) : status;
     }
@@ -56,7 +58,7 @@ inline std::vector<controller::TreeNode> tree(const JsonValue& array) {
     for (const auto& value : array.arr_val) {
         if (value.obj_val.count("value"))
             nodes.push_back({-1, 0., -1, -1, integer(value, "value", 15)});
-        else nodes.push_back({integer(value, "feature", controller::scene_feature_count-1),
+        else nodes.push_back({integer(value, "feature", controller::selector_feature_count-1),
             number(value, "threshold"), integer(value, "left", 126), integer(value, "right", 126), -1});
     }
     return nodes;
@@ -95,6 +97,14 @@ inline ControllerPolicy parse_controller_policy(const JsonValue& root) {
         for (const auto& entry : field(root, "gates", JsonValue::Array).arr_val)
             policy.gate_nodes.push_back(tree(entry));
         for (const auto& nodes : policy.gate_nodes) policy.gates.push_back({nodes.data(), nodes.size()});
+        if (root.obj_val.count("retry_targets")) {
+            for (const auto& target:field(root,"retry_targets",JsonValue::Array).arr_val) {
+                if (target.type!=JsonValue::Number || !std::isfinite(target.num_val) || target.num_val<0 ||
+                    target.num_val>entries.size() || target.num_val!=std::floor(target.num_val))
+                    throw std::runtime_error("Invalid bounded retry target");
+                policy.retry_targets.push_back(static_cast<std::size_t>(target.num_val));
+            }
+        }
     }
     controller::Controller validation;
     if (policy.configure(validation) != Status::OK)

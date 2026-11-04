@@ -29,5 +29,11 @@ int main() {
     CHECK(c.begin_pair(scene,&first)==Status::INVALID_ARGUMENT);
     selector[0].left=0;CHECK(c.configure(policy)==Status::INVALID_ARGUMENT);
     selector[0].left=1;gate[0].feature=gate_feature_count;CHECK(c.configure(policy)==Status::INVALID_ARGUMENT);
+    gate[0].feature=13;
+    std::size_t targets[]={1,2};policy.retry_targets=targets;policy.retry_target_count=2;
+    CHECK(c.configure(policy)==Status::OK);
+    targets[0]=0;CHECK(c.configure(policy)==Status::INVALID_ARGUMENT);
+    SceneFeatures raw{};raw[2]=.2;raw[14]=.7;
+    CHECK(std::abs(selector_features(raw)[26]-.5)<1e-12);
     std::puts("Learned Controller boundary, feedback and malformed tree checks passed");
 }

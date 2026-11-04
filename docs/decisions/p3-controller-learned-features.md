@@ -28,6 +28,16 @@ Lựa chọn ban đầu học từ chi phí các cấu hình đạt gate, với 
 latency sweep calibration. Đo chuỗi đổi R, K, S để hiệu chỉnh chi phí dựa
 trên stage cần chạy lại và R tăng thêm; chi phí trích feature tính trong
 latency adaptive. Policy có fallback reference và retry hữu hạn.
+Học đích retry tiến về phía sau theo chi phí trên calibration, không buộc
+đi qua mọi nấc còn lại. Kiểm target tiến để không tạo chu trình.
+
+Khóa ba biến thể trước holdout: gate không có false accept ngoài fold;
+hai biến thể diagnostic dùng precision ngoài fold tối thiểu 0,90 và 0,80.
+Hai mức này chỉ là ràng buộc học gate, không thay ngưỡng QoR và không được
+coi là bảo đảm precision trên dữ liệu mới. Báo mọi biến thể; chỉ khuyến
+nghị thay baseline khi phép đo không mất các pair QoR PASS của reference.
+Loss học bộ chọn tính thêm chi phí reference cho false stop đã biết trên
+calibration; đây là penalty offline, không phải phép phát hiện QoR online.
 
 ## Dữ liệu và nghiệm thu
 

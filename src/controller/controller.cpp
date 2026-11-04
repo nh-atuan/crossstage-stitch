@@ -42,7 +42,8 @@ Status Controller::begin_pair(const SceneSignals& scene, Knobs* first) noexcept 
         return Status::INVALID_ARGUMENT;
     if (policy_.selector.count) {
         if (!scene.features_present) return Status::INVALID_ARGUMENT;
-        const int selected = predict_tree(policy_.selector, scene.features.data(), scene_feature_count);
+        const auto values=selector_features(scene.features);
+        const int selected = predict_tree(policy_.selector, values.data(), selector_feature_count);
         if (selected < 0 || selected >= static_cast<int>(count_)) return Status::INVALID_ARGUMENT;
         ladder_position_ = static_cast<std::size_t>(selected);
         *first = ladder_[ladder_position_];
@@ -84,13 +85,13 @@ Status Controller::observe(const Feedback& feedback, Decision* decision) noexcep
             result.action = Action::ACCEPT;
             phase_ = Phase::Finished;
         } else {
-            std::size_t next = ladder_position_ + 1;
+            std::size_t next = policy_.retry_target_count ? policy_.retry_targets[ladder_position_] : ladder_position_+1;
             // Changing R cannot add matches. Skip candidates whose inlier
             // requirement already exceeds the available correspondence count.
             while (next < count_ && ladder_[next].S == feedback.executed.S &&
                    ladder_[next].K == feedback.executed.K &&
                    feedback.homography.num_matches < policy_.self_checks[next].min_inliers)
-                ++next;
+                next=policy_.retry_target_count ? policy_.retry_targets[next] : next+1;
             if (next < count_) {
                 result.action = Action::RETRY;
                 result.next = ladder_[next];

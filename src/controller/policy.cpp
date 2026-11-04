@@ -29,11 +29,16 @@ bool valid_policy(const Policy& p) noexcept {
             return false;
     }
     if (p.selector.count) {
-        if (!valid_tree(p.selector, scene_feature_count, static_cast<int>(p.self_check_count)) ||
+        if (!valid_tree(p.selector, selector_feature_count, static_cast<int>(p.self_check_count)) ||
             !p.gates || p.gate_count != p.self_check_count) return false;
         for (std::size_t i = 0; i < p.gate_count; ++i)
             if (!valid_tree(p.gates[i], gate_feature_count, 2)) return false;
     } else if (p.gates || p.gate_count) return false;
+    if (p.retry_target_count) {
+        if (!p.selector.count || !p.retry_targets || p.retry_target_count!=p.self_check_count) return false;
+        for (std::size_t i=0;i<p.retry_target_count;++i)
+            if (p.retry_targets[i]<=i || p.retry_targets[i]>p.self_check_count) return false;
+    } else if (p.retry_targets) return false;
     return true;
 }
 }  // namespace stitch::controller::detail

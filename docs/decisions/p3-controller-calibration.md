@@ -3,7 +3,9 @@
 - **Người quyết định:** Đế, đồng ý triển khai các đề xuất trong phiên làm việc.
 - **Ngày:** 03/11 (Thứ 3), năm 2026.
 - **Phase:** Phase 3; deadline chung 05/11 (Thứ 5).
-- **Trạng thái:** Đang triển khai và kiểm chứng trên Colab Tesla T4.
+- **Trạng thái:** Đã triển khai và kiểm chứng trên Colab Tesla T4 ngày 04/11
+  (Thứ 4); chưa đạt lợi thế latency online. Kết quả tại
+  [báo cáo hiệu chỉnh](../reports/controller-policy-calibration.md).
 
 ## Bối cảnh
 

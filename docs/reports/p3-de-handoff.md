@@ -1,5 +1,20 @@
 # Bàn giao Phase 3 của Đế
 
+## Cập nhật 04/11 (Thứ 4)
+
+Đã hoàn thành phần hiệu chỉnh Controller bổ sung theo yêu cầu của Đế:
+ladder từ development, fit rule/self-check, skip retry không thể đạt ngưỡng
+và validation riêng trên Colab T4. Source đo `e378c53`; checkpoint đã tải về
+và đối chiếu hash. Trên 50 pair validation, adaptive mới có 49 QoR PASS và
+một reference failure; legacy có 13 PASS, 36 FAIL và một reference failure.
+Policy mới học cách bắt đầu thẳng reference, chưa đạt speedup so với
+Fixed-Best. Chi tiết tại [báo cáo hiệu chỉnh](controller-policy-calibration.md).
+
+Phần bổ sung này chỉ dùng development; không thay kết quả toàn UDIS-D test,
+HPatches hay draft v1 đã bàn giao dưới đây. Không có push hoặc PR mới từ
+phiên làm việc này; nghiệm thu nghiên cứu và chọn policy cho paper vẫn cần
+review của Nhóm.
+
 ## Cập nhật 03/11 (Thứ 3)
 
 Đã đo đủ 1.106 cặp UDIS-D và 295 cặp HPatches trên Colab Tesla T4. Đã có

@@ -105,7 +105,7 @@ Nhận xét:
 
 ### 6.2. Các pha (chỉ báo dưới dạng tỉ lệ)
 
-Tổng các pha đo bằng marks lệch tổng không marks quá max(5%, 0,005 ms) ở 76/96 ô (hai lượt gộp), phần lớn từ +3% tới +11%. Theo fallback của quyết định đo (mục 4), các pha chỉ được báo dưới dạng tỉ lệ trong S2 hoặc S3.
+Tổng các pha đo bằng marks lệch tổng không marks quá max(5%, 0,005 ms) ở 76/96 ô (hai lượt gộp), cao nhất +11,8% (S = 0,25, K = 2000, `max`). Theo fallback của quyết định đo (mục 4), các pha chỉ được báo dưới dạng tỉ lệ trong S2 hoặc S3.
 
 Ở S = 1, mode `view`, tính từ bảng pha của `a3-run1-full.md` (tỉ lệ trên tổng các pha của cùng stage):
 

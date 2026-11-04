@@ -169,7 +169,7 @@ Fallback nếu tập train quá nặng để tải: lấy development từ tập
 
 | Điểm | Người xác nhận |
 |---|---|
-| Kiểu descriptor, số byte hoặc số chiều; kiểu ảnh S2 cần từ S1; `σ` của blur | Thành |
+| Kiểu descriptor, số byte hoặc số chiều; kiểu ảnh S2 cần từ S1; `σ` của blur | Thành (Đã chốt: `BINARY_U8` 32 byte, `GRAY8`, `σ = 0` tại S1 vì S3 tự blur $7\times 7, \sigma = 2$) |
 | S5 gọi `to_original` và trả cả `H_s` lẫn H | Đế |
 | Định nghĩa `Ω_i`, coverage, ngưỡng 0.95; development lấy từ tập train UDIS-D | Đế, Chương |
 | Workspace query; S6 chỉ nhận H trong hệ gốc | Chương |

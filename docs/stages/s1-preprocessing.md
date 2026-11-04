@@ -4,7 +4,7 @@
 - **Người quyết định:** Tuấn.
 - **Ngày ghi nhận:** 18/10 (Chủ nhật), năm 2026.
 - **Phase:** Phase 0.
-- **Trạng thái:** Đã chọn phương pháp. Chưa có kernel CUDA và chưa đo trên GPU Tesla T4. Các điểm chờ Thành xác nhận ở mục 6.
+- **Trạng thái:** Đã chọn phương pháp và hoàn thành kernel CUDA (`src/s1/s1.cu`). Đã chốt với Thành (xem [quyết định S2/S3](../decisions/s2-s3-orb.md), mục 2): S1 xuất ảnh xám `GRAY8` với **$\sigma = 0$ (bỏ qua bước Gaussian blur trong S1)** vì S2 (FAST + Harris) và bước tính góc IC-angle của S3 chạy trên ảnh chưa làm mờ, còn S3 tự thực hiện Gaussian blur $7\times 7$ ($\sigma = 2$) nội bộ trước khi tính rBRIEF.
 
 Tham chiếu [các stage của pipeline](../stages.md) và [quy ước chung](../conventions.md). Ma trận `D` và các struct dữ liệu của S1 là một phần của interface dùng chung.
 
@@ -77,7 +77,7 @@ Chưa kiểm chứng: kernel CUDA, thời gian chạy, độ lệch của `INTER
 
 | Điểm | Người xác nhận |
 |---|---|
-| Kiểu ảnh S2 cần (`uint8` hay `float32`) và giá trị `σ` | Thành |
+| Kiểu ảnh S2 cần (`uint8` hay `float32`) và giá trị `σ` | Thành (Đã chốt 25/10: `GRAY8` `uint8`, `σ = 0` tại S1; S3 tự làm mờ $7\times 7, \sigma = 2$, xem [s2-s3-orb.md](../decisions/s2-s3-orb.md)) |
 | Làm sớm bộ cặp ảnh tổng hợp độ phân giải cao | Đế |
 
 Rủi ro: ở 512×512 cả pipeline có thể bị giới hạn bởi overhead launch, làm điều kiện Go/No-Go số 1 (khoảng 30% thời gian nằm ở các stage có núm) khó đạt. Cần cặp ảnh tổng hợp độ phân giải cao (mục 9 của [kế hoạch](../plan.md)) để núm S có tác động đo được.

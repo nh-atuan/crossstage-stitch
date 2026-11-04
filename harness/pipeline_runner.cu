@@ -350,10 +350,18 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
     }
     CUDA_CHECK(cudaEventRecord(ev_s1_, stream_));
 
+    // Create per-attempt keypoint views with capacity = K (keep max_k if K > max_k so S2 returns INVALID_ARGUMENT)
+    Keypoints kp_view_a = kp_a_;
+    Keypoints kp_view_b = kp_b_;
+    if (cfg.K >= 0 && cfg.K <= kp_a_.capacity) {
+        kp_view_a.capacity = cfg.K;
+        kp_view_b.capacity = cfg.K;
+    }
+
     // Stage 2: FAST detection + Harris ranking (núm K)
     s2::Config s2_cfg{cfg.fast_threshold, cfg.K, cfg.harris_k};
-    Status s2_stat_a = s2::s2_detect(dev_gray_a_, s2_cfg, kp_a_, ws_s2_a_, ws_bytes_s2_a_, stream_);
-    Status s2_stat_b = s2::s2_detect(dev_gray_b_, s2_cfg, kp_b_, ws_s2_b_, ws_bytes_s2_b_, stream_);
+    Status s2_stat_a = s2::s2_detect(dev_gray_a_, s2_cfg, kp_view_a, ws_s2_a_, ws_bytes_s2_a_, stream_);
+    Status s2_stat_b = s2::s2_detect(dev_gray_b_, s2_cfg, kp_view_b, ws_s2_b_, ws_bytes_s2_b_, stream_);
     if (s2_stat_a != Status::OK || s2_stat_b != Status::OK) {
         record->status = status_to_str(s2_stat_a != Status::OK ? s2_stat_a : s2_stat_b);
         record->fail_stage = "s2";
@@ -362,8 +370,8 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
     CUDA_CHECK(cudaEventRecord(ev_s2_, stream_));
 
     // Stage 3: rBRIEF description
-    Status s3_stat_a = s3::s3_describe(dev_gray_a_, kp_a_, desc_a_, ws_s3_, ws_bytes_s3_, stream_);
-    Status s3_stat_b = s3::s3_describe(dev_gray_b_, kp_b_, desc_b_, ws_s3_, ws_bytes_s3_, stream_);
+    Status s3_stat_a = s3::s3_describe(dev_gray_a_, kp_view_a, desc_a_, ws_s3_, ws_bytes_s3_, stream_);
+    Status s3_stat_b = s3::s3_describe(dev_gray_b_, kp_view_b, desc_b_, ws_s3_, ws_bytes_s3_, stream_);
     if (s3_stat_a != Status::OK || s3_stat_b != Status::OK) {
         record->status = status_to_str(s3_stat_a != Status::OK ? s3_stat_a : s3_stat_b);
         record->fail_stage = "s3";
@@ -373,7 +381,7 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
 
     // Stage 4: Matching
     s4::Config s4_cfg{cfg.ratio_threshold, cfg.cross_check};
-    Status s4_stat = s4::s4_match(kp_a_, desc_a_, kp_b_, desc_b_, s4_cfg, matches_, ws_s4_, ws_bytes_s4_, stream_);
+    Status s4_stat = s4::s4_match(kp_view_a, desc_a_, kp_view_b, desc_b_, s4_cfg, matches_, ws_s4_, ws_bytes_s4_, stream_);
     if (s4_stat != Status::OK) {
         record->status = status_to_str(s4_stat);
         record->fail_stage = "s4";
@@ -383,7 +391,7 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
 
     // Stage 5: MSAC Homography (núm R)
     s5::Config s5_cfg{cfg.R, 0, cfg.msac_batch_size, cfg.msac_refinements, cfg.msac_threshold, cfg.seed, 1};
-    Status s5_stat = s5::estimate(kp_a_, kp_b_, matches_, scale_a, scale_b, s5_cfg,
+    Status s5_stat = s5::estimate(kp_view_a, kp_view_b, matches_, scale_a, scale_b, s5_cfg,
                                   d_inlier_mask_, pinned_h_res_, ws_s5_, ws_bytes_s5_, stream_);
     if (s5_stat != Status::OK) {
         record->status = status_to_str(s5_stat);
@@ -647,6 +655,13 @@ void PipelineRunner::execute_adaptive_run(
             }
         }
 
+        Keypoints kp_view_a = kp_a_;
+        Keypoints kp_view_b = kp_b_;
+        if (current_knobs.K >= 0 && current_knobs.K <= kp_a_.capacity) {
+            kp_view_a.capacity = current_knobs.K;
+            kp_view_b.capacity = current_knobs.K;
+        }
+
         // Run S2 & S3 if needed
         if (rerun_s2) {
             CUDA_CHECK(cudaMemsetAsync(d_kp_count_a_, 0, sizeof(int), stream_));
@@ -654,8 +669,8 @@ void PipelineRunner::execute_adaptive_run(
 
             CUDA_CHECK(cudaEventRecord(ev_s1_, stream_));
             s2::Config s2_cfg{20, current_knobs.K, 0.04f};
-            Status s2_a = s2::s2_detect(dev_gray_a_, s2_cfg, kp_a_, ws_s2_a_, ws_bytes_s2_a_, stream_);
-            Status s2_b = s2::s2_detect(dev_gray_b_, s2_cfg, kp_b_, ws_s2_b_, ws_bytes_s2_b_, stream_);
+            Status s2_a = s2::s2_detect(dev_gray_a_, s2_cfg, kp_view_a, ws_s2_a_, ws_bytes_s2_a_, stream_);
+            Status s2_b = s2::s2_detect(dev_gray_b_, s2_cfg, kp_view_b, ws_s2_b_, ws_bytes_s2_b_, stream_);
             CUDA_CHECK(cudaEventRecord(ev_s2_, stream_));
             CUDA_CHECK(cudaStreamSynchronize(stream_));
             float ms2 = 0.0f; cudaEventElapsedTime(&ms2, ev_s1_, ev_s2_); total_s2_ms += ms2;
@@ -666,8 +681,8 @@ void PipelineRunner::execute_adaptive_run(
             }
 
             CUDA_CHECK(cudaEventRecord(ev_s2_, stream_));
-            Status s3_a = s3::s3_describe(dev_gray_a_, kp_a_, desc_a_, ws_s3_, ws_bytes_s3_, stream_);
-            Status s3_b = s3::s3_describe(dev_gray_b_, kp_b_, desc_b_, ws_s3_, ws_bytes_s3_, stream_);
+            Status s3_a = s3::s3_describe(dev_gray_a_, kp_view_a, desc_a_, ws_s3_, ws_bytes_s3_, stream_);
+            Status s3_b = s3::s3_describe(dev_gray_b_, kp_view_b, desc_b_, ws_s3_, ws_bytes_s3_, stream_);
             CUDA_CHECK(cudaEventRecord(ev_s3_, stream_));
             CUDA_CHECK(cudaStreamSynchronize(stream_));
             float ms3 = 0.0f; cudaEventElapsedTime(&ms3, ev_s2_, ev_s3_); total_s3_ms += ms3;
@@ -683,7 +698,7 @@ void PipelineRunner::execute_adaptive_run(
             CUDA_CHECK(cudaMemsetAsync(d_matches_count_, 0, sizeof(int), stream_));
             CUDA_CHECK(cudaEventRecord(ev_s3_, stream_));
             s4::Config s4_cfg{0.8, false};
-            Status s4_stat = s4::s4_match(kp_a_, desc_a_, kp_b_, desc_b_, s4_cfg, matches_, ws_s4_, ws_bytes_s4_, stream_);
+            Status s4_stat = s4::s4_match(kp_view_a, desc_a_, kp_view_b, desc_b_, s4_cfg, matches_, ws_s4_, ws_bytes_s4_, stream_);
             CUDA_CHECK(cudaEventRecord(ev_s4_, stream_));
             CUDA_CHECK(cudaStreamSynchronize(stream_));
             float ms4 = 0.0f; cudaEventElapsedTime(&ms4, ev_s3_, ev_s4_); total_s4_ms += ms4;
@@ -697,7 +712,7 @@ void PipelineRunner::execute_adaptive_run(
         // Run S5 MSAC Homography
         CUDA_CHECK(cudaEventRecord(ev_s4_, stream_));
         s5::Config s5_cfg{current_knobs.R, prev_r, 64, 1, 3.0, seed, current_gen};
-        Status s5_stat = s5::estimate(kp_a_, kp_b_, matches_, scale_a, scale_b, s5_cfg,
+        Status s5_stat = s5::estimate(kp_view_a, kp_view_b, matches_, scale_a, scale_b, s5_cfg,
                                       d_inlier_mask_, pinned_h_res_, ws_s5_, ws_bytes_s5_, stream_);
         CUDA_CHECK(cudaEventRecord(ev_s5_, stream_));
         CUDA_CHECK(cudaStreamSynchronize(stream_));

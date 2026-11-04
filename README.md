@@ -17,6 +17,8 @@ Mốc nộp bài của Nhóm: 13/11/2026.
 | `docs/stages/s1-preprocessing.md` | Quyết định kỹ thuật S1 |
 | `docs/decisions/TEMPLATE.md` | Mẫu ghi quyết định kỹ thuật |
 | `src/common/` | Header interface dùng chung |
+| `tools/data_prep/` | Script tải tự động dữ liệu UDIS-D (`testing.zip` / `training.zip`) và chuẩn bị `pairs.json` (xem [tools/data_prep/README.md](tools/data_prep/README.md)) |
+| `tools/colab_runner.py` | Script chạy tự động 3 chế độ (`Fixed-Best`, `Oracle`, `Adaptive`) trên Colab Tesla T4 và xuất `telemetry_results.csv` |
 | `tools/mock/` | Script sinh mock data và bản giả OpenCV của từng stage |
 | `tests/` | Test CTest (C++/CUDA) và pytest (`tests/python/`) |
 

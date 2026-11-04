@@ -4,26 +4,55 @@
 
 - Origin Skill: academic-research-suite / deep-research.
 - Origin Mode: backlog triển khai từ nghiên cứu có RQ xác định.
-- Origin Date: 2026-10-24; cập nhật 24/10 (Thứ 7), năm 2026.
-- Verification Status: PLANNED — chưa coi task dưới đây là đã triển khai hoặc được owner nhận.
-- Version Label: quantum_catalogue_tasks_v1.
+- Origin Date: 02/11 (Thứ 2), năm 2026; thay phân công đề xuất ngày 24/10 (Thứ 7).
+- Verification Status: PLANNED — hướng offline và owner Thành đã được người dùng chốt; chưa có implementation/QAOA experiment để nghiệm thu.
+- Version Label: quantum_catalogue_tasks_v2_thanh.
 - Tài liệu phương pháp: [quantum-integration-proposal.md](quantum-integration-proposal.md).
 
 ## 1. Phạm vi, owner và Definition of Done
 
 Primary path đã chọn: **A — offline QUBO/QAOA catalogue selection**, B_fixed. Tạo bảng đo CUDA trước, xây native cover/QUBO, chạy QAOA simulator p=1,2 có raw samples, rồi so với classical baselines và tích hợp catalogue vào controller cổ điển. Không chuyển sang S5 estimator, S6 seam hoặc quantum classifier để thay thế phần còn thiếu.
 
-Owner dưới đây là đề xuất: Tuấn giữ S1/harness/common/merge; Thành giữ S2–S3; Đế giữ S4–S5/controller và duyệt QoR; Chương giữ S6, đề xuất nhận quantum tooling và tổng hợp. Mỗi owner stage chịu trách nhiệm code của mình; Tuấn review interface/CSV chung. Không giao thêm trách nhiệm cho Thành ngoài review keypoint/descriptor và feature availability khi cần.
+Phân công được người dùng chốt ngày 02/11 (Thứ 2): **Thành là single owner Q00–Q13 và quantum tooling/solver report**. Thành tiếp tục S2–S3/A3; các việc quantum được làm song song với baseline không quantum. Tuấn cung cấp raw sweep và giữ harness/S1/common/merge; Đế duyệt policy/reference và giữ controller/S4–S5; Chương giữ S6/A4/A5, review QoR và tổng hợp paper. Review hoặc cung cấp input không chuyển trách nhiệm implementation của stage sang Thành. Quyết định ở [p3-offline-quantum-catalogue.md](../decisions/p3-offline-quantum-catalogue.md).
 
-Effort là ước lượng **person-day làm việc tập trung**, một ngày khoảng 6 giờ, chưa được đo và không phải deadline. Task harness/CUDA/controller một phần trùng task đã có trong plan; không cộng đôi thành effort quantum. Không có deadline riêng từng task; Nhóm xếp backlog này vào phase hiện tại hoặc phase sau sau khi review, giữ mốc chung trong plan. P0 là bắt buộc cho thí nghiệm quantum offline; P1 cho kết luận runtime/paper; P2 là hardware/extension tùy chọn.
+Phase hiện tại là **Phase 3**, deadline chung 05/11 (Thứ 5), review cùng ngày. Q00–Q13 là backlog chi tiết của phase này; chưa có task nào được đánh dấu DONE bằng lượt cập nhật kế hoạch. Effort dưới đây là ước lượng person-day tập trung khoảng 6 giờ, không phải deadline hoặc cam kết tất cả đều kịp; không cộng đôi việc harness/stage đã có. Thành báo tiến độ theo gate và các thiếu hụt dữ liệu/tài nguyên; baseline/A1–A5 tiếp tục độc lập. Q14–Q22 và QH chỉ là định hướng sau review, không giao lịch hoặc acceptance chi tiết của phase sau. P0 là ưu tiên offline; P1/P2 trong backlog cũ chỉ biểu thị ưu tiên, không phải tên phase.
 
 Definition of Done cho tích hợp quantum ứng dụng: Q00–Q13 có artifact kiểm tra được, QAOA thực sự chạy trên ít nhất một instance từ CUDA sweep còn q_after>0 sau reduction, native/classical baselines đủ, raw và repaired outputs tách biệt. Optimum=1 hoặc classical giải nhanh không miễn prototype khi q_after>0 và đủ tài nguyên. Kết quả QAOA không có feasible raw sample vẫn là negative experiment nếu circuit/counts/logs hợp lệ; không được xuất catalogue thành công giả. Khi đó muốn hoàn tất tích hợp vào controller phải có catalogue hybrid hợp lệ, truy vết nguồn và repair, hoặc ghi rõ phần tích hợp chưa hoàn thành. Claim hệ thống còn cần Q14–Q20; Q21–Q22 để bàn giao paper/tái lập. QPU không bắt buộc.
 
 Mọi CLI và file code `tools/quantum/*` dưới đây là **dự kiến chưa tồn tại**, trừ tooling QoR/S6 dẫn chiếu sẵn. Artifacts data/results/build không commit theo conventions; lưu manifest/hash và vị trí chia sẻ. Small test fixtures có thể commit trong tests theo quy ước Nhóm; không commit dataset hoặc raw benchmark outputs.
 
+
+### 1.1. Hai nhánh song song và ba nhóm đối chứng
+
+| Nhóm | Vai trò | Quantum khi chạy từng ảnh |
+|---|---|---|
+| W0 — Adaptive-original | Runtime/ladder gốc của nhóm, cùng Fixed-Best và Oracle; giữ campaign baseline riêng | Không |
+| W1 — Adaptive-classical-catalogue | Catalogue do exact/CP-SAT/greedy hoặc classical solver đã khai báo chọn; dùng catalogue consumer cổ điển | Không |
+| W2 — Adaptive-QAOA-catalogue | Catalogue từ QAOA simulator, validated và truy vết được sample; repair nếu có phải mang nhãn hybrid | Không |
+
+W0 chạy được khi không cài quantum SDK và không cần đợi W1/W2. Quantum SDK không nằm trong root CMake, stage API hoặc `tools/requirements.txt`. W1/W2 chỉ được gọi là kết quả runtime sau khi Đế/Tuấn tích hợp consumer và đo thật; trước đó chỉ có so sánh solver offline. W1/W2 dùng cùng candidate set/reduction, split, quality policy, B, consumer, selector family và tuning budget, reuse/self-check/fallback. W0 so với W1 đo tác động thiết kế catalogue/consumer; W1 so với W2 mới kiểm tra đóng góp solver. Kích thước catalogue khác nhau vẫn được giữ trong bảng, kèm matched-size control khi có.
+
+Thành triển khai adapter, classical solvers, encoding, QAOA và validator dưới `tools/quantum/` cùng tests riêng; các đường dẫn đó hiện chưa tồn tại. Các stage S1–S6 không nhận quantum states hoặc circuit. Catalogue là JSON gồm config IDs/S/K/R/B, hashes và provenance, không chứa RGB. Một catalogue không tự xác định thứ tự ladder; Đế chuyển nó sang policy/ladder hợp lệ trên development và giữ fallback đã duyệt.
+
+### 1.2. Mức nghiệm thu trong Phase 3
+
+- **PASS_OFFLINE:** Q00–Q13 đủ artifact trên ít nhất một instance từ sweep CUDA còn `q_after > 0`, có QAOA p=1,2 và controls. PASS không có nghĩa QAOA thắng classical hoặc runtime nhanh hơn.
+- **NEGATIVE_RESULT:** Circuit/counts và đối chứng đầy đủ nhưng raw feasibility bằng 0, classical mạnh hơn hoặc repair quyết định kết quả; bàn giao nguyên dữ liệu và giới hạn, không xuất catalogue thành công giả.
+- **BLOCKED/INCOMPLETE:** Thiếu sweep/policy approval, environment không chạy, encoding chưa đúng, mọi instance bị exact reduction giải hết hoặc vượt tài nguyên; toy-only không đóng ứng dụng quantum.
+
+Không dùng một kết quả baseline để đóng task quantum. Negative result không chặn baseline, không tự cho phép bỏ workstream quantum, đổi stage hoặc mua quyền QPU. Nếu chưa có e2e consumer thì phần tích hợp runtime còn pending dù solver offline đã nghiệm thu.
+
+### 1.3. Protocol và phân bổ công việc của Thành
+
+Thành bắt đầu Q02/Q10 và tiny exact tests trong lúc chờ raw sweep Q00. Sau G0 mới tạo instance ứng dụng; sau G1 mới chạy QAOA; Q13 gom tất cả seeds/failures và công bố G2/G3. QAOA/classical controls có ngân sách solver riêng, CPU simulator tách khỏi phiên đo GPU T4 để tránh tranh tài nguyên. Không chạy thêm solver trên T4 trong lúc baseline đang đo nếu chưa có cô lập tài nguyên.
+
+A3 và quantum là hai deliverable riêng của Thành; không chuyển A3 sang owner khác. Để giới hạn khối lượng trong Phase 3, bắt đầu một instance thật đã kiểm tra cùng các controls, rồi mới mở rộng cohort/seeds khi còn budget. Không đồng thời mở multiobjective, quantum selector, seam, QPU hoặc toàn bộ sensitivity grid. Mọi run config nhỏ hơn các budget pilot đề xuất phải được ghi trước khi chạy và báo số thực thi; không giảm sau khi nhìn kết quả để bỏ seed thất bại. Nếu tổng effort vượt sức chứa phase, Thành báo phần PASS/NEGATIVE/BLOCKED tại review; Nhóm quyết định phần tiếp theo, không ghi tất cả DONE.
+
+Nhánh quantum đầu tiên chỉ dùng **một** policy QoR đã được Đế duyệt và B cố định được Chương xác nhận. A5 là workstream sensitivity riêng; không tự nhân quantum theo 20 tổ hợp hoặc dùng test UDIS-D để fit catalogue. Rho, seeds, sampling/budget và restriction manifest ở proposal là tham số pilot đề xuất; Thành lập run config, Tuấn/Đế review trước khi dùng validation/final. Quyết định offline/owner hiện tại không đồng thời duyệt mọi ngưỡng trong proposal.
+
 ## 2. Dependency graph và critical path
 
-Q00 được đặt đầu vì chưa có CUDA characterization hợp lệ. Q01/Q02 là prerequisite chuẩn bị của Q00, có thể làm trước khi đủ kernel. Q04–Q12 có thể phát triển bằng toy fixtures khi chờ, nhưng không đóng task nghiệm thu dữ liệu thật bằng toy. Graph có cả chuỗi tooling song song và đường dữ liệu chính.
+Q00 được đặt đầu vì chưa có bảng characterization đủ provenance được tooling quantum nghiệm thu; kernel/controller nền đã có và Phase 2 đã PASS theo báo cáo nhóm. Q01/Q02 là prerequisite chuẩn bị của Q00, có thể làm trước khi đủ kernel. Q04–Q12 có thể phát triển bằng toy fixtures khi chờ, nhưng không đóng task nghiệm thu dữ liệu thật bằng toy. Graph có cả chuỗi tooling song song và đường dữ liệu chính.
 
 ```mermaid
 flowchart TD
@@ -57,22 +86,22 @@ flowchart TD
     Q13 -. "optional" .-> QH["QH: hardware replication"]
 ```
 
-Critical path: CUDA đủ stage/harness → Q00 → Q03 → Q04 → encoding/admission → Q11/Q13 → controller replay → final. Q10, tiny-instance tests và validator có thể làm song song. Nếu critical path bị chặn, báo missing artifact; không thay bằng timing S6-only hay mock CPU.
+Critical path: CUDA đủ stage/harness → Q00 → Q03 → Q04 → encoding/admission → Q11/Q13 → controller replay → final. Q10, tiny-instance tests và validator có thể làm song song với Q00 và nhánh baseline không quantum. Nếu critical path bị chặn, báo missing artifact; không thay bằng timing S6-only hay mock CPU.
 
 ## 3. Nhóm dữ liệu characterization
 
 ### Q00 — Complete the development CUDA sweep
 
-- **Owner đề xuất:** Tuấn (harness/sweep), Đế (ghép S1–S6), từng owner sửa stage của mình; **Priority:** P0.
+- **Owner:** Thành (yêu cầu, tiếp nhận và kiểm tra campaign); Tuấn cung cấp sweep/harness, Đế review pipeline/QoR; **Priority:** P0.
 - **Dependencies:** Q01, Q02; stage GPU và T4/harness đủ điều kiện theo plan. **Estimated effort:** 1–2 ngày chạy/kiểm tra sau tích hợp; không bao gồm viết stage còn thiếu.
-- **Deliverable:** sweep CUDA cho các development-fit/validation pairs được phép, C=(S,K,R,B_fixed), Fixed-High và baseline cần thiết; có 2 warmup + 10 đo/pair/config.
+- **Deliverable:** Thành yêu cầu và tiếp nhận sweep CUDA từ Tuấn cho các development-fit/validation pairs được phép, C=(S,K,R,B_fixed), Fixed-High và baseline cần thiết; có 2 warmup + 10 đo/pair/config.
 - **Acceptance criteria:** cùng timing boundary t_e2e của conventions; algorithm seed cố định, H tất định; đủ stage thực chạy GPU; H trong hệ RGB gốc B→A; lưu mọi launch/runtime failure; config/repeats coverage được kiểm bằng manifest. Không thay measurements thiếu bằng CPU/mock hoặc latency S6-only.
 - **Go/No-Go:** G0; thiếu stage/harness/T4 thì BLOCKED ứng dụng, không đánh sweep complete. Toy test của tooling vẫn có thể chạy độc lập.
 - **Artifacts:** `runs.csv`, `meta.json`, config-grid/split manifests, logs, GPU/driver/CUDA/clock/git/source hashes; vị trí dự kiến `results/quantum-characterization/<run_id>/`.
 
 ### Q01 — Freeze the pilot protocol and scene-grouped splits
 
-- **Owner đề xuất:** Đế (policy/reference/split), Tuấn (CSV/measurement), Chương (B); **Priority:** P0.
+- **Owner:** Thành lập protocol quantum; Đế duyệt policy/reference/split, Tuấn review CSV/measurement, Chương review B; **Priority:** P0.
 - **Dependencies:** quyết định hiện có trong docs; không phụ thuộc Q00. **Estimated effort:** 0,5 ngày review, chưa tính chuẩn bị dataset lớn.
 - **Deliverable:** protocol pilot có C, B_fixed, Fixed-High, candidate/fallback spaces, split/grouping, seeds và policy version/hash.
 - **Acceptance criteria:** validation tách từ development được phép; final không đổi; scene/sequence/ảnh dùng chung không leakage khi metadata cho phép. Policy pilot 0.95/0.02/0.5 được ghi là đề xuất cho tới Đế duyệt. Khóa quantile method và failure/repeat handling. Sensitivity grids/rho/budget có người duyệt, không tự thay Go/No-Go runtime.
@@ -81,7 +110,7 @@ Critical path: CUDA đủ stage/harness → Q00 → Q03 → Q04 → encoding/adm
 
 ### Q02 — Implement the characterization schema and adapters
 
-- **Owner đề xuất:** Chương (adapter riêng), Tuấn review schema/common boundary; **Priority:** P0.
+- **Owner:** Thành (adapter riêng), Tuấn review schema/common boundary; **Priority:** P0.
 - **Dependencies:** đọc conventions và evaluator hiện có; test schema không cần sweep. **Estimated effort:** 0,5–1 ngày.
 - **Deliverable:** `tools/quantum/characterize.py`, schema bảng dẫn xuất và tiny CSV fixtures/tests.
 - **Acceptance criteria:** join đúng pair_id/config_id/run_id/split, gọi evaluator/report để tính pass; không sửa runs.csv/qor.csv chung. Kiểm tra duplicate/missing rows, config mismatch, warmup, đủ 10 repeats, status/hashes. `latency_p95_repeat_ms` chỉ diagnostic; p95 main trên pair medians. Không drop silent failures.
@@ -90,7 +119,7 @@ Critical path: CUDA đủ stage/harness → Q00 → Q03 → Q04 → encoding/adm
 
 ### Q03 — Validate failures and publish characterization
 
-- **Owner đề xuất:** Chương; Đế review reference status/QoR, Tuấn review timing; **Priority:** P0.
+- **Owner:** Thành; Đế review reference status/QoR, Tuấn review timing; **Priority:** P0.
 - **Dependencies:** Q00, Q02. **Estimated effort:** 0,5 ngày.
 - **Deliverable:** bảng pair/config median latency, diagnostic repeat p95, QoR pass, coverage, status và completeness report.
 - **Acceptance criteria:** reference_failure/reference_unreliable, unachievable_in_C và incomplete phân loại riêng; giữ denominator toàn split. QoR pass tái tạo từ evaluator, không nhập tay. Fixed-High hợp lệ tự pass nếu nằm trong C; explicit candidate exclusion được ghi. Mỗi dòng truy về run/meta/policy hashes.
@@ -101,16 +130,17 @@ Critical path: CUDA đủ stage/harness → Q00 → Q03 → Q04 → encoding/adm
 
 ### Q04 — Build the Oracle and original cover instances
 
-- **Owner đề xuất:** Chương; Tuấn review Oracle consistency; **Priority:** P0.
+- **Owner:** Thành; Tuấn review Oracle consistency; **Priority:** P0.
 - **Dependencies:** Q03 cho dữ liệu thật; phát triển trước bằng toy. **Estimated effort:** 0,5–1 ngày.
 - **Deliverable:** `tools/quantum/build_instance.py`, C/I_f/t_i*/U_i(rho), original incidence matrix và original-problem validator API.
+- **Split guard:** chỉ development-fit tạo incidence/objective cho solver; validation/final được xuất riêng cho đánh giá catalogue, không thêm vào cover constraints hoặc repair. Tests phải từ chối mixed-split instance và rò rỉ final vào fit.
 - **Acceptance criteria:** Oracle từ median t_e2e và pass trong C, không từ S6 latency; rho/epsilon comparison versioned; no-pass/empty I_f là status rõ. Fixture giải tích xác nhận U_i, full-grid coverage và infinity regret. Có hashes/scope full hoặc restricted.
 - **Go/No-Go:** thiếu measurements hoặc I_f rỗng thì không xuất instance hợp lệ giả.
 - **Artifacts:** `instance.json`, `incidence.npz`, `oracle.csv`, tests và configuration mapping.
 
 ### Q05 — Implement greedy, exhaustive and native CP-SAT
 
-- **Owner đề xuất:** Chương; Tuấn review exact/bound reporting; **Priority:** P0.
+- **Owner:** Thành; Tuấn review exact/bound reporting; **Priority:** P0.
 - **Dependencies:** Q04; CP-SAT execution cần Q10, pure-Python tests làm trước. **Estimated effort:** 1 ngày.
 - **Deliverable:** `tools/quantum/solve_classical.py` với maximum-gain greedy/reverse-delete, exhaustive-small và native integer CP-SAT.
 - **Acceptance criteria:** cùng original instance/reduction và tie-break; greedy/exact feasibility được kiểm gốc; known-optimum tests. Native enumeration admission theo n_y=|C_remaining|, không theo số hàng. CP-SAT OPTIMAL/FEASIBLE/UNKNOWN và incumbent/bound tách rõ; exhaustive timeout chưa là certificate. Ghi actual wall time kể cả khi exact chạy gần như tức thì.
@@ -119,7 +149,7 @@ Critical path: CUDA đủ stage/harness → Q00 → Q03 → Q04 → encoding/adm
 
 ### Q06 — Implement QUBO SA and matched random controls
 
-- **Owner đề xuất:** Chương; **Priority:** P0.
+- **Owner:** Thành; **Priority:** P0.
 - **Dependencies:** Q07; phát triển trên tiny QUBO trước. **Estimated effort:** 0,5–1 ngày.
 - **Deliverable:** seeded Metropolis SA, uniform-QUBO random và random-y distribution có khai báo; same-time/matched-sample runs.
 - **Acceptance criteria:** tính delta energy khớp full energy; schedule/proposals/restarts, draws/evaluations và threads lưu vào log. Cùng QUBO với QAOA, không coi shot bằng SA move. Ghi raw sample/energy/status; raw feasibility không thay bằng repaired feasibility.
@@ -130,7 +160,7 @@ Critical path: CUDA đủ stage/harness → Q00 → Q03 → Q04 → encoding/adm
 
 ### Q07 — Implement slack QUBO, Ising conversion and decode
 
-- **Owner đề xuất:** Chương; Tuấn review logic/formulation; **Priority:** P0.
+- **Owner:** Thành; Tuấn review logic/formulation; **Priority:** P0.
 - **Dependencies:** Q04. **Estimated effort:** 1 ngày.
 - **Deliverable:** slack binary b_i=ceil(log2 d_i), upper-triangular QUBO, Ising h/J/offset, bit mapping/decode.
 - **Acceptance criteria:** enumerate tiny (y,z), so residual/QUBO/Ising energies; cover-feasible y có ít nhất một zero-penalty slack, equality-feasible sample luôn cover gốc. Với alpha>lambda|C|, ground state cardinality bằng exact cover; test singleton, duplicate, non-power-of-two degree, empty/invalid row, endian/factor-2. QUBO-feasible phải định nghĩa là residual zero, không là mọi bitstring.
@@ -139,7 +169,7 @@ Critical path: CUDA đủ stage/harness → Q00 → Q03 → Q04 → encoding/adm
 
 ### Q08 — Implement optimum-preserving reductions
 
-- **Owner đề xuất:** Chương; **Priority:** P0.
+- **Owner:** Thành; **Priority:** P0.
 - **Dependencies:** Q07, Q04. **Estimated effort:** 0,5–1 ngày.
 - **Deliverable:** duplicate/superset rows, forced singletons, zero columns, duplicate columns và full reconstruction ledger.
 - **Acceptance criteria:** exhaustive nhỏ xác nhận optimum cardinality trước/sau và feasibility sau restore trên original matrix; fixed-point và idempotence tests. Giữ forced cost/representatives/hashes. Duplicate columns chỉ giữ cardinality optimum, không hứa validation-equivalence; có on/off ablation. Không sparsify mất constraints rồi nhận exact reduction.
@@ -148,7 +178,7 @@ Critical path: CUDA đủ stage/harness → Q00 → Q03 → Q04 → encoding/adm
 
 ### Q09 — Audit penalties, couplings and simulator admission
 
-- **Owner đề xuất:** Chương; **Priority:** P0.
+- **Owner:** Thành; **Priority:** P0.
 - **Dependencies:** Q05, Q07, Q08. **Estimated effort:** 0,5 ngày.
 - **Deliverable:** bound alpha>lambda k_ub từ feasible cover, sensitivity grid, q_before/q_after/couplings/dynamic-range/RAM report.
 - **Acceptance criteria:** default alpha=k_ub+1 khi lambda=1; below-bound tests được nhãn stress-only. Đếm q_after theo row degrees đã cập nhật sau reduction. Positive global scaling giữ mapping/offset, không clip. q<=20 là proposed admission, đo thêm actual memory. Full instance quá lớn chỉ cho restricted cohort manifest khóa trước; đánh giá full-data coverage sau đó, không claim full optimum.
@@ -159,16 +189,17 @@ Critical path: CUDA đủ stage/harness → Q00 → Q03 → Q04 → encoding/adm
 
 ### Q10 — Pin and verify an isolated simulator environment
 
-- **Owner đề xuất:** Chương; Tuấn review dependency boundary; **Priority:** P0.
+- **Owner:** Thành; Tuấn review dependency boundary; **Priority:** P0.
 - **Dependencies:** không cần sweep; package/install plan trong proposal. **Estimated effort:** 0,5 ngày.
 - **Deliverable:** Python 3.12 environment riêng, pinned/hashes Qiskit/Aer/OR-Tools, license inventory và install/run instructions.
+- **Tách dependencies:** classical core dùng stdlib/NumPy, CP-SAT dùng extra OR-Tools; Qiskit/Aer chỉ import khi chọn backend QAOA. CLI/tests classical phải chạy khi thiếu quantum SDK; không import SDK trong package initializer hoặc runtime consumer.
 - **Acceptance criteria:** compatibility import + tiny circuit smoke, CPU/RAM/threads/OS/version receipt, direct/transitive licenses/NOTICE. Không đổi pipeline requirements hoặc root build, không cần cloud credentials. Pin versions sau kiểm tra thực, không sao chép version chưa chạy.
 - **Go/No-Go:** thiếu compatible environment thì chặn QAOA execution; dependency failure không được ghi thành quantum negative result về thuật toán.
 - **Artifacts:** `tools/quantum/requirements-lock.txt`, environment receipt và license inventory; venv/build không commit.
 
 ### Q11 — Implement and run QAOA p=1,2 on a simulator
 
-- **Owner đề xuất:** Chương; **Priority:** P0.
+- **Owner:** Thành; **Priority:** P0.
 - **Dependencies:** Q07, Q09, Q10, Q12. **Estimated effort:** 1–2 ngày prototype; pilot budget giới hạn theo config.
 - **Deliverable:** `tools/quantum/solve_qaoa.py`, uniform initial state, X mixer, cost Hamiltonian, finite-shot expectation/SPSA và p=1,2.
 - **Acceptance criteria:** circuit phase/basis test khớp Ising oracle; raw counts tổng đúng executed shots. Lưu angles, optimizer/sampler/transpiler seeds, requested/executed calls/shots, restarts/timeouts, backend/version/circuit depth/two-qubit gates. Pilot đề xuất 10 seeds, 4 starts, 100 calls/start, 1024 shots/call + 4096 confirmation; 60 s cap gồm mọi bước solver/repair, dừng sớm ghi rõ. Raw probabilities chính từ confirmation circuit cố định; samples gộp optimizer chỉ là adaptive mixture/best-found. Exact-expectation diagnostic tách khỏi finite shots.
@@ -177,7 +208,7 @@ Critical path: CUDA đủ stage/harness → Q00 → Q03 → Q04 → encoding/adm
 
 ### Q12 — Implement shared validation, repair and catalogue provenance
 
-- **Owner đề xuất:** Chương; Đế review consumption contract; **Priority:** P0.
+- **Owner:** Thành; Đế review consumption contract; **Priority:** P0.
 - **Dependencies:** Q05, Q06, Q07; có thể test không cần QAOA. **Estimated effort:** 0,5–1 ngày.
 - **Deliverable:** shared original-matrix validator, canonical slack decode, deterministic add/reverse-delete repair và catalogue schema.
 - **Acceptance criteria:** raw equality/cover feasibility tách; repaired y luôn được kiểm lại gốc. Cùng repair cho quantum/SA/random và empty-start control; đếm bit flips/added/deleted/time/rate. Không dùng validation/final labels. No-feasible trả status thật; catalogue success truy về sample/forced/repair, không mặc định greedy rồi gắn nhãn quantum.
@@ -186,106 +217,20 @@ Critical path: CUDA đủ stage/harness → Q00 → Q03 → Q04 → encoding/adm
 
 ### Q13 — Run the real-instance solver pilot and evaluate Go/No-Go
 
-- **Owner đề xuất:** Chương; Tuấn/Đế review kết luận; **Priority:** P0.
+- **Owner:** Thành; Tuấn/Đế review kết luận; **Priority:** P0.
 - **Dependencies:** Q03–Q12 có artifact áp dụng, CP-SAT environment sẵn. **Estimated effort:** 0,5–1 ngày, không gồm sweep.
 - **Deliverable:** comparison exhaustive/CP-SAT/greedy/SA/random/QAOA trên cùng instance; raw/post-repair và resource/time breakdown.
 - **Acceptance criteria:** cardinality/feasibility/success/optimality gap hoặc bounds, raw feasibility probability, validation coverage/regret, repair rate và actual time đủ. CP-SAT native được phép mạnh hơn QUBO baseline. Cùng wall cap và separate resource audit; seeds/restarts retained, không chọn best seed rồi bỏ failures. Catalogue lớn/nhỏ đều giữ, thêm matched-size nếu có.
 - **Go/No-Go:** G3; nếu exact/greedy thắng hoặc repair-only tương đương, chốt feasibility/negative result và dừng mở rộng. Quantum execution evidence vẫn bắt buộc; chưa có real instance thì ghi chưa hoàn tất.
 - **Artifacts:** `solver-comparison.csv`, pilot report, logs/hashes, catalogue-size/regret và solver-time/instance-size plots; không vẽ scaling claim từ một instance.
 
-## 7. Nhóm tích hợp controller cổ điển
+## 7. Handoff sau prototype offline — chỉ định hướng
 
-### Q14 — Load versioned catalogues without changing stage ABI
+Q14–Q17 giữ làm tham chiếu backlog cũ: Thành xuất catalogue có schema/hash và validator; Đế chủ trì consumer/ladder và giữ reuse/invalidation đúng contract; Tuấn giữ harness/telemetry và deployment không quantum SDK. Consumer validation không được thay nguồn gốc catalogue hoặc ẩn classical repair. Chưa coi các API/CLI catalogue dự kiến là đã tồn tại. Nếu các owner có đủ thời gian trong Phase 3, chỉ tích hợp sau khi catalogue qua validator và cùng contract; nếu chưa thì báo phần hệ thống pending và lập task chi tiết tại review.
 
-- **Owner đề xuất:** Đế (controller); Chương xuất catalogue; Tuấn review integration; **Priority:** P1.
-- **Dependencies:** Q13, Q12. **Estimated effort:** 0,5 ngày khi controller nền đã có.
-- **Deliverable:** loader cho catalogue classical và QAOA/hybrid có provenance; config validation/fallback.
-- **Acceptance criteria:** reject unknown config/mismatched B/policy/hash/schema, empty/invalid catalogue có error rõ; không đổi S1–S6/common. Nếu thêm fallback ngoài P, báo cả |P| và |P union fallback|. Catalogue solver-failed không được consume như success.
-- **Go/No-Go:** chỉ nhận catalogue validated; không sửa source của owner khác để vượt gate.
-- **Artifacts:** loader tests, schema compatibility receipt, catalogue IDs trong run metadata.
+## 8. Validation, final và paper — chỉ định hướng
 
-### Q15 — Implement matched classical selection and escalation
-
-- **Owner đề xuất:** Đế; Thành review feature availability khi dùng S2/S3; **Priority:** P1.
-- **Dependencies:** Q14, Q01. **Estimated effort:** 1 ngày incremental khi controller nền sẵn.
-- **Deliverable:** same-family initial selector, self-check, classical escalation order/retry cap/fallback cho mọi catalogue.
-- **Acceptance criteria:** features có trước quyết định và cost extraction được đo; không đọc pair_id lookup, H_ref/Oracle/Pass labels online, hoặc tín hiệu future stage. P không tự thành ladder monotonic; order khóa trên development, selector fit development và tuning validation. Same training/tuning budget giữa solver catalogues.
-- **Go/No-Go:** phát hiện leakage hoặc termination không rõ thì dừng system comparison.
-- **Artifacts:** feature-availability table, selector config/model hashes, transition traces và forbidden-feature tests.
-
-### Q16 — Validate reuse and invalidation dependencies
-
-- **Owner đề xuất:** Đế (controller/S5), từng owner stage review; **Priority:** P1.
-- **Dependencies:** Q15, S5 incremental-R contract. **Estimated effort:** 0,5–1 ngày incremental.
-- **Deliverable:** dependency/reuse tests cho tăng R, đổi K/S, thay H và render S6.
-- **Acceptance criteria:** chỉ tăng R giữ đúng matches/hypothesis sequence nếu S5 hỗ trợ; đổi S/K invalidate phần bị ảnh hưởng, H mới chạy lại S6. Caller-owned buffers/stream sống đủ; reuse on/off cùng output/failure theo tolerance stage. Cache bookkeeping không bị loại khỏi timing.
-- **Go/No-Go:** cache sai thì tắt reuse cho mọi baseline tương ứng và ghi limitation; không giữ speedup từ stale output.
-- **Artifacts:** invalidation matrix, cache/retry traces, regression tests và reviewer records theo stage.
-
-### Q17 — Measure real end-to-end controller cost
-
-- **Owner đề xuất:** Tuấn (harness), Đế (controller telemetry); **Priority:** P1.
-- **Dependencies:** Q16, Q14. **Estimated effort:** 0,5–1 ngày incremental.
-- **Deliverable:** replay/benchmark fixed, full-grid và catalogue variants với e2e/controller/sync/retry/cache costs.
-- **Acceptance criteria:** t_e2e cùng conventions; includes controller/retries/fallback; S6-only hoặc sum stage times không thay host e2e. Ghi failure latency, false acceptance/rejection counts/denominators, retry/fallback/coverage. Không cộng quantum offline vào mỗi ảnh; offline total/amortization vẫn có bảng riêng.
-- **Go/No-Go:** thiếu online timing thì chỉ cho offline catalogue claim, chưa kết luận runtime speedup.
-- **Artifacts:** `runs.csv`, traces, overhead breakdown, `qor.csv` và system metrics theo catalogue_id.
-
-## 8. Nhóm validation, final và paper
-
-### Q18 — Complete validation and ablations
-
-- **Owner đề xuất:** Chương (solver/analysis), Đế (controller/QoR), Tuấn (harness); **Priority:** P1.
-- **Dependencies:** Q13, Q17. **Estimated effort:** 1–2 ngày, tùy data/compute.
-- **Deliverable:** development/validation report và ablations trong proposal §7.2.
-- **Acceptance criteria:** full-grid vs classical/quantum; native exact/greedy/SA/random controls; reduction on/off/duplicate-columns, penalty/rho/policy sensitivity, raw/repair-only, reuse/escalation on/off. N/A quantum selector có lý do vì F ngoài primary. Oracle-C/Oracle-P/adaptive-P tách. Scene-cluster paired CI, failure denominator đủ; no tune final.
-- **Go/No-Go:** nếu catalogue không hữu ích hoặc quantum không thắng, ghi negative result và giới hạn claim; không tìm cohort sau kết quả để cứu quantum.
-- **Artifacts:** validation tables/plots, bootstrap seeds/config, sensitivity reports và decision record.
-
-### Q19 — Lock the final protocol
-
-- **Owner đề xuất:** Đế và Tuấn; cả Nhóm duyệt system thresholds; **Priority:** P1.
-- **Dependencies:** Q18, Q01. **Estimated effort:** 0,25–0,5 ngày review.
-- **Deliverable:** protocol-lock manifest: code, splits, policies, catalogue IDs, solver/controller parameters và planned analysis.
-- **Acceptance criteria:** owner decisions rõ; final chưa được dùng tune; ngưỡng Go/No-Go runtime trong plan không bị thay ngầm. Định nghĩa campaign/resume và failure handling; mọi config/budget/CI/figure scripts có hash. Không chọn final seed hoặc catalogue theo final result.
-- **Go/No-Go:** chưa lock thì không mở final; phát hiện contamination cần disclosure/holdout mới được Nhóm duyệt.
-- **Artifacts:** `protocol-lock.json`, owner review/decision record, analysis manifest.
-
-### Q20 — Run the final evaluation campaign once
-
-- **Owner đề xuất:** Tuấn (chạy benchmark), Đế (pipeline/QoR), Chương (analysis); **Priority:** P1.
-- **Dependencies:** Q19. **Estimated effort:** 1 ngày chạy/kiểm tra, phụ thuộc quota T4.
-- **Deliverable:** final outputs cho Fixed-High, Fixed-Best, Oracle-C/Oracle-P và adaptive variants đã khóa.
-- **Acceptance criteria:** same session/GPU/config boundary theo plan; 2 warmup + 10 measured/config, paired analysis trên pair medians. Không tune bằng final; crash resume giữ manifest và record, không thay protocol. Offline quantum costs/raw failures cùng package; simulator/hardware tách.
-- **Go/No-Go:** thiếu benchmark/runtime gate thì ghi incomplete; không điền số ước lượng như đo thật.
-- **Artifacts:** raw CSV/meta/logs, frozen final tables/plots, failure ledger và campaign completion receipt.
-
-### Q21 — Write the quantum subsection and limitations
-
-- **Owner đề xuất:** Chương; Đế review QoR/controller, Tuấn review systems/merge; **Priority:** P1.
-- **Dependencies:** Q20 cho system claims; Q13 đủ cho bản subsection offline có giới hạn. **Estimated effort:** 0,5–1 ngày.
-- **Deliverable:** subsection 1–1,5 trang tối đa gồm table/plot, limitations/threats, source citations và claim-evidence mapping.
-- **Acceptance criteria:** mọi số sinh từ artifacts; nêu simulator/raw/repair/cost; không advantage/exponential speedup/SOTA/QoR guarantee. Quantum có thực nghiệm cụ thể kể cả negative, không chỉ Future Work. Default giữ title/RQ; abstract chỉ nhắc nếu có bằng chứng đáng kể, quyết định có record. Tôn trọng double-blind và budget OASIcs.
-- **Go/No-Go:** G4; thiếu QAOA evidence không nhận quantum integration done. Không coi negative result tự động đủ contribution full paper.
-- **Artifacts:** LaTeX diff khi task writing được giao, citations, result-generation manifest và reviewer disposition.
-
-### Q22 — Package reproducibility and hand off
-
-- **Owner đề xuất:** Chương (tooling/docs), Tuấn review release/merge; **Priority:** P1.
-- **Dependencies:** Q21, các experiments được report. **Estimated effort:** 0,5 ngày.
-- **Deliverable:** README reproduction, exact environment/commands, schema/version/hashes và artifact index.
-- **Acceptance criteria:** replay instance→solver→decode→catalogue→tables trên một tiny fixture và real instance được phép chia sẻ; raw samples không mất. Code/docs/config/tests commit riêng hợp lý; data/build/results không commit. Instance từ dataset có license/provenance; optional QPU tokens không trong source. Working tree changes người dùng có sẵn không stage.
-- **Go/No-Go:** artifact không truy vết được thì đánh incomplete, không xuất certificate tái lập giả.
-- **Artifacts:** code/config/test commits, release artifact index, reproduction receipt và issue checklist.
-
-### QH — Optional QPU or annealer replication
-
-- **Owner đề xuất:** Chương; Tuấn duyệt resource/access; **Priority:** P2.
-- **Dependencies:** Q13, quyền truy cập/chi phí được xác nhận, license/API plan riêng. **Estimated effort:** chưa ước lượng khi chưa biết backend/quota.
-- **Deliverable:** cùng instances trên hardware thật nếu có tài nguyên, tuyệt đối không cần để hoàn thành simulator MVP.
-- **Acceptance criteria:** gate-QPU báo device/calibration/transpile seed/depth/two-qubit gates/shots/job IDs; annealer báo logical/physical bits, embedding/chain strength/breaks/reads/postprocessing. Queue/network/compile/programming/sampling/readout/repair và wall time tách; so simulator/classical cùng original problem. Hybrid vendor solver phải khai rõ phần opaque/classical.
-- **Go/No-Go:** access/cost/noise không phù hợp thì skip có lý do, không đổi primary hoặc ngoại suy simulator thành hardware.
-- **Artifacts:** provider receipts/job logs, backend metadata, raw samples, embedding hoặc compiled circuits và hardware-vs-simulator report.
+Q18–Q22: sau review lập chi tiết matched W0/W1/W2, validation, protocol lock và final evaluation. Thành giữ analysis/solver artifacts và draft nội dung quantum; Chương tổng hợp paper; Đế review controller/QoR; Tuấn review systems/merge. Phải có output runtime thật mới viết e2e claims. QH (QPU/annealer) là tùy chọn, cần quyền/chi phí được duyệt riêng; simulator đủ cho quantum offline MVP. Không đặt deadline riêng hoặc chuyển các phase sau thành kế hoạch chi tiết trong tài liệu này.
 
 ## 9. Gate và quyết định dừng
 
@@ -310,4 +255,4 @@ Critical path: CUDA đủ stage/harness → Q00 → Q03 → Q04 → encoding/adm
 | `feat(controller): consume versioned configuration catalogues` | Q14–Q17, do Đế/Tuấn phụ trách |
 | `docs(quantum): report catalogue experiments and limitations` | Q18–Q22 |
 
-Danh sách này là cách tách commit đề xuất, chưa tạo commit hoặc giao task ngoài phạm vi nghiên cứu. Nguồn học thuật, license và giới hạn đọc nằm tại proposal §12; không sao chép citation metadata chưa kiểm chứng vào paper.
+Danh sách này là cách tách commit implementation cho Thành và các owner integration khi task được kích hoạt; lượt hiện tại chỉ cập nhật tài liệu, không tạo solver hoặc catalogue consumer. Nguồn học thuật, license và giới hạn đọc nằm tại proposal §12; không sao chép citation metadata chưa kiểm chứng vào paper.

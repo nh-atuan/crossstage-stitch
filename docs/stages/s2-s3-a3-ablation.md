@@ -68,7 +68,7 @@ SHA-256 của output:
 | `a3-jitter-run3.csv` | `246377d1c8b8dff5ed1465b2149cbe16c59123d50149fed2595d8d57eca92241` |
 | `paper/tables/s2-s3-a3.tex` | `07c6e30f7da8acc984dffc7d910fc8dd35f5210b481a2e8bcf4360b46c40c4c3` |
 
-CSV thô của lượt 1 và 2 cùng log và bảng Markdown của cả ba lượt được lưu ngoài repo, trong thư mục kết quả của Thành. CSV của lượt 3 chỉ còn trên runtime Colab. Không commit vào `results/`: `.gitignore` chỉ bỏ qua file nằm trực tiếp trong `results/`, nên file trong `results/s2_s3/a3/` sẽ không bị ignore.
+CSV thô, log và bảng Markdown của cả ba lượt được lưu ngoài repo, trong thư mục kết quả của Thành. Không commit vào `results/`: `.gitignore` chỉ bỏ qua file nằm trực tiếp trong `results/`, nên file trong `results/s2_s3/a3/` sẽ không bị ignore.
 
 ## 5. Các lượt có nhất quán không
 
@@ -191,7 +191,6 @@ Median trên 25 cặp (p95 trong ngoặc), thời gian tính bằng ms, gộp ha
 
 ## 8. Chưa kiểm chứng
 
-- CSV thô của lượt 3 chỉ còn trên runtime Colab (trình duyệt chặn lần tải thứ hai). Bảng Markdown, log và hash của lượt 3 đã được lưu.
 - Đồ thị `a3-k-sweep.pdf` vẽ từ lượt 1 và không dùng trong paper.
 - K sweep trên harness chỉ chạy ở S = 0,5; ở S này K > 1000 bão hòa nên chưa thấy được chi phí S4/S5 khi K lớn thật sự.
 - Chưa giải thích được vì sao `max` chậm hơn `view` chỉ ở K = 1000, và vì sao `alloc_ms` tăng mạnh ở S = 1.

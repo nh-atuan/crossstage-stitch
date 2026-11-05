@@ -181,7 +181,16 @@ def qaoa_table(run):
             "up to the end of the run, not a per-run figure.")
     header = ("p", "seed", "status", "calls run/requested (incl. confirmation)", "shots run/requested",
               "2q gates", "depth", "P(optimum) in confirmation", "best raw size", "s", "process peak RSS MiB")
-    return note + "\n\n" + _table(header, rows)
+    by_depth = defaultdict(list)
+    for r in run["runs"]:
+        if r["solver"].startswith("qaoa") and r.get("p_optimum_confirmation") is not None:
+            by_depth[r["p"]].append(r["p_optimum_confirmation"])
+    summary = [(p, len(v), *_spread(v), sum(x < uniform for x in v) if uniform is not None else "",
+                statistics.median(v) / uniform if uniform else "")
+               for p, v in sorted(by_depth.items())]
+    summary_header = ("p", "runs with confirmation", "P(optimum) med", "min", "max", "runs below uniform",
+                      "median / uniform")
+    return note + "\n\n" + _table(header, rows) + "\n\n" + _table(summary_header, summary)
 
 
 def gates_table(run):

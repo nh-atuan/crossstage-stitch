@@ -39,6 +39,7 @@ def test_report_tables_match_the_run_files(toy_run):
     assert f"| qaoa_p1 | raw | {len(qaoa_raw)} |" in text
     assert text.count("\n| 1 | ") >= len(qaoa_raw)          # one QAOA row per p=1 seed
     assert "| 13/13 | 1024/1024 |" in text                # 2 x 6 calls of 64 shots + 256 confirmation
+    assert "| 1 | 2 | " in text and "runs below uniform" in text   # p=1 summary over 2 seeds
 
 
 def test_cli_refuses_to_overwrite(toy_run, tmp_path):

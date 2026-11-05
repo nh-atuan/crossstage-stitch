@@ -125,7 +125,7 @@ def test_duplicate_side_and_symlink_rejected(tmp_path: Path) -> None:
 
 def test_canonical_count_cannot_be_lowered_in_real_mode(tmp_path: Path) -> None:
     archive, source = archive_fixture(tmp_path, split="testing", count=2)
-    with pytest.raises(ValueError, match="1106"):
+    with pytest.raises(ValueError, match="1105"):
         ingest(archive, source, tmp_path / "out", split="testing", expected_pairs=2)
     value = read_json(source)
     value.update(author_source_url="https://github.com/nie-lang/UnsupervisedDeepImageStitching",
@@ -135,7 +135,7 @@ def test_canonical_count_cannot_be_lowered_in_real_mode(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="ledger"):
         ingest(archive, source, tmp_path / "real", split="testing")
     report = read_json(tmp_path / "real/ingestion_report.json")
-    assert report["expected_pairs"] == 1106
+    assert report["expected_pairs"] == 1105
     assert report["observed_pairs"] == 2
     assert "count_error" in report
 

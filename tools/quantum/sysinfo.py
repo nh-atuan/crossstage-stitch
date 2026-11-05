@@ -7,6 +7,8 @@ import sys
 
 
 def _windows_counters():
+    from ctypes import wintypes
+
     class Counters(ctypes.Structure):
         _fields_ = [("cb", ctypes.c_ulong), ("PageFaultCount", ctypes.c_ulong),
                     ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
@@ -14,10 +16,17 @@ def _windows_counters():
                     ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
                     ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
                     ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t)]
+    # Without restype/argtypes ctypes passes the 64-bit pseudo-handle as a 32-bit int,
+    # the call fails and every counter stays 0.
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
+    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
     counters = Counters()
     counters.cb = ctypes.sizeof(Counters)
-    handle = ctypes.windll.kernel32.GetCurrentProcess()
-    ctypes.windll.psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb)
+    if not psapi.GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
+        raise OSError(ctypes.get_last_error(), "GetProcessMemoryInfo failed")
     return counters
 
 

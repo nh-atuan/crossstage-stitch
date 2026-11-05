@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from pathlib import PurePosixPath
 from typing import Any
 
 from tools.controller.real_cohort import select_cohort
@@ -59,15 +60,28 @@ def component_split(training: dict[str, Any], testing: dict[str, Any], *, seed: 
     groups: dict[str, list[str]] = defaultdict(list)
     for key in sorted(population):
         groups[find(key)].append(key)
-    for members in groups.values():
-        if {key.split(":", 1)[0] for key in members} == {"training", "testing"}:
-            raise ValueError(f"train/test image or declared scene leakage: {members}")
 
-    # Reuse the existing archive-metadata selector strictly on training data.
+    # Identify any training pairs that share images or declared scenes with testing pairs.
+    # To maintain benchmark integrity, all testing pairs (1,105 canonical) are kept immutable,
+    # and all contaminated training pairs are quarantined into train-unused.
+    test_roots = {find(f"testing:{k}") for k in testing["pairs"]}
+    quarantined_train: set[str] = set()
+    for root in test_roots:
+        for member in groups[root]:
+            if member.startswith("training:"):
+                quarantined_train.add(member.split(":", 1)[1])
+
+    # Reuse the existing archive-metadata selector strictly on non-quarantined training data.
     index = [{name: entry[name] for name in ("name", "size", "crc32")}
-             for entry in training["archive_index"] if entry["disposition"] == "pair_input"]
-    legacy = select_cohort(index, seed=seed, development_count=development_count,
-                           pilot_count=min(25, development_count))
+             for entry in training["archive_index"] if entry["disposition"] == "pair_input"
+             and PurePosixPath(entry["name"]).stem not in quarantined_train]
+    try:
+        legacy = select_cohort(index, seed=seed, development_count=development_count,
+                               pilot_count=min(25, development_count))
+    except ValueError as exc:
+        if quarantined_train:
+            raise ValueError(f"train/test image or declared scene leakage: cannot satisfy development count {development_count} after quarantining {len(quarantined_train)} train pairs ({exc})") from exc
+        raise
     selected = {entry["pair_id"] for entry in legacy["development_pairs"]}
     selected_groups: dict[str, list[str]] = defaultdict(list)
     for identifier in sorted(selected):
@@ -88,6 +102,10 @@ def component_split(training: dict[str, Any], testing: dict[str, Any], *, seed: 
                        "train-val" if key.split(":", 1)[1] in validation else
                        "train-fit" if key.split(":", 1)[1] in fit else "train-unused")
                   for key in population}
+    for key, members in groups.items():
+        active = {assignment[member] for member in members} - {"train-unused"}
+        if len(active) > 1:
+            raise ValueError(f"train/test image or declared scene leakage: active splits overlap in component {key}: {active}")
     return {"schema_version": "udis-split-v1", "seed": seed,
             "selection": "tools.controller.real_cohort.select_cohort on training only; SHA-256 image graph refines isolation",
             "development_count": development_count, "requested_validation_count": validation_count,
@@ -95,6 +113,7 @@ def component_split(training: dict[str, Any], testing: dict[str, Any], *, seed: 
             "splits": {"train-fit": fit, "train-val": validation,
                        "train-unused": sorted(set(training["pairs"]) - selected),
                        "test": sorted(testing["pairs"])},
+            "quarantined_training_pairs": sorted(quarantined_train),
             "components": [{"component_id": key, "members": members,
                             "active_splits": sorted({assignment[member] for member in members} - {"train-unused"})}
                            for key, members in sorted(groups.items())],

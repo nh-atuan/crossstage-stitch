@@ -17,11 +17,14 @@ def package_source(output_zip: Path, repo_root: Path) -> Path:
     res = subprocess.run(["git", "ls-files", "-z"], cwd=repo_root, capture_output=True, check=True)
     tracked_files = [f for f in res.stdout.decode("utf-8", errors="replace").split("\x00") if f]
 
-    # 2. Add extra files like the new notebook or dev results if present
-    notebook_path = repo_root / "notebooks" / "phase3_ch01_data_protocol.ipynb"
+    # 2. Add extra files like the new notebooks or dev results if present
     extra_files = []
-    if notebook_path.exists() and "notebooks/phase3_ch01_data_protocol.ipynb" not in tracked_files:
-        extra_files.append("notebooks/phase3_ch01_data_protocol.ipynb")
+    notebooks_dir = repo_root / "notebooks"
+    if notebooks_dir.exists():
+        for p in notebooks_dir.glob("*.ipynb"):
+            rel = p.relative_to(repo_root).as_posix()
+            if rel not in tracked_files:
+                extra_files.append(rel)
 
     dev_results_dir = repo_root / "p3_dev25_results"
     if dev_results_dir.exists():

@@ -13,6 +13,7 @@ import csv
 import json
 import statistics
 from collections import defaultdict
+from itertools import combinations
 from pathlib import Path
 
 from .common import read_json
@@ -60,7 +61,8 @@ def read_run(folder):
     catalogues = {p.stem: read_json(p) for p in sorted(folder.glob("catalogue-*.json"))}
     return {"folder": folder, "config": read_json(folder / "run-config.json"),
             "selection": read_json(folder / "selection.json"), "gates": read_json(folder / "gates.json"),
-            "audit": read_json(folder / "resource-audit.json"), "comparison": comparison, "runs": runs,
+            "audit": read_json(folder / "resource-audit.json"), "reduction": read_json(folder / "reduction.json"),
+            "comparison": comparison, "runs": runs,
             "catalogues": catalogues, "manifest": read_json(folder / "SHA256SUMS.json")}
 
 
@@ -147,6 +149,17 @@ def seeded_table(run):
     return _table(header, rows)
 
 
+def uniform_optimum_probability(reduction, audit):
+    """P(a uniform q-bit string is a minimum cover), any slack value: #covers * 2^n_slack / 2^q."""
+    columns, rows = reduction["columns"], [set(r) for r in reduction["rows"].values()]
+    k = audit["optimum"] - len(reduction["forced"])
+    if not rows:
+        return None, 0
+    covers = sum(all(row & set(chosen) for row in rows) for chosen in combinations(columns, k))
+    q, n_slack = audit["audit"]["q"], audit["audit"]["n_slack"]
+    return covers * 2 ** n_slack / 2 ** q, covers
+
+
 def qaoa_table(run):
     budget = run["config"]["budget"]["qaoa"]
     optimizer_calls = budget["inits"] * budget["calls_per_init"]
@@ -162,8 +175,13 @@ def qaoa_table(run):
                      circuit.get("depth", ""), r.get("p_optimum_confirmation"),
                      len(r["raw_best"]["catalogue"]) if r.get("raw_best") else "", r.get("seconds"),
                      round(r["peak_rss_bytes"] / 2 ** 20, 1) if r.get("peak_rss_bytes") else ""))
-    return _table(("p", "seed", "status", "calls run/requested (incl. confirmation)", "shots run/requested", "2q gates", "depth",
-                   "P(optimum) in confirmation", "best raw size", "s", "peak RSS MiB"), rows)
+    uniform, covers = uniform_optimum_probability(run["reduction"], run["audit"])
+    note = (f"Minimum covers on the reduced instance: {covers}; a uniform random {run['audit']['audit']['q']}-bit "
+            f"string is a minimum cover with probability {_fmt(uniform)}. Peak RSS is the process peak "
+            "up to the end of the run, not a per-run figure.")
+    header = ("p", "seed", "status", "calls run/requested (incl. confirmation)", "shots run/requested",
+              "2q gates", "depth", "P(optimum) in confirmation", "best raw size", "s", "process peak RSS MiB")
+    return note + "\n\n" + _table(header, rows)
 
 
 def gates_table(run):

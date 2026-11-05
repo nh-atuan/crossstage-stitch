@@ -5,7 +5,7 @@
 - Origin Skill: academic-research-suite / deep-research.
 - Origin Mode: backlog triển khai từ nghiên cứu có RQ xác định.
 - Origin Date: 02/11 (Thứ 2), năm 2026; thay phân công đề xuất ngày 24/10 (Thứ 7).
-- Verification Status: PLANNED — hướng offline và owner Thành đã được người dùng chốt; chưa có implementation/QAOA experiment để nghiệm thu.
+- Verification Status: PILOT_RUN, cập nhật 05/11 (Thứ 5). Tooling `tools/quantum/` đã có trên nhánh `thanh/p3-quantum`, pilot đã chạy trên sweep calibration thật và đạt PASS_OFFLINE cho G0–G2 với nhãn pilot; G3 không đạt. Trạng thái từng ticket ở mục 11, kết quả ở [quantum-pilot-report.md](quantum-pilot-report.md).
 - Version Label: quantum_catalogue_tasks_v2_thanh.
 - Tài liệu phương pháp: [quantum-integration-proposal.md](quantum-integration-proposal.md).
 
@@ -256,3 +256,26 @@ Q18–Q22: sau review lập chi tiết matched W0/W1/W2, validation, protocol lo
 | `docs(quantum): report catalogue experiments and limitations` | Q18–Q22 |
 
 Danh sách này là cách tách commit implementation cho Thành và các owner integration khi task được kích hoạt; lượt hiện tại chỉ cập nhật tài liệu, không tạo solver hoặc catalogue consumer. Nguồn học thuật, license và giới hạn đọc nằm tại proposal §12; không sao chép citation metadata chưa kiểm chứng vào paper.
+
+## 11. Trạng thái Q00–Q13 tại review 05/11 (Thứ 5)
+
+Nhãn trạng thái: PASS (có artifact và test, chạy trên dữ liệu thật), PARTIAL (thiếu một phần dữ liệu hoặc kiểm chứng), PENDING_REVIEW (đã làm, chờ người duyệt). Mọi kết quả trên dữ liệu thật vẫn mang nhãn pilot vì policy và protocol chưa được duyệt. Output nằm trong `data/quantum/` (không commit), mỗi run có `SHA256SUMS.json`.
+
+| Ticket | Trạng thái | Bằng chứng | Còn thiếu |
+|---|---|---|---|
+| Q00 | PARTIAL | Sweep calibration của Đế: 200 cặp × 48 cấu hình × 10 repeat trên T4, hash khớp audit | Sweep validation 50 cặp; `split.json` gốc |
+| Q01 | PENDING_REVIEW | `tools/quantum/protocol-pilot.json` với amendment A1–A4 ngày 05/11 (Thứ 5) | Đế duyệt policy và split, Tuấn duyệt đo, Chương duyệt B |
+| Q02 | PASS | `tools/quantum/characterize.py`, `tests/python/test_quantum_characterize.py` | |
+| Q03 | PASS | `data/quantum/v4-char/`: 9600 dòng, complete, có failure ledger | Chạy lại khi có split gốc |
+| Q04 | PASS | `tools/quantum/instance.py`, split guard có test; `instance.json` của hai run | |
+| Q05 | PASS | Exhaustive, CP-SAT và greedy cho optimum 17 trên instance chính | |
+| Q06 | PASS | SA, random_qubo, random_y, 10 seed, sample lưu trong `samples/` | |
+| Q07 | PASS | `tests/python/test_quantum_encoding.py`; ground-state check trên instance thật ở 5 giá trị alpha | |
+| Q08 | PASS | `tools/quantum/reduce.py`, `reduction.json` có ledger; ablation tắt gộp cột trùng cho q = 26 | |
+| Q09 | PASS | `resource-audit.json`: q = 13, statevector 131072 byte, admitted | |
+| Q10 | PASS | Venv Python 3.13, `tools/quantum/requirements-lock.txt`, env receipt | Chưa cài thử trên máy khác |
+| Q11 | PASS | 20 run QAOA p = 1, 2 trên instance chính, đủ call và shot, counts xác nhận | Lượt phụ q = 21: cả 20 run chạm cap 60 s trước lượt xác nhận |
+| Q12 | PASS | `tools/quantum/validate.py`, `catalogue.schema.json`; W1 và W2 qua `check_catalogue` | |
+| Q13 | PASS_OFFLINE, G3 không đạt | [quantum-pilot-report.md](quantum-pilot-report.md): mọi solver, kể cả repair-only, đạt optimum 17; QAOA không tốt hơn classical | Validation, consumer (Q14+) |
+
+Kiểm chứng local ngày 05/11 (Thứ 5): venv quantum `python -m pytest tests/python/test_quantum_*.py -q` cho 48 pass, 1 skip (test characterize cần `cv2`); Python 3.11 của pipeline `python -m pytest tests/python -q` cho 385 pass, 3 skip (các test cần OR-Tools).

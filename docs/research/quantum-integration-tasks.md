@@ -263,10 +263,10 @@ Nhãn trạng thái: PASS (có artifact và test, chạy trên dữ liệu thậ
 
 | Ticket | Trạng thái | Bằng chứng | Còn thiếu |
 |---|---|---|---|
-| Q00 | PARTIAL | Sweep calibration của Đế: 200 cặp × 48 cấu hình × 10 repeat trên T4, hash khớp audit | Sweep validation 50 cặp; `split.json` gốc |
-| Q01 | PENDING_REVIEW | `tools/quantum/protocol-pilot.json` với amendment A1–A4 ngày 05/11 (Thứ 5) | Đế duyệt policy và split, Tuấn duyệt đo, Chương duyệt B |
+| Q00 | PARTIAL | Sweep calibration của Đế: 200 cặp × 48 cấu hình × 10 repeat trên T4, hash khớp audit; `split.json` gốc khớp receipt | Sweep validation trên 50 cặp holdout v4 của split gốc |
+| Q01 | PENDING_REVIEW | `tools/quantum/protocol-pilot.json` với amendment A1–A5 ngày 05/11 (Thứ 5) | Đế duyệt policy và split, Tuấn duyệt đo, Chương duyệt B |
 | Q02 | PASS | `tools/quantum/characterize.py`, `tests/python/test_quantum_characterize.py` | |
-| Q03 | PASS | `data/quantum/v4-char/`: 9600 dòng, complete, có failure ledger | Chạy lại khi có split gốc |
+| Q03 | PASS | `data/quantum/v4-char-orig/` trên split gốc: 9600 dòng, complete, có failure ledger; giống từng byte bản trên split dựng lại | |
 | Q04 | PASS | `tools/quantum/instance.py`, split guard có test; `instance.json` của hai run | |
 | Q05 | PASS | Exhaustive, CP-SAT và greedy cho optimum 17 trên instance chính | |
 | Q06 | PASS | SA, random_qubo, random_y, 10 seed, sample lưu trong `samples/` | |
@@ -274,7 +274,7 @@ Nhãn trạng thái: PASS (có artifact và test, chạy trên dữ liệu thậ
 | Q08 | PASS | `tools/quantum/reduce.py`, `reduction.json` có ledger; ablation tắt gộp cột trùng cho q = 26 | |
 | Q09 | PASS | `resource-audit.json`: q = 13, statevector 131072 byte, admitted | |
 | Q10 | PASS | Venv Python 3.13, `tools/quantum/requirements-lock.txt`, env receipt | Chưa cài thử trên máy khác |
-| Q11 | PASS | 20 run QAOA p = 1, 2 trên instance chính, đủ call và shot, counts xác nhận | Lượt phụ q = 21: cả 20 run chạm cap 60 s trước lượt xác nhận |
+| Q11 | PASS | 20 run QAOA p = 1, 2 trên instance chính, đủ call và shot, counts xác nhận; chạy lại trên split gốc cho cùng góc và counts | Lượt phụ q = 21: cả 20 run chạm cap 60 s trước lượt xác nhận |
 | Q12 | PASS | `tools/quantum/validate.py`, `catalogue.schema.json`; W1 và W2 qua `check_catalogue` | |
 | Q13 | PASS_OFFLINE, G3 không đạt | [quantum-pilot-report.md](quantum-pilot-report.md): mọi solver, kể cả repair-only, đạt optimum 17; QAOA không tốt hơn classical | Validation, consumer (Q14+) |
 

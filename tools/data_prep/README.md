@@ -8,7 +8,7 @@ Thư mục Google Drive gốc của tác giả UDIS-D (`1kC7KAULd5mZsqaWnY3-rSbQ
 
 | Split | File tên gốc | Google Drive File ID | Dung lượng | Số cặp ảnh | Link tải |
 |---|---|---|---|---|---|---|
-| `testing` | `testing.zip` | `1unnBdPg9Vi12-1xXoUdzMub_XUq7yZz0` | ~203 MB | 1.106 cặp | [Tải testing.zip](https://drive.google.com/file/d/1unnBdPg9Vi12-1xXoUdzMub_XUq7yZz0/view) |
+| `testing` | `testing.zip` | `1unnBdPg9Vi12-1xXoUdzMub_XUq7yZz0` | ~203 MB | 1.105 cặp (1.106 danh nghĩa; thiếu 000001.jpg trong input1) | [Tải testing.zip](https://drive.google.com/file/d/1unnBdPg9Vi12-1xXoUdzMub_XUq7yZz0/view) |
 | `training` | `training.zip` | `1CTKa42BRdXO2vdYSadaQkvgQ8DR6l49a` | ~1.95 GB | 10.440 cặp | [Tải training.zip](https://drive.google.com/file/d/1CTKa42BRdXO2vdYSadaQkvgQ8DR6l49a/view) |
 | Cả thư mục | Thư mục UDIS-D tác giả | `1kC7KAULd5mZsqaWnY3-rSbQLaZ7LujTY` | ~2.15 GB | 11.546 cặp | [Thư mục Drive](https://drive.google.com/drive/folders/1kC7KAULd5mZsqaWnY3-rSbQLaZ7LujTY) |
 
@@ -50,7 +50,7 @@ python -m tools.data_prep.prepare_dev_dataset \
     --manifest data/dev_pairs/pairs.json
 ```
 
-### 2.3. Tải và chuẩn bị toàn bộ 1.106 cặp ảnh UDIS-D Test Set (`data/test_pairs/pairs.json`)
+### 2.3. Tải và chuẩn bị toàn bộ 1.105 cặp ảnh UDIS-D Test Set (`data/test_pairs/pairs.json`)
 
 ```bash
 python -m tools.data_prep.prepare_dev_dataset \
@@ -74,13 +74,13 @@ python -m tools.colab_runner \
     --out-dir results/p3_dev25
 ```
 
-### 3.2. Chạy đại thực nghiệm 1.106 cặp UDIS-D Test Set trên Colab T4
+### 3.2. Chạy đại thực nghiệm 1.105 cặp UDIS-D Test Set trên Colab T4
 
 ```bash
 python -m tools.colab_runner \
-    --subset test1106 \
+    --subset test1105 \
     --gdrive-cache-dir /content/drive/MyDrive/UDIS-D \
-    --out-dir results/p3_test1106
+    --out-dir results/p3_test1105
 ```
 
 Kết quả đầu ra trong thư mục `--out-dir` (và được sao lưu tự động sang `/content/drive/MyDrive/UDIS-D/results/<subset>/` nếu có truyền `--gdrive-cache-dir`):

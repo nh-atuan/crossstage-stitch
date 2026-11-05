@@ -1,4 +1,4 @@
-"""Preparation and automated download of UDIS-D image pairs (Dev 25-pair pilot, Dev split, and 1,106 Test set).
+"""Preparation and automated download of UDIS-D image pairs (Dev 25-pair pilot, Dev split, and 1,105 Test set).
 
 Supports:
 1. Downloading official UDIS-D archives (`testing.zip` / `training.zip`) from Google Drive using `gdown`
@@ -323,7 +323,7 @@ def generate_synthetic_dev_set(out_dir: Path, num_pairs: int = 25, seed: int = 4
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Download and prepare UDIS-D image pairs (25-pair dev pilot or full 1,106 test set)."
+        description="Download and prepare UDIS-D image pairs (25-pair dev pilot or full 1,105 test set)."
     )
     parser.add_argument(
         "--mode",
@@ -365,12 +365,12 @@ def main() -> int:
         "--num-pairs",
         type=int,
         default=25,
-        help="Number of pairs to prepare (default: 25 for dev pilot; pass 0 or --all for all pairs, e.g. 1106)",
+        help="Number of pairs to prepare (default: 25 for dev pilot; pass 0 or --all for all pairs, e.g. 1105)",
     )
     parser.add_argument(
         "--all",
         action="store_true",
-        help="Prepare all discovered pairs in the split (e.g. all 1,106 testing pairs)",
+        help="Prepare all discovered pairs in the split (e.g. all 1,105 testing pairs)",
     )
     parser.add_argument(
         "--preserve-ids",

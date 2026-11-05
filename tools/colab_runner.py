@@ -3,7 +3,7 @@
 Responsibilities (Phase 3 Task 1 of Tuan in docs/plan.md):
 1. Download UDIS-D (`testing.zip` / `training.zip`) automatically from official Google Drive
    (with optional persistent caching in Google Drive `/content/drive/MyDrive/...`).
-2. Prepare PPM image pairs and `pairs.json` manifest (either 25-pair dev pilot or full 1,106 test set).
+2. Prepare PPM image pairs and `pairs.json` manifest (either 25-pair dev pilot or full 1,105 test set).
 3. Run `stitch_harness` across the 3 modes (`Fixed-Best`, `Oracle`, `Adaptive`) on GPU,
    producing per-mode `runs.csv` files, unified `telemetry_results.csv`, and `meta.json`.
 """
@@ -122,9 +122,9 @@ def main() -> int:
     )
     parser.add_argument(
         "--subset",
-        choices=["dev25", "test1106"],
-        default="test1106",
-        help="Dataset subset to prepare and run: 'dev25' (25 pairs) or 'test1106' (all 1,106 test pairs)",
+        choices=["dev25", "test1105", "test1106"],
+        default="test1105",
+        help="Dataset subset to prepare and run: 'dev25' (25 pairs) or 'test1105' (all 1,105 test pairs; 'test1106' kept as alias)",
     )
     parser.add_argument(
         "--harness",

@@ -117,7 +117,7 @@ flowchart TD
   - Chạy công cụ đánh giá QoR `tools/qor/evaluate.py` quét qua lưới tham số:
     - $\delta_S \in \{0.01, 0.02, 0.03, 0.04, 0.05\}$
     - $\delta_P \in \{0.2, 0.5, 0.8, 1.0\text{ dB}\}$
-  - Thống kê trên toàn bộ 1.106 cặp ảnh test UDIS-D: tỉ lệ cặp ảnh tìm được cấu hình đạt chuẩn (feasible rate), phân bố nấc ladder của Controller, và tốc độ trung bình của Oracle.
+  - Thống kê trên toàn bộ 1.105 cặp ảnh test UDIS-D: tỉ lệ cặp ảnh tìm được cấu hình đạt chuẩn (feasible rate), phân bố nấc ladder của Controller, và tốc độ trung bình của Oracle.
 - **Đầu ra bàn giao:**
   - Đồ thị đường cong độ nhạy: Trục hoành là $\delta_S$, trục tung là Mean Latency của Controller và Oracle.
   - Bảng tóm tắt kết luận: Ngưỡng $\delta_S=0.02, \delta_P=0.5\text{ dB}$ hiện tại là điểm cân bằng tối ưu giữa chất lượng hình ảnh và latency.

@@ -139,7 +139,7 @@ Cách này chỉ đúng khi B cố định trong thí nghiệm S, K, R chính.
 
 | Tập | Nội dung |
 |---|---|
-| Final | Toàn bộ 1.106 cặp tập test UDIS-D; không dùng để chọn tham số |
+| Final | Toàn bộ 1.105 cặp tập test UDIS-D (danh nghĩa 1.106; input1 thiếu 000001.jpg); không dùng để chọn tham số |
 | Development | 200–300 cặp lấy ngẫu nhiên từ tập train UDIS-D với seed cố định; danh sách `pair_id` được commit |
 | Go/No-Go | 20–30 cặp là tập con của development |
 

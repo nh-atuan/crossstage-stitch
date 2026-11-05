@@ -512,7 +512,7 @@ Protocol ghi trong repo: 2 warm-up, 10 lần đo, median cho từng pair/config;
 
 | Dữ liệu | Vai trò hiện tại | Nguồn |
 |---|---|---|
-| UDIS-D | Benchmark chính; repo nguồn ghi 10.440 train/1.106 test pairs | [F10, F11] |
+| UDIS-D | Benchmark chính; repo nguồn ghi 10.440 train/1.106 test pairs (thực tế 1.105 test pairs hợp lệ do thiếu 000001.jpg trong input1) | [F10, F11] |
 | HPatches | Mock, correspondence/geometry correctness, known homography | [F12] |
 | Synthetic high-resolution | Stress test resolution/latency, có H biết trước; báo riêng ảnh thật | Thiết kế của Nhóm |
 

@@ -22,7 +22,7 @@ Tài liệu chỉ ghi quyết định thuộc hai task trên. Tham chiếu [kế
 | **Synthetic high-resolution pairs** | Kiểm tra GPU latency và resolution scaling ở độ phân giải lớn | Stress test tùy chọn, không phải benchmark chất lượng chính |
 | **StitchBench** (AAAI 2025) | Kiểm tra khả năng tổng quát trên bộ stitching độc lập | Chỉ bổ sung nếu còn thời gian |
 
-**UDIS-D** có 10.440 training pairs và 1.106 testing pairs theo repository và mô tả dataset [3]. UDIS++ (ICCV 2023) tiếp tục sử dụng UDIS-D cho đánh giá warping/alignment và composition, với các ví dụ có parallax hoặc low-texture [4], [5]. Dataset không cung cấp ground-truth homography và panorama hoàn chỉnh tương đương những benchmark tổng hợp có nhãn; vì vậy không thể dùng một lỗi hình học có ground truth làm `Qmin` chính.
+**UDIS-D** có 10.440 training pairs và 1.105 testing pairs hợp lệ (danh nghĩa 1.106 pairs theo mô tả dataset [3], nhưng `input1` thiếu `000001.jpg`). UDIS++ (ICCV 2023) tiếp tục sử dụng UDIS-D cho đánh giá warping/alignment và composition, với các ví dụ có parallax hoặc low-texture [4], [5]. Dataset không cung cấp ground-truth homography và panorama hoàn chỉnh tương đương những benchmark tổng hợp có nhãn; vì vậy không thể dùng một lỗi hình học có ground truth làm `Qmin` chính.
 
 **Protocol sử dụng:**
 

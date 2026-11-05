@@ -121,7 +121,7 @@ flowchart TD
     - $\delta_S \in \{0.01, 0.02, 0.03, 0.04, 0.05\}$
     - $\delta_P \in \{0.2, 0.5, 0.8, 1.0\text{ dB}\}$
   - Chương tự triển khai config loading và calibration của cùng controller family trên development-fit/validation, giữ cùng reference và budget tìm kiếm giữa policy; khóa variants, Fixed-Best và fallback trước test. Không tune theo test hoặc gán dung sai offline trực tiếp thành ngưỡng inlier/residual chưa kiểm chứng.
-  - Chạy controller thật theo từng variant trên 1.106 cặp test, cùng timing/seed/repeats; Oracle chọn từ audited grid theo policy. Grid/metric không phụ thuộc dung sai được tái dùng để tránh chạy CUDA dư thừa.
+  - Chạy controller thật theo từng variant trên 1.105 cặp test, cùng timing/seed/repeats; Oracle chọn từ audited grid theo policy. Grid/metric không phụ thuộc dung sai được tái dùng để tránh chạy CUDA dư thừa.
   - Chỉ thay predicate offline trên output cũ thì output/latency controller không thay đổi; phép relabel đó phải được ghi là offline-only, không thay thí nghiệm controller theo policy.
   - Báo feasible rate, QoR, reference failures/missing, ladder/retry, median/p95 pair latency và conditional/all-cohort comparison có denominator.
 - **Đầu ra bàn giao:**

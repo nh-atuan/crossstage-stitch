@@ -19,7 +19,7 @@ Phase hiện tại là **Phase 3**, deadline chung 05/11 (Thứ 5), review cùng
 
 Definition of Done cho tích hợp quantum ứng dụng: Q00–Q13 có artifact kiểm tra được, QAOA thực sự chạy trên ít nhất một instance từ CUDA sweep còn q_after>0 sau reduction, native/classical baselines đủ, raw và repaired outputs tách biệt. Optimum=1 hoặc classical giải nhanh không miễn prototype khi q_after>0 và đủ tài nguyên. Kết quả QAOA không có feasible raw sample vẫn là negative experiment nếu circuit/counts/logs hợp lệ; không được xuất catalogue thành công giả. Khi đó muốn hoàn tất tích hợp vào controller phải có catalogue hybrid hợp lệ, truy vết nguồn và repair, hoặc ghi rõ phần tích hợp chưa hoàn thành. Claim hệ thống còn cần Q14–Q20; Q21–Q22 để bàn giao paper/tái lập. QPU không bắt buộc.
 
-Mọi CLI và file code `tools/quantum/*` dưới đây là **dự kiến chưa tồn tại**, trừ tooling QoR/S6 dẫn chiếu sẵn. Artifacts data/results/build không commit theo conventions; lưu manifest/hash và vị trí chia sẻ. Small test fixtures có thể commit trong tests theo quy ước Nhóm; không commit dataset hoặc raw benchmark outputs.
+CLI và file code `tools/quantum/*` của Q00–Q13 đã có từ 05/11 (Thứ 5); trạng thái và bằng chứng từng ticket ở mục 11. Các CLI và file nêu cho Q14 trở đi vẫn là dự kiến, chưa tồn tại. Artifacts data/results/build không commit theo conventions; lưu manifest/hash và vị trí chia sẻ. Small test fixtures có thể commit trong tests theo quy ước Nhóm; không commit dataset hoặc raw benchmark outputs.
 
 
 ### 1.1. Hai nhánh song song và ba nhóm đối chứng

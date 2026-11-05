@@ -40,3 +40,24 @@ def test_toy_pilot_writes_artifacts_and_never_claims_pass(tmp_path):
     with pytest.raises(FileExistsError):
         run_pilot(tmp_path / "characterization.csv", tmp_path / "configs.json", PROTOCOL, out,
                   label="toy", overrides=SMALL)
+
+
+def test_empty_validation_is_not_measured_and_secondary_is_labelled(tmp_path):
+    fit_only = [r for r in toy.rows() if r["split"] == "calibration"]
+    write_csv(tmp_path / "characterization.csv", fit_only, FIELDS)
+    (tmp_path / "configs.json").write_text(json.dumps(toy.configs()))
+    protocol = json.loads(PROTOCOL.read_text(encoding="utf-8"))
+    protocol["admission"]["q_max"] = 3            # the toy full instance at rho 0.2 needs q = 5
+    (tmp_path / "protocol.json").write_text(json.dumps(protocol))
+    out = tmp_path / "secondary"
+    gates = run_pilot(tmp_path / "characterization.csv", tmp_path / "configs.json", tmp_path / "protocol.json",
+                      out, label="toy", overrides=SMALL, secondary_full_rho=0.2)
+    assert gates["status"] == "SECONDARY" and gates["outcome_if_primary"] == "TOOLING_ONLY"
+    selection = json.loads((out / "selection.json").read_text())
+    assert selection["rule"] == gates["selection_rule"] == "secondary_beyond_q_max"
+    assert selection["protocol_q_max"] == 3
+    assert selection["effective_q_max"] == selection["audits"][0]["q_after"] == gates["G1"]["q"] == 5
+    assert gates["G1"]["admitted"]
+    assert json.loads((out / "run-config.json").read_text())["secondary_full_rho"] == 0.2
+    rows = list(csv.DictReader((out / "solver-comparison.csv").open(encoding="utf-8")))
+    assert {r["validation_qor_coverage"] for r in rows} == {"not_measured"}

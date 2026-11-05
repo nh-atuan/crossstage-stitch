@@ -132,6 +132,10 @@ class Pilot:
         fit = evaluate(self.fit, names, instance["rho"])
         out = {"fit_qor_coverage": fit["qor_coverage_I_f"]}
         for split, rows in self.evaluation.items():
+            if not rows:
+                out.update(validation_qor_coverage="not_measured", validation_near_oracle_coverage="not_measured",
+                           validation_regret_median="not_measured", validation_regret_p95="not_measured")
+                continue
             result = evaluate(rows, names, instance["rho"])
             out.update(validation_qor_coverage=result["qor_coverage_I_f"],
                        validation_near_oracle_coverage=result["near_oracle_coverage_I_f"],
@@ -176,7 +180,7 @@ class Pilot:
 
 
 def run_pilot(characterization, configs_path, protocol_path, output, *, label, completeness=None,
-              overrides=None):
+              overrides=None, secondary_full_rho=None):
     output = Path(output)
     if output.exists() and any(output.iterdir()):
         raise FileExistsError(f"{output} is not empty")
@@ -192,17 +196,33 @@ def run_pilot(characterization, configs_path, protocol_path, output, *, label, c
     write_json(output / "run-config.json",
                {"label": label, "protocol_sha256": sha256_file(protocol_path), "budget": budget,
                 "overrides": overrides or {}, "characterization_sha256": sha256_file(characterization),
-                "completeness": completeness and read_json(completeness)})
+                "completeness": completeness and read_json(completeness),
+                "secondary_full_rho": secondary_full_rho})
     char_rows = read_characterization(characterization)
     configs = read_json(configs_path)
     pilot = Pilot(char_rows, configs, protocol, output, label)
     columns = sorted(pilot.configs)
     source = sha256_file(characterization)
-    instance, reduction, selection = select_instance(pilot.fit, protocol, columns, source)
+    q_max = protocol["admission"]["q_max"]
+    if secondary_full_rho is None:
+        instance, reduction, selection = select_instance(pilot.fit, protocol, columns, source)
+    else:
+        # Declared secondary run: full fit instance at one rho, admitted beyond the protocol q_max.
+        instance, reduction, audit_row = _candidate(pilot.fit, secondary_full_rho,
+                                                    protocol["split"]["fit_partition"], columns, source)
+        if reduction is None or not audit_row["q_after"]:
+            instance = reduction = None
+        else:
+            q_max = max(q_max, audit_row["q_after"])
+        selection = {"rule": "secondary_beyond_q_max", "rho": secondary_full_rho,
+                     "protocol_q_max": protocol["admission"]["q_max"], "effective_q_max": q_max,
+                     "audits": [audit_row]}
     write_json(output / "selection.json", selection)
     if instance is None:
-        gates = {"G0": "label " + label, "G1": "no admissible instance", "G2": "not reached",
-                 "status": "BLOCKED" if label == "real" else "TOOLING_ONLY"}
+        outcome = "BLOCKED" if label == "real" else "TOOLING_ONLY"
+        gates = {"label": label, "selection_rule": selection["rule"], "outcome_if_primary": outcome,
+                 "G0": "label " + label, "G1": "no admissible instance", "G2": "not reached",
+                 "status": "SECONDARY" if secondary_full_rho is not None else outcome}
         write_json(output / "gates.json", gates)
         return gates
     names = instance["columns"]
@@ -246,7 +266,7 @@ def run_pilot(characterization, configs_path, protocol_path, output, *, label, c
     qubo = qubo_mod.build_qubo(reduction, lam=lam, alpha=alpha)
     ising = qubo_mod.to_ising(qubo)
     scaled, scale = ising.scaled()
-    audit = admission.resource_audit(qubo, ising, q_max=protocol["admission"]["q_max"])
+    audit = admission.resource_audit(qubo, ising, q_max=q_max)
     sensitivity = []
     for entry in admission.alpha_grid(k_ub, lam):
         probe = qubo_mod.build_qubo(reduction, lam=lam, alpha=entry["alpha"])
@@ -366,7 +386,11 @@ def run_pilot(characterization, configs_path, protocol_path, output, *, label, c
         status = "NEGATIVE_RESULT"
     else:
         status = "PASS_OFFLINE"
-    gates = {"label": label, "G0": "real data with completeness report" if real else "toy data, not G0",
+    outcome = status
+    if secondary_full_rho is not None:
+        status = "SECONDARY"            # a declared secondary run never closes a gate on its own
+    gates = {"label": label, "selection_rule": selection["rule"], "outcome_if_primary": outcome,
+             "G0": "real data with completeness report" if real else "toy data, not G0",
              "G1": {"admitted": audit["admitted"], "ground_states_minimum_covers": g1, "q": audit["q"]},
              "G2": {"depths_with_confirmation_counts": sorted(depths), "passed": g2 and real},
              "qaoa_raw_feasible_runs": len(raw_qaoa), "qaoa_runs": len(qaoa_records), "status": status}
@@ -387,11 +411,14 @@ def main(argv=None):
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--override", action="append", default=[], metavar="KEY=JSON",
                         help="budget override recorded in run-config.json, e.g. qaoa.calls_per_init=10")
+    parser.add_argument("--secondary-full-rho", type=float,
+                        help="declared secondary run on the full fit instance at this rho, beyond q_max")
     args = parser.parse_args(argv)
     overrides = {k: json.loads(v) for k, v in (item.split("=", 1) for item in args.override)}
     started = time.perf_counter()
     gates = run_pilot(args.characterization, args.configs, args.protocol, args.output, label=args.label,
-                      completeness=args.completeness, overrides=overrides)
+                      completeness=args.completeness, overrides=overrides,
+                      secondary_full_rho=args.secondary_full_rho)
     print(json.dumps(gates, indent=2), f"\nwall {time.perf_counter() - started:.1f} s")
 
 

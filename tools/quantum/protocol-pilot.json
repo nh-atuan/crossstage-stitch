@@ -65,5 +65,19 @@
     "rule": "same routine as greedy, on the original incidence",
     "controls": ["repair-only from an empty catalogue"]
   },
-  "solution_selection": "smallest raw cover-feasible catalogue among all samples in budget, lexicographic tie-break"
+  "solution_selection": "smallest raw cover-feasible catalogue among all samples in budget, lexicographic tie-break",
+  "amendments": [
+    {"date": "2026-11-05", "decided_by": "Thanh", "declared_before_solvers": true,
+     "id": "A1-split-rebuilt",
+     "text": "the original split.json was not shipped with the calibration sweep; the split is rebuilt with freeze_split (PR #16) from data/udis-d/udis-d-development-v1.json; its 200 calibration pairs equal the 200 audited pairs but its sha256 differs from the receipt; the original replaces it when available and characterization is rerun"},
+    {"date": "2026-11-05", "decided_by": "Thanh", "declared_before_solvers": true,
+     "id": "A2-validation-not-measured",
+     "text": "no validation sweep exists; evaluation partitions with no rows are reported as not_measured; no generalization claim"},
+    {"date": "2026-11-05", "decided_by": "Thanh", "declared_before_solvers": true,
+     "id": "A3-secondary-full-instance",
+     "text": "in addition to the primary instance chosen by instance_selection, one secondary run uses the full fit instance at rho 0.10 with q_max raised to its q_after; same budget; selection rule secondary_beyond_q_max; gate status SECONDARY; it never replaces the primary result"},
+    {"date": "2026-11-05", "decided_by": "Thanh", "declared_before_solvers": true,
+     "id": "A4-w2-selection",
+     "text": "W2 is the smallest raw cover-feasible QAOA catalogue over all QAOA runs in budget, ties broken by the sorted config list, then lower p, then lower seed; with no raw cover-feasible sample, W2 is the smallest repaired catalogue under the same tie-break and is labelled hybrid_quantum_classical_repair"}
+  ]
 }

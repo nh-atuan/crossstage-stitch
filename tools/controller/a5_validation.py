@@ -185,21 +185,28 @@ def validate(harness: Path, plan_dir: Path, fit_dir: Path, output: Path) -> dict
     return result
 
 
-def verify_lock(output: Path) -> dict:
-    lock = read_json(output / "a5-lock.json")
-    if (lock["schema_version"] != "a5-validation-v1" or lock["status"] != "LOCKED"
+def verify_result(output: Path, *, no_go: bool = False) -> dict:
+    expected, other = ("a5-no-go.json", "a5-lock.json") if no_go else ("a5-lock.json", "a5-no-go.json")
+    lock = read_json(output / expected)
+    if ((output / other).exists() or lock["schema_version"] != "a5-validation-v1"
+            or lock["status"] != ("NO_GO" if no_go else "LOCKED")
             or set(lock["policies"]) != set(POLICIES)):
-        raise ValueError("expected a complete 20-policy A5 lock")
+        raise ValueError("expected one complete 20-policy A5 result")
+    if no_go and ((output / "locked").exists() or all(row["selected"] is not None for row in lock["policies"].values())):
+        raise ValueError("NO_GO requires at least one infeasible policy and no published controllers")
     for policy_id, row in lock["policies"].items():
         expected_models = {f"{policy_id}-r{r}" for r in BUDGET["scene_max_regions"]}
         expected_locked = {f"locked/{policy_id}/{name}" for name in ("controller.json", "quality_policy.json")}
-        if (set(row["candidates"]) != expected_models or row["selected"] not in expected_models
-                or set(row["locked_files_sha256"]) != expected_locked):
+        locked = row.get("locked_files_sha256", {})
+        if (set(row["candidates"]) != expected_models
+                or (no_go and "locked_files_sha256" in row)
+                or (not no_go and (row["selected"] not in expected_models or set(locked) != expected_locked))):
             raise ValueError(f"invalid lock inventory: {policy_id}")
-        winner = row["candidates"][row["selected"]]
-        if winner["model_sha256"] != row["locked_files_sha256"][f"locked/{policy_id}/controller.json"]:
-            raise ValueError(f"locked model differs from validation candidate: {policy_id}")
-        for name, digest in row["locked_files_sha256"].items():
+        if not no_go:
+            winner = row["candidates"][row["selected"]]
+            if winner["model_sha256"] != locked[f"locked/{policy_id}/controller.json"]:
+                raise ValueError(f"locked model differs from validation candidate: {policy_id}")
+        for name, digest in locked.items():
             if sha256(safe_path(output, name)) != digest:
                 raise ValueError(f"locked file changed: {name}")
         for name, candidate in row["candidates"].items():
@@ -217,22 +224,30 @@ def verify_lock(output: Path) -> dict:
     return lock
 
 
+def verify_lock(output: Path) -> dict:
+    return verify_result(output)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     for name in ("harness", "plan", "fit"):
         parser.add_argument(f"--{name}", type=Path)
-    parser.add_argument("--verify-only", action="store_true")
+    verification = parser.add_mutually_exclusive_group()
+    verification.add_argument("--verify-only", action="store_true", help="Verify a published A5 lock")
+    verification.add_argument("--verify-no-go", action="store_true", help="Verify a completed A5 NO_GO")
     args = parser.parse_args()
     try:
         if args.verify_only:
             result = verify_lock(args.output)
+        elif args.verify_no_go:
+            result = verify_result(args.output, no_go=True)
         else:
             if any(value is None for value in (args.harness, args.plan, args.fit)):
                 parser.error("validation requires --harness, --plan and --fit")
             result = validate(args.harness, args.plan, args.fit, args.output)
         log("a5_validation_finished", status=result["status"])
-        return 0 if result["status"] == "LOCKED" else 2
+        return 0 if result["status"] == "LOCKED" or args.verify_no_go else 2
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
         log("error", message=str(exc))
         return 2

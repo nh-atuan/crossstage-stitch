@@ -34,7 +34,7 @@ def build_ch04a_notebook(output_path: Path) -> Path:
     1. **Khóa CH-01 Development Baseline:** Đối soát 250 cặp development UDIS-D, phê duyệt 12 ngoại lệ reference với 0 PASS, khóa Fixed-Best `S1.00_K2000_R1024_Bfeather` (192 fit / 46 val) và xuất `development-lock.json`.
     2. **Hiệu chỉnh 20 Quality Gates & Fit Scene Rules:** Lập kế hoạch lưới 5×4 cho 20 policies A5, fit các ngưỡng self-check không false-accept trên `train-fit`, khôi phục 500 ảnh PPM từ bundle, tính đặc trưng gradient ảnh và huấn luyện scene rules $R \\in \\{1, 4\\}$ regions (sinh 40 candidate models).
     3. **Biên dịch `stitch_harness` sm_75 & Đo lường Validation:** Chạy harness adaptive thực tế trên 50 cặp `train-val` (2 warmup, 10 repeats) cho tất cả 40 models trên Tesla T4, chấm điểm RGB theo homography chuẩn.
-    4. **Khóa Controller A5 & Xuất Evidence:** So sánh với sàn Fixed-Best trên `train-val`, chọn ứng viên tối ưu và xuất `a5-lock.json` cùng các tệp `controller.json` khóa. Lưu trữ toàn bộ bằng chứng và đối soát hash SHA-256 trên Google Drive.
+    4. **Khóa Controller A5 & Xuất Evidence:** So sánh với sàn Fixed-Best trên `train-val`. Xác minh `a5-lock.json` nếu cả 20 policy đạt, hoặc `a5-no-go.json` nếu còn policy chưa đạt. CH-04b dùng bộ lock trong một campaign test riêng.
     """)
 
     # Cell 1
@@ -61,13 +61,7 @@ def build_ch04a_notebook(output_path: Path) -> Path:
 
     drive.mount("/content/drive")
     DRIVE = Path("/content/drive/MyDrive")
-    SOURCE_ZIP = next((p for p in (DRIVE / "phase3_ch04a_source.zip",
-                                   DRIVE / "phase3_ch01e_source.zip",
-                                   DRIVE / "crossstage_stitch_source.zip",
-                                   Path("/content/phase3_ch04a_source.zip"),
-                                   Path("/content/crossstage_stitch_source.zip"))
-                       if p.is_file()),
-                      DRIVE / "crossstage_stitch_source.zip")
+    SOURCE_ZIP = DRIVE / "phase3_ch04a_source.zip"  # @param {type:"raw"}
 
     WORK = Path(tempfile.mkdtemp(prefix="crossstage-ch04a-", dir="/content"))
     REPO = WORK / "source"
@@ -116,7 +110,7 @@ def build_ch04a_notebook(output_path: Path) -> Path:
             raise FileExistsError(f"{name} already recorded. Start a new workspace for a rerun.")
         try:
             value = work()
-        except (OSError, RuntimeError, ValueError, KeyError, zipfile.BadZipFile, subprocess.SubprocessError) as exc:
+        except (OSError, RuntimeError, ValueError, KeyError, ImportError, zipfile.BadZipFile, subprocess.SubprocessError) as exc:
             value = {"status": "BLOCKED_OR_INCOMPLETE", "error": str(exc)}
         write_json(marker, value)
         print(name, value, flush=True)
@@ -126,9 +120,16 @@ def build_ch04a_notebook(output_path: Path) -> Path:
         marker = STATUS / f"{name}.json"
         return marker.is_file() and json.loads(marker.read_text(encoding="utf-8"))["status"] == "READY"
 
+    def require_frozen(step_name, field, path):
+        if not ready(step_name):
+            raise RuntimeError(f"{step_name} is pending")
+        marker = json.loads((STATUS / f"{step_name}.json").read_text(encoding="utf-8"))
+        if sha(path) != marker[field]:
+            raise ValueError(f"Frozen artifact changed: {path}")
+
     def setup():
         if not SOURCE_ZIP.is_file():
-            raise FileNotFoundError(f"Missing source ZIP at {SOURCE_ZIP}; upload crossstage_stitch_source.zip to Drive")
+            raise FileNotFoundError(f"Missing source ZIP at {SOURCE_ZIP}; upload the updated phase3_ch04a_source.zip")
         source_digest = sha(SOURCE_ZIP)
         with zipfile.ZipFile(SOURCE_ZIP) as archive:
             seen = set()
@@ -144,7 +145,8 @@ def build_ch04a_notebook(output_path: Path) -> Path:
         if sha(SOURCE_ZIP) != source_digest:
             raise RuntimeError("Source archive changed during setup")
         for name in ("tools/controller/a5_calibration.py", "tools/controller/a5_validation.py",
-                     "tools/data_prep/lock_development.py"):
+                     "tools/controller/a5_inputs.py", "tools/data_prep/lock_development.py",
+                     "tools/data_prep/reference-exceptions-p3.json"):
             if not (REPO / name).is_file():
                 raise FileNotFoundError(f"Outdated source ZIP: missing {name} in {SOURCE_ZIP}")
 
@@ -166,6 +168,9 @@ def build_ch04a_notebook(output_path: Path) -> Path:
         receipt = EVIDENCE / "environment_receipt.json"
         module("receipt", "tools.env.generate_receipt", "--output", receipt)
         module("receipt-verify", "tools.env.generate_receipt", "--output", receipt, "--verify-only")
+        module("validation-preflight", "tools.controller.a5_validation", "--help")
+        if "--verify-no-go" not in (LOGS / "validation-preflight.log").read_text(encoding="utf-8"):
+            raise ValueError("Outdated source ZIP: A5 NO_GO verification is missing")
         return {"status": "READY", "workspace": str(WORK)}
 
     step("setup", setup)
@@ -191,12 +196,27 @@ def build_ch04a_notebook(output_path: Path) -> Path:
         candidates = [CH01_EXPORT_DIR,
                       REPO / "specs/p3_evidence",
                       Path("/content/p3_evidence/run_20261106_022310Z")]
-        source = next((p for p in candidates if (p / "development-audit.json").is_file()), CH01_EXPORT_DIR)
-        print(f"CH-01 evidence source: {source}")
-        if not (source / "development-audit.json").is_file():
-            raise FileNotFoundError(f"Missing CH-01 export at {source}")
         if not APPROVAL.is_file():
             raise FileNotFoundError(f"Missing reference exceptions file at {APPROVAL}")
+        audit_hash = json.loads(APPROVAL.read_text(encoding="utf-8"))["development_audit_sha256"]
+        source = None
+        for candidate in candidates:
+            audit_path = candidate / "development-audit.json"
+            if audit_path.is_file() and sha(audit_path) == audit_hash:
+                audit = json.loads(audit_path.read_text(encoding="utf-8"))
+                protocol_path = candidate / audit["inputs"]["protocol"]["path"]
+                expected = {candidate / item["path"]: item["sha256"] for item in audit["inputs"].values()}
+                if not all(path.is_file() and sha(path) == digest for path, digest in expected.items()):
+                    continue
+                protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
+                expected = {protocol_path.parent / name: digest for name, digest in protocol["files_sha256"].items()}
+                expected.update({candidate / "data" / item["path"]: item["sha256"] for item in protocol["inputs"].values()})
+                if all(path.is_file() and sha(path) == digest for path, digest in expected.items()):
+                    source = candidate
+                    break
+        if source is None:
+            raise FileNotFoundError(f"No complete pinned CH-01 export found in {candidates}")
+        print(f"CH-01 evidence source: {source}")
 
         module("lock-development", "tools.data_prep.lock_development",
                "--protocol", source / "protocol",
@@ -227,21 +247,20 @@ def build_ch04a_notebook(output_path: Path) -> Path:
     ## 3. CH-04a · Chuẩn bị Gate & Huấn luyện Scene Rules (Fit 40 Candidates)
 
     1. `a5_calibration prepare`: Khởi tạo 20 policy variants trên lưới 5×4 ($\Delta \text{SSIM} \in [0.01, 0.05]$, $\Delta \text{PSNR} \in [0.2, 1.0]$ dB), fit các ngưỡng self-check và sinh `plan.json` (`FIT_GATES_READY`).
-    2. Nạp `p3_protocol_bundle.zip` (tự động tải từ Google Drive qua `gdown` nếu thiếu).
+    2. Nạp `p3_protocol_bundle.zip` từ Drive hoặc `/content`. Tùy chọn `DOWNLOAD_BUNDLE` cho phép tải về workspace tạm khi thiếu cả hai.
     3. `a5_calibration fit`: Khôi phục 500 ảnh PPM thuộc 250 cặp development, tính đặc trưng gradient ảnh thô và fit scene rules $R \in \{1, 4\}$ regions (sinh 40 candidate models, `FIT_CANDIDATES_READY`).
     """)
     code(r'''
     # @title 3. Chuẩn bị 20 Gate Policy và Fit 40 Candidate Models
     UDIS_BUNDLE = DRIVE / "p3_protocol_bundle.zip"  # @param {type:"raw"}
+    DOWNLOAD_BUNDLE = False  # @param {type:"boolean"}
     BUNDLE_GDRIVE_ID = "1YNkpnEay-0c7ooEUSkMSpFojGKBXjwhZ"
-    BUNDLE_URL = f"https://drive.google.com/uc?id={BUNDLE_GDRIVE_ID}"
 
     GATES_DIR = EVIDENCE / "gates"
     FIT_DIR = EVIDENCE / "fit"
 
     def prepare_gates():
-        if not ready("lock-development"):
-            raise RuntimeError("Development lock has not passed")
+        require_frozen("lock-development", "development_lock_sha256", DEV_LOCK)
         marker = json.loads((STATUS / "lock-development.json").read_text(encoding="utf-8"))
         source = Path(marker["source"])
         module("a5-prepare", "tools.controller.a5_calibration", "prepare",
@@ -253,11 +272,12 @@ def build_ch04a_notebook(output_path: Path) -> Path:
         if not plan_file.is_file():
             raise FileNotFoundError("a5_calibration prepare did not generate plan.json")
         plan = json.loads(plan_file.read_text(encoding="utf-8"))
+        if plan["status"] != "FIT_GATES_READY" or len(plan["policies"]) != 20:
+            raise ValueError("Expected all 20 A5 quality policies")
         return {"status": "READY", "plan_sha256": sha(plan_file), "policies": len(plan["policies"])}
 
     def fit_candidates():
-        if not ready("a5-prepare"):
-            raise RuntimeError("Gate preparation is pending")
+        require_frozen("a5-prepare", "plan_sha256", GATES_DIR / "plan.json")
         marker = json.loads((STATUS / "lock-development.json").read_text(encoding="utf-8"))
         source = Path(marker["source"])
 
@@ -266,18 +286,21 @@ def build_ch04a_notebook(output_path: Path) -> Path:
             local_bundle = Path("/content/p3_protocol_bundle.zip")
             if local_bundle.is_file():
                 bundle_path = local_bundle
-            else:
-                print(f"Không tìm thấy {bundle_path} trên Drive. Đang tự động tải từ Google Drive qua gdown...")
+            elif DOWNLOAD_BUNDLE:
                 import gdown
+                bundle_path = WORK / "p3_protocol_bundle.zip"
+                print(f"Downloading the shared PPM bundle into {bundle_path}")
                 try:
-                    gdown.download(BUNDLE_URL, str(bundle_path), quiet=False, fuzzy=True)
+                    downloaded = gdown.download(id=BUNDLE_GDRIVE_ID, output=str(bundle_path), quiet=False)
                 except Exception as exc:
-                    print(f"Không thể ghi trực tiếp vào Drive ({exc}), đang tải vào /content/p3_protocol_bundle.zip...")
-                    bundle_path = local_bundle
-                    gdown.download(BUNDLE_URL, str(bundle_path), quiet=False, fuzzy=True)
+                    raise RuntimeError("Bundle download failed. Set UDIS_BUNDLE to the ZIP used by A4.") from exc
+                if not downloaded:
+                    raise RuntimeError("Bundle download returned no file")
 
         if not bundle_path.is_file():
             raise FileNotFoundError(f"Missing PPM bundle at {bundle_path}; set UDIS_BUNDLE to the ZIP used by A4")
+        if not zipfile.is_zipfile(bundle_path):
+            raise ValueError(f"Invalid PPM ZIP: {bundle_path}")
 
         module("a5-fit", "tools.controller.a5_calibration", "fit",
                "--evidence", source,
@@ -290,6 +313,9 @@ def build_ch04a_notebook(output_path: Path) -> Path:
             raise FileNotFoundError("a5_calibration fit did not generate candidates.json")
         candidates = json.loads(candidates_file.read_text(encoding="utf-8"))
         total_models = sum(len(models) for models in candidates["models"].values())
+        if (candidates["status"] != "FIT_CANDIDATES_READY" or len(candidates["models"]) != 20
+                or any(len(models) != 2 for models in candidates["models"].values())):
+            raise ValueError("Expected two fitted candidates for each of the 20 A5 policies")
         return {"status": "READY", "candidates_sha256": sha(candidates_file),
                 "policies": len(candidates["models"]), "total_models": total_models}
 
@@ -339,7 +365,7 @@ def build_ch04a_notebook(output_path: Path) -> Path:
     - Đánh giá chất lượng hình học so với Fixed-High đã khóa.
     - So sánh tỷ lệ `PASS` với sàn Fixed-Best trên `train-val` để chọn ra model chiến thắng cho mỗi policy.
     - Nếu cả 20 policies đều đạt: xuất `a5-lock.json` (`status: LOCKED`) và các tệp `controller.json` khóa trong `locked/`.
-    - Chạy đối soát `--verify-only` trên `a5-lock.json`.
+    - Đối soát hash và kết quả chọn ứng viên cho cả `LOCKED` và `NO_GO`.
     """)
     code(r'''
     # @title 5. Chạy validation adaptive và khóa A5 lock
@@ -349,6 +375,10 @@ def build_ch04a_notebook(output_path: Path) -> Path:
         if not (ready("setup") and ready("lock-development") and ready("a5-prepare")
                 and ready("a5-fit") and ready("build-harness")):
             raise RuntimeError("Prerequisites for A5 validation are pending")
+        require_frozen("lock-development", "development_lock_sha256", DEV_LOCK)
+        require_frozen("a5-prepare", "plan_sha256", GATES_DIR / "plan.json")
+        require_frozen("a5-fit", "candidates_sha256", FIT_DIR / "candidates.json")
+        require_frozen("build-harness", "harness_sha256", HARNESS_BIN)
 
         # Run validation
         code = module("a5-validate", "tools.controller.a5_validation",
@@ -361,7 +391,7 @@ def build_ch04a_notebook(output_path: Path) -> Path:
         lock_file = VALIDATION_DIR / "a5-lock.json"
         no_go_file = VALIDATION_DIR / "a5-no-go.json"
 
-        if lock_file.is_file():
+        if code == 0 and lock_file.is_file() and not no_go_file.exists():
             module("a5-validate-verify", "tools.controller.a5_validation",
                    "--output", VALIDATION_DIR,
                    "--verify-only")
@@ -369,12 +399,16 @@ def build_ch04a_notebook(output_path: Path) -> Path:
             return {"status": "READY", "lock_status": "LOCKED",
                     "policies_locked": len(lock["policies"]),
                     "lock_sha256": sha(lock_file)}
-        elif no_go_file.is_file():
+        elif code == 2 and no_go_file.is_file() and not lock_file.exists():
+            module("a5-validate-verify-no-go", "tools.controller.a5_validation",
+                   "--output", VALIDATION_DIR, "--verify-no-go")
             no_go = json.loads(no_go_file.read_text(encoding="utf-8"))
+            infeasible = [name for name, row in no_go["policies"].items() if row["selected"] is None]
             return {"status": "VERIFIED_WITH_NO_GO", "lock_status": "NO_GO",
-                    "result": no_go}
+                    "policies_evaluated": len(no_go["policies"]), "infeasible_policies": infeasible,
+                    "no_go_sha256": sha(no_go_file)}
         else:
-            raise RuntimeError(f"Validation failed without producing lock or no-go artifact (exit code {code})")
+            raise RuntimeError(f"Validation exit code {code} and result artifacts do not agree")
 
     step("a5-validate-and-lock", validate_and_lock)
     ''')
@@ -383,8 +417,9 @@ def build_ch04a_notebook(output_path: Path) -> Path:
     markdown("""
     ## 6. Sao lưu và Kiểm tra Mã băm Evidence trên Google Drive
 
-    Sao chép toàn bộ bằng chứng sang thư mục timestamp mới trên `MyDrive/p3_evidence/`.
-    Đối soát mã băm SHA-256 từng file trên Drive trước khi ghi `export_verified.json`.
+    Sao chép log, CSV, policy, receipt và manifest sang `MyDrive/p3_evidence/`.
+    Ảnh PPM phục hồi từ bundle ở lại workspace. Hash từng ảnh có trong `fit/candidates.json` nếu fit hoàn tất.
+    Có thể chạy cell này sau lỗi để giữ log. `export_verified.json` xác nhận bản sao Drive.
     """)
     code(r'''
     # @title 6. Sao lưu và kiểm hash evidence trên Drive
@@ -393,17 +428,24 @@ def build_ch04a_notebook(output_path: Path) -> Path:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%SZ")
     destination = Path(tempfile.mkdtemp(prefix=f"run_{timestamp}_ch04a_", dir=drive_root))
     copied = destination / "evidence"
-    shutil.copytree(EVIDENCE, copied)
+    def inventory(root, *, omit_images=False):
+        result = {}
+        for path in sorted(root.rglob("*")):
+            if path.is_file():
+                relative = path.relative_to(root).as_posix()
+                if not (omit_images and relative.startswith("fit/inputs/images/")):
+                    result[relative] = sha(path)
+        return result
 
-    def inventory(root):
-        return {path.relative_to(root).as_posix(): sha(path)
-                for path in sorted(root.rglob("*")) if path.is_file()}
+    def ignore_images(directory, names):
+        return {"images"} if Path(directory) == EVIDENCE / "fit/inputs" and "images" in names else set()
 
-    hashes = inventory(EVIDENCE)
+    hashes = inventory(EVIDENCE, omit_images=True)
+    shutil.copytree(EVIDENCE, copied, ignore=ignore_images)
     if inventory(copied) != hashes:
         raise RuntimeError(f"Drive copy differs from source: {destination}")
     write_json(destination / "export_verified.json",
-               {"files_sha256": hashes, "steps": {
+               {"files_sha256": hashes, "excluded_paths": ["fit/inputs/images/"], "steps": {
                    p.stem: json.loads(p.read_text(encoding="utf-8")) for p in sorted(STATUS.glob("*.json"))}})
     print(f"Verified copy of {len(hashes)} files: {destination}")
     ''')

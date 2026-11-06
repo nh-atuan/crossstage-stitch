@@ -11,12 +11,19 @@ def predictions(models, grid):
             predict(models['post_quality'],grid.post.reshape(n*c,-1)).reshape(n,c))
 
 
-def choose(pre_probability, latency, reference, pre_threshold, extra_ms):
+def choose(pre_probability, latency, reference, pre_threshold, extra_ms, *, fallback_fractions=None):
     # Approximate expected cost; calibration replay includes gate rejection and
     # measured feature costs. This is a ranking score, not a QoR guarantee.
     if pre_threshold>=1.:
         return np.full(len(latency),reference,dtype=int)
-    score = latency+(1.-pre_probability)*latency[:, reference,None]+extra_ms
+    fractions=1. if fallback_fractions is None else np.asarray(fallback_fractions,dtype=float)
+    if fallback_fractions is not None and (fractions.shape!=(latency.shape[1],)
+            or not np.isfinite(fractions).all() or np.any((fractions<0)|(fractions>1))
+            or fractions[reference]!=1.):
+        raise ValueError('invalid fallback fractions')
+    if not np.isfinite(latency).all() or not np.isfinite(pre_probability).all():
+        raise ValueError('nonfinite scoring inputs')
+    score = latency+(1.-pre_probability)*latency[:, reference,None]*fractions+extra_ms
     score[pre_probability<pre_threshold] = np.inf
     score[:,reference] = latency[:,reference]
     result=np.argmin(score, axis=1)

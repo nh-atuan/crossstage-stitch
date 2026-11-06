@@ -36,6 +36,7 @@ struct ControllerPolicy {
     bool pooled_mode{};
     BoostedModel pre_quality,post_quality,latency;
     mutable controller::PooledModels pooled_view{};
+    std::vector<double> fallback_fractions;
 
     Status configure(controller::Controller& target) const {
         gates.clear();
@@ -43,6 +44,8 @@ struct ControllerPolicy {
         if(pooled_mode) {
             pooled_view.pre_quality=pre_quality.view();pooled_view.post_quality=post_quality.view();
             pooled_view.latency=latency.view();
+            pooled_view.fallback_fractions=fallback_fractions.empty()?nullptr:fallback_fractions.data();
+            pooled_view.fallback_count=fallback_fractions.size();
         }
         const controller::Policy policy{probe_scale, rules.data(), rules.size(), checks.data(), checks.size(),
             {selector.data(), selector.size()}, gates.empty() ? nullptr : gates.data(), gates.size(),
@@ -166,6 +169,22 @@ inline ControllerPolicy parse_controller_policy(const JsonValue& root) {
         if(view.reference_index>=policy.ladder.size())throw std::runtime_error("Invalid pooled fallback");
         const auto& ref=policy.ladder[view.reference_index];
         if(ref.S!=1. || ref.K!=2000 || ref.R!=1024)throw std::runtime_error("Pooled reference differs from QoR baseline");
+        if(root.obj_val.count("score_mode")) {
+            const auto mode=field(root,"score_mode",JsonValue::String).str_val;
+            if(mode!="old" && mode!="reuse_approx")throw std::runtime_error("Unknown score mode");
+            if(mode=="reuse_approx") {
+                for(const auto& value:field(root,"fallback_fractions",JsonValue::Array).arr_val) {
+                    if(value.type!=JsonValue::Number || !std::isfinite(value.num_val) || value.num_val<0 || value.num_val>1)
+                        throw std::runtime_error("Invalid fallback fraction");
+                    policy.fallback_fractions.push_back(value.num_val);
+                }
+                if(policy.fallback_fractions.size()!=policy.ladder.size())throw std::runtime_error("Incomplete fallback profile");
+                // A scale change reuses no preprocessing work in this approximation.
+                for(std::size_t i=0;i<policy.ladder.size();++i)
+                    if(policy.ladder[i].S!=ref.S && policy.fallback_fractions[i]!=1.)
+                        throw std::runtime_error("Scale fallback must retain full reference cost");
+            } else if(root.obj_val.count("fallback_fractions"))throw std::runtime_error("Old score cannot use fallback profile");
+        } else if(root.obj_val.count("fallback_fractions"))throw std::runtime_error("Fallback profile requires score mode");
     }
     controller::Controller validation;
     if (policy.configure(validation) != Status::OK)

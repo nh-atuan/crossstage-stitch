@@ -31,7 +31,8 @@ def verify(probe,policies,grid,output):
         actual=np.array([[float(row[k]) for k in ['pre_probability','latency','post_probability']] for row in rows])
         if not np.allclose(expected,actual,atol=2e-6,rtol=1e-6):raise ValueError('C++ ensemble predictions differ')
         probability,latency,_=predictions(models,grid)
-        initial=choose(probability,latency,grid.reference,policy['pre_threshold'],policy['extra_ms'])
+        initial=choose(probability,latency,grid.reference,policy['pre_threshold'],policy['extra_ms'],
+            fallback_fractions=policy.get('fallback_fractions'))
         for index,row in zip(selected,rows):
             actual_config=policy['ladder'][int(row['initial_index'])]['config_id']
             if actual_config!=grid.configs[initial[index//c]]:raise ValueError('C++ initial selection differs')

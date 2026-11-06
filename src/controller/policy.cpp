@@ -28,6 +28,15 @@ bool valid_policy(const Policy& p) noexcept {
         !valid_ensemble(p.pooled->latency,39,true) ||
         !unit_interval(p.pooled->pre_threshold) || !unit_interval(p.pooled->gate_threshold) ||
         !std::isfinite(p.pooled->extra_ms) || p.pooled->extra_ms<0 || p.pooled->relation_mask>7)) return false;
+    if (p.pooled) {
+        const auto& m=*p.pooled;
+        if (m.fallback_count) {
+            if (!m.fallback_fractions || m.fallback_count!=p.self_check_count) return false;
+            for (std::size_t i=0;i<m.fallback_count;++i)
+                if (!unit_interval(m.fallback_fractions[i])) return false;
+            if (m.fallback_fractions[m.reference_index]!=1.) return false;
+        } else if (m.fallback_fractions) return false;
+    }
     for (std::size_t i = 0; i < p.self_check_count; ++i) {
         const auto& c = p.self_checks[i];
         if (c.min_inliers < 4 || !unit_interval(c.min_inlier_ratio) ||

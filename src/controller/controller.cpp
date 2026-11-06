@@ -59,7 +59,8 @@ Status Controller::begin_pair(const SceneSignals& scene, Knobs* first) noexcept 
             const double p=predict_ensemble(model.pre_quality,pooled_context_.data());
             const double latency=predict_ensemble(model.latency,pooled_context_.data());
             if(!std::isfinite(p) || !std::isfinite(latency))return Status::INVALID_ARGUMENT;
-            const double cost=latency+(1-p)*reference_ms+model.extra_ms;
+            const double fallback_ms=reference_ms*(model.fallback_count?model.fallback_fractions[i]:1.);
+            const double cost=latency+(1-p)*fallback_ms+model.extra_ms;
             if(p>=model.pre_threshold && cost<best) {best=cost;ladder_position_=i;}
         }
         set_config(ladder_position_);*first=ladder_[ladder_position_];

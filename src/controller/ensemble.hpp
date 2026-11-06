@@ -63,5 +63,8 @@ struct PooledModels {
     std::size_t reference_index{};
     bool pair_relations{};
     unsigned relation_mask{};
+    // Optional calibration-only stage profile. Empty preserves legacy scoring.
+    const double* fallback_fractions{};
+    std::size_t fallback_count{};
 };
 }  // namespace stitch::controller

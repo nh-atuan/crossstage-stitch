@@ -115,6 +115,26 @@ def reference_diagnostics(audit: dict[str, Any], reference: str, split: str,
                 for pair, row in failures.items()]}
 
 
+def replay_audit(protocol: dict[str, Any], protocol_dir: Path,
+                 path: Path) -> tuple[dict[str, Any], dict[str, Path]]:
+    previous = read_json(path)
+    if set(previous["inputs"]) != {"protocol", "fit_runs", "fit_qor", "val_runs", "val_qor"}:
+        raise ValueError("invalid audit input schema")
+    paths = {}
+    for name, record in previous["inputs"].items():
+        item = safe_path(protocol_dir.parent, record["path"])
+        if sha256(item) != record["sha256"]:
+            raise ValueError("development audit evidence changed")
+        paths[name] = item
+    if paths["protocol"].resolve() != (protocol_dir / "protocol_manifest.json").resolve():
+        raise ValueError("different protocol")
+    value = _audit_verified_protocol(protocol, protocol_dir, paths["fit_runs"], paths["fit_qor"],
+                                     paths["val_runs"], paths["val_qor"])
+    if value != previous:
+        raise ValueError("audit no longer reproduces")
+    return value, paths
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--protocol", type=Path, required=True)
@@ -134,21 +154,8 @@ def main(argv: list[str] | None = None) -> int:
         if protocol["evidence_type"] != ("real" if args.mode == "real" else "synthetic_fixture"):
             raise ValueError("real/fixture mode does not match frozen protocol")
         if args.verify_only:
-            previous = read_json(args.output)
-            paths = {}
-            if set(previous["inputs"]) != {"protocol", "fit_runs", "fit_qor", "val_runs", "val_qor"}:
-                raise ValueError("invalid audit input schema")
-            for name, record in previous["inputs"].items():
-                path = safe_path(args.protocol.parent, record["path"])
-                if sha256(path) != record["sha256"]:
-                    raise ValueError("development audit evidence changed")
-                paths[name] = path
-            if paths["protocol"].resolve() != (args.protocol / "protocol_manifest.json").resolve():
-                raise ValueError("different protocol")
+            value, paths = replay_audit(protocol, args.protocol, args.output)
             values = [paths[name] for name in ("fit_runs", "fit_qor", "val_runs", "val_qor")]
-            value = _audit_verified_protocol(protocol, args.protocol, *values)
-            if value != previous:
-                raise ValueError("audit no longer reproduces")
         else:
             values = [args.fit_runs, args.fit_qor, args.val_runs, args.val_qor]
             if any(value is None for value in values):

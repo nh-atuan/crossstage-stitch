@@ -22,18 +22,18 @@ Rung~3 ($0.75, 2000, 512$), and Rung~4 ($1.00, 2000, 1024$).
 
 Separating the probe with dedicated CUDA events shows that the GPU probe cost is
 small. Across the $1{,}105$ pairs, $4\times 4$ area downsampling of both input
-images to $128\times 128$ takes a median of $0.039$\,ms (p95 $0.044$\,ms), and
-the spatial gradient reduction takes a median of $0.014$\,ms (p95 $0.017$\,ms).
-Together, the GPU probe requires $0.054$\,ms ($1.1\%$ of the $4.759$\,ms median
+images to $128\times 128$ takes a median of $0.038$\,ms (p95 $0.044$\,ms), and
+the spatial gradient reduction takes a median of $0.015$\,ms (p95 $0.016$\,ms).
+Together, the GPU probe requires $0.053$\,ms ($1.1\%$ of the $4.716$\,ms median
 end-to-end time), while stream synchronization and host selection add another
-$0.010$\,ms ($t_{\text{ctrl}}$ median $0.064$\,ms). When the controller selects
+$0.009$\,ms ($t_{\text{ctrl}}$ median $0.062$\,ms). When the controller selects
 Rung~0 ($S_0=0.25$), the first attempt reuses the probe grayscale buffers without
 rerunning S1.
 
 Compared with Conservative High ($S=1.0$), starting at $S=0.50$ via the probe
-cuts median end-to-end latency from $9.020$ to $4.759$\,ms (a paired median
-reduction of $4.843$\,ms, or $2.11\times$) and reduces p95 latency from $17.644$
-to $8.598$\,ms, at the cost of rejecting $161$ pairs that fail the online
+cuts median end-to-end latency from $8.931$ to $4.716$\,ms (a paired median
+reduction of $4.830$\,ms, or $2.12\times$) and reduces p95 latency from $17.497$
+to $8.512$\,ms, at the cost of rejecting $161$ pairs that fail the online
 self-checks at the top rung. Compared with Blind Escalation starting at Rung~0
 ($S_0=0.25$), the probe halves the retry rate from $37.6\%$ ($416$ pairs) to
 $18.5\%$ ($204$ pairs) and lowers the mean attempt count from $1.738$ to
@@ -42,8 +42,8 @@ on $63.6\%$ of pairs ($2.333$ attempts per pair), whereas the probe skips to
 Rung~2 and retries on $37.1\%$ ($1.697$ attempts).
 
 Yet Blind Escalation at $S_0=0.25$ achieves a lower overall median latency
-($2.308$\,ms vs.\ $4.759$\,ms), and Blind Escalation at $S_0=0.50$ is slightly
-faster ($4.570$\,ms, $16.8\%$ retries). The trace exposes two policy causes.
+($2.286$\,ms vs.\ $4.716$\,ms), and Blind Escalation at $S_0=0.50$ is slightly
+faster ($4.530$\,ms, $16.8\%$ retries). The trace exposes two policy causes.
 First, on UDIS-D ($512\times 512$), the normalized probe gradient
 $g=\min(G_A,G_B)$ spans $[0.004, 0.087]$ with median $0.044$ and 90th percentile
 $0.062$. Because the uncalibrated \texttt{legacy-v1} rule requires $g\ge 0.08$
@@ -52,11 +52,11 @@ and sends $99.7\%$ to $S_0=0.50$, discarding the $0.25$-scale probe images and
 quadrupling the pixel area for S1--S6. By contrast, when $S_0=0.25$ is tried
 unconditionally, $689$ pairs ($62.4\%$) pass Rung~0's loose self-check
 ($15$ inliers, $0.15$ ratio, $4.0$\,px residual) on the first attempt in a
-median of $2.195$\,ms. Second, for the $456$ pairs with $g<0.04$, jumping from
+median of $2.183$\,ms. Second, for the $456$ pairs with $g<0.04$, jumping from
 Rung~1 to Rung~2 raises $R$ from $128$ to $256$ while tightening the self-check
 from $(20\text{ inliers}, 0.15\text{ ratio}, 3.5\,\text{px})$ to
 $(25, 0.20, 3.0\,\text{px})$, causing $18$ additional pairs to escalate to
-$S\ge 0.75$. Thus, while the GPU probe itself costs only $0.054$\,ms, converting
+$S\ge 0.75$. Thus, while the GPU probe itself costs only $0.053$\,ms, converting
 that signal into an end-to-end speedup requires calibrating the gradient cutoffs
 to the workload distribution so that passing $S=0.25$ pairs are not prematurely
 promoted to $S=0.50$.

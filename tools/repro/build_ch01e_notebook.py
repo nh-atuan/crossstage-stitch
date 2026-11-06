@@ -172,8 +172,8 @@ def build_ch01e_notebook(output_path: Path) -> Path:
         with zipfile.ZipFile(bundle) as zf:
             zf.extractall(data_p3)
 
-    module("verify-testing", "tools.data_prep.udis_ingest", "--raw-dir", str(data_p3), "--split", "testing", "--verify-only")
-    module("verify-training", "tools.data_prep.udis_ingest", "--raw-dir", str(data_p3), "--split", "training", "--verify-only")
+    module("verify-testing", "tools.data_prep.udis_ingest", "--output", str(data_p3 / "testing"), "--verify-only")
+    module("verify-training", "tools.data_prep.udis_ingest", "--output", str(data_p3 / "training"), "--verify-only")
 
     write_json(STATUS / "setup.json", {"status": "READY"})
     print(f"\n✅ Workspace sẵn sàng: {WORK}")

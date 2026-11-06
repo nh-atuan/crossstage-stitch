@@ -53,6 +53,7 @@ std::string blend_to_str(s6::BlendMode mode) {
 PipelineRunner::PipelineRunner() {
     CUDA_CHECK(cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking));
     CUDA_CHECK(cudaEventCreate(&ev_start_));
+    CUDA_CHECK(cudaEventCreate(&ev_probe_prep_));
     CUDA_CHECK(cudaEventCreate(&ev_s1_));
     CUDA_CHECK(cudaEventCreate(&ev_s2_));
     CUDA_CHECK(cudaEventCreate(&ev_s3_));
@@ -64,6 +65,7 @@ PipelineRunner::PipelineRunner() {
 PipelineRunner::~PipelineRunner() {
     if (stream_) cudaStreamDestroy(stream_);
     if (ev_start_) cudaEventDestroy(ev_start_);
+    if (ev_probe_prep_) cudaEventDestroy(ev_probe_prep_);
     if (ev_s1_) cudaEventDestroy(ev_s1_);
     if (ev_s2_) cudaEventDestroy(ev_s2_);
     if (ev_s3_) cudaEventDestroy(ev_s3_);
@@ -552,42 +554,66 @@ void PipelineRunner::execute_adaptive_run(
     dev_gray_b_.height = probe_scale_b.work_h;
 
     const auto t_ctrl_start = std::chrono::steady_clock::now();
-    CUDA_CHECK(cudaEventRecord(ev_start_, stream_));
-
-    Status probe_s1 = s1::s1_preprocess(dev_img_a_, dev_img_b_, probe_s,
-                                        &dev_gray_a_, &dev_gray_b_,
-                                        &probe_scale_a, &probe_scale_b, stream_);
-    if (probe_s1 != Status::OK) {
-        record->status = status_to_str(probe_s1);
-        record->fail_stage = "s1";
-        return;
-    }
-
-    const bool learned=controller.uses_learned_features();
-    Status probe_grad = learned ? controller::extract_scene(dev_gray_a_,dev_gray_b_,d_features_,pinned_features_,stream_,controller.uses_pair_relations()) :
-        s1::s1_compute_gradient(dev_gray_a_, dev_gray_b_, d_ws_probe_,pinned_grad_a_, pinned_grad_b_, stream_);
-    if (probe_grad != Status::OK) {
-        record->status = status_to_str(probe_grad);
-        record->fail_stage = "s1";
-        return;
-    }
-
-    CUDA_CHECK(cudaEventRecord(ev_s1_, stream_));
-    CUDA_CHECK(cudaStreamSynchronize(stream_));
-
+    const bool learned = controller.uses_learned_features();
     float probe_s1_ms = 0.0f;
-    cudaEventElapsedTime(&probe_s1_ms, ev_start_, ev_s1_);
 
-    if (learned) {
-        *pinned_grad_a_=pinned_features_[0];*pinned_grad_b_=pinned_features_[1];
-        std::copy_n(pinned_features_,controller::scene_feature_count,record->scene_features.begin());
+    if (probe_enabled_) {
+        CUDA_CHECK(cudaEventRecord(ev_start_, stream_));
+
+        Status probe_s1 = s1::s1_preprocess(dev_img_a_, dev_img_b_, probe_s,
+                                            &dev_gray_a_, &dev_gray_b_,
+                                            &probe_scale_a, &probe_scale_b, stream_);
+        if (probe_s1 != Status::OK) {
+            record->status = status_to_str(probe_s1);
+            record->fail_stage = "s1";
+            return;
+        }
+        CUDA_CHECK(cudaEventRecord(ev_probe_prep_, stream_));
+
+        Status probe_grad = learned ? controller::extract_scene(dev_gray_a_,dev_gray_b_,d_features_,pinned_features_,stream_,controller.uses_pair_relations()) :
+            s1::s1_compute_gradient(dev_gray_a_, dev_gray_b_, d_ws_probe_,pinned_grad_a_, pinned_grad_b_, stream_);
+        if (probe_grad != Status::OK) {
+            record->status = status_to_str(probe_grad);
+            record->fail_stage = "s1";
+            return;
+        }
+
+        CUDA_CHECK(cudaEventRecord(ev_s1_, stream_));
+        CUDA_CHECK(cudaStreamSynchronize(stream_));
+
+        float probe_prep_ms = 0.0f, probe_grad_ms = 0.0f;
+        cudaEventElapsedTime(&probe_prep_ms, ev_start_, ev_probe_prep_);
+        cudaEventElapsedTime(&probe_grad_ms, ev_probe_prep_, ev_s1_);
+        cudaEventElapsedTime(&probe_s1_ms, ev_start_, ev_s1_);
+        record->t_probe_s1 = probe_prep_ms;
+        record->t_probe_grad = probe_grad_ms;
+        record->t_probe = probe_s1_ms;
+
+        if (learned) {
+            *pinned_grad_a_=pinned_features_[0];*pinned_grad_b_=pinned_features_[1];
+            std::copy_n(pinned_features_,controller::scene_feature_count,record->scene_features.begin());
+        }
+        record->probe_gradient_a = *pinned_grad_a_;
+        record->probe_gradient_b = *pinned_grad_b_;
+    } else {
+        if (learned) {
+            record->status = "INVALID_ARGUMENT";
+            record->fail_stage = "controller";
+            return;
+        }
+        *pinned_grad_a_ = 1.0;
+        *pinned_grad_b_ = 1.0;
+        record->t_probe_s1 = 0.0;
+        record->t_probe_grad = 0.0;
+        record->t_probe = 0.0;
+        record->probe_gradient_a = 0.0;
+        record->probe_gradient_b = 0.0;
     }
+
     controller::SceneSignals scene{
         {probe_scale_a, *pinned_grad_a_},
         {probe_scale_b, *pinned_grad_b_},record->scene_features,learned
     };
-    record->probe_gradient_a = *pinned_grad_a_;
-    record->probe_gradient_b = *pinned_grad_b_;
 
     controller::Knobs current_knobs{};
     Status begin_stat = controller.begin_pair(scene, &current_knobs);
@@ -609,7 +635,7 @@ void PipelineRunner::execute_adaptive_run(
     bool accepted = false;
     std::uint64_t current_gen = 1;
     int completed_r = 0;
-    double prev_s = probe_s; // Gray buffer currently holds probe_s
+    double prev_s = probe_enabled_ ? probe_s : -1.0; // Gray buffer holds probe_s only when probe executed
     int prev_k = -1;
     int attempts = 0;
     double total_s1_ms = probe_s1_ms;

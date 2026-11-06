@@ -183,4 +183,14 @@ inline ControllerPolicy legacy_controller_policy() {
             {{.08, 0}, {.04, 1}, {0., 2}}};
 }
 
+inline ControllerPolicy legacy_blind_s05_policy() {
+    constexpr auto feather = s6::BlendMode::Feather;
+    return {"legacy-v1-blind-s05", .25,
+            {{.25, 500, 128, feather}, {.5, 1000, 128, feather}, {.5, 1000, 256, feather},
+             {.75, 2000, 512, feather}, {1., 2000, 1024, feather}},
+            {{15, .15, .05, 4.}, {20, .15, .05, 3.5}, {25, .2, .05, 3.},
+             {30, .2, .05, 2.5}, {35, .2, .05, 2.}},
+            {{0., 1}}};
+}
+
 }  // namespace stitch::harness

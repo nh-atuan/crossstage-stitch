@@ -36,13 +36,16 @@ is not a perceptual-quality constraint.
 
 \subsection{Runtime Baselines and Failure Accounting}
 % Role: experimental design; distinguish planned platform from completed runs.
-The intended runtime platform is an NVIDIA Tesla T4 with CUDA targeting
-\texttt{sm\_75}. Each campaign records actual GPU state, toolkit, dependencies,
-code revision, policy hash, input manifest, seeds, and compiler flags. UDIS-D
-is the primary planned real-image benchmark. Development and validation must
-be separated by scene or source where possible. Final data must not be used
-for threshold or configuration selection. Synthetic fixtures test correctness
-and do not replace real-image workload evaluation.
+All GPU benchmarks in this study execute on a Google Colab NVIDIA Tesla T4
+(\texttt{sm\_75}, $15{,}360$\,MiB GDDR6, driver \texttt{580.82.07}, CUDA
+\texttt{13.0} / \texttt{nvcc 13.0.88}, host compiler GNU \texttt{13.3.0} with
+\texttt{-O3 -DNDEBUG -arch=sm\_75}). Each campaign records GPU clocks
+($1590$\,MHz graphics, $5000$\,MHz memory), power draw, code revision, policy
+hash, input manifest, and the fixed RANSAC seed (\texttt{20261101}). UDIS-D
+($512\times 512$ RGB pairs) is the primary real-image benchmark. Development and
+test splits are kept disjoint, and test pairs are never used for threshold or
+configuration selection. Synthetic fixtures test stage correctness and do not
+replace real-image workload evaluation.
 
 Fixed-Best is selected on development data. For each pair, the offline oracle
 uses the measured finite grid to select
@@ -55,9 +58,12 @@ already on the device to the completed device panorama. Feature extraction,
 controller decisions, required internal transfers, synchronization, retry, and
 cache bookkeeping belong inside that interval. Decode and initial H2D/final D2H
 transfers are separate. Report failures and unverified cases alongside latency.
-Exclude warmups before taking repeat medians, then compute median and p95 over
-pairs. Retry/fallback analysis requires actual controller traces, which are not
-yet available for this manuscript.
+Each pair and mode runs 2 untimed warmups followed by 10 measured repeats; we
+reduce each pair to its repeat median and report the mean, median, and 95th
+percentile (p95) across pairs.
+
+\input{sections/s1-probe-ablation}
+\input{sections/feature-budget}
 
 \subsection{Available Evidence and Pending Measurements}
 % Role: evidence status; no unaudited pilot number becomes a paper result.

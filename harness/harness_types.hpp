@@ -64,6 +64,9 @@ struct RunRecord {
     double t_controller{0.0};
     double t_d2h{0.0};
     double t_e2e{0.0};
+    double t_probe_s1{0.0};
+    double t_probe_grad{0.0};
+    double t_probe{0.0};
     double probe_gradient_a{0.0};
     double probe_gradient_b{0.0};
     controller::SceneFeatures scene_features{};

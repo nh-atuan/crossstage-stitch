@@ -38,6 +38,8 @@ public:
     // Upload outside the measurement window; return only when device RGB is ready.
     void upload_pair(const HostImageRGB& img_a, const HostImageRGB& img_b);
     void set_reuse_enabled(bool enabled) { reuse_enabled_ = enabled; }
+    void set_probe_enabled(bool enabled) { probe_enabled_ = enabled; }
+    bool probe_enabled() const { return probe_enabled_; }
     void set_collect_features(bool enabled) { collect_features_ = enabled; }
     const AttemptTrace& attempt_trace() const { return trace_; }
 
@@ -67,6 +69,7 @@ public:
 
 private:
     bool reuse_enabled_{true};
+    bool probe_enabled_{true};
     bool collect_features_{};
     controller::SceneFeatures collected_scene_{};
     double* d_features_{};
@@ -77,6 +80,7 @@ private:
 
     // CUDA timing events
     cudaEvent_t ev_start_{nullptr};
+    cudaEvent_t ev_probe_prep_{nullptr};
     cudaEvent_t ev_s1_{nullptr};
     cudaEvent_t ev_s2_{nullptr};
     cudaEvent_t ev_s3_{nullptr};

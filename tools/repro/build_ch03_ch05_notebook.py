@@ -1,0 +1,637 @@
+"""Generate notebooks/phase3_ch03_ch05_experiments.ipynb for Google Colab Tesla T4.
+Covers CH-05 (Synthetic multi-resolution scaling: 720p, 1080p, 4K across s6_only and end_to_end)
+and CH-03 / A4 (Same-homography blending trade-off in S6: Feather vs Multiband 3 vs Multiband 5).
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+
+def build_ch03_ch05_notebook(output_path: Path) -> Path:
+    cells = []
+
+    # Title & Overview
+    cells.append({
+        "cell_type": "markdown",
+        "id": "intro",
+        "metadata": {"id": "intro"},
+        "source": [
+            "# Phase 3: CH-05 (Multi-Resolution Scaling) & CH-03 / A4 (Same-H Blending)\n",
+            "\n",
+            "**Workshop Paper PARMA-DITAM 2027 · crossstage-stitch · Nhánh: `chuong/p3-execution-plan`**\n",
+            "\n",
+            "Notebook này thực hiện hai chiến dịch thực nghiệm trọng tâm của Phase 3 trên GPU **NVIDIA Tesla T4** (`sm_75`):\n",
+            "1. **CH-05 — Synthetic Multi-Resolution Stress Scaling:** Đánh giá khả năng mở rộng ở 3 cấp độ phân giải chuẩn (**720p**, **1080p**, **4K**), đo đạc workspace bộ nhớ và độ trễ latency trên hai track độc lập: `s6_only` (khóa $H_{\\text{gt}}$) và `end_to_end` (toàn bộ pipeline $S1\\to S6$). Track này sử dụng dữ liệu synthetic và hoàn toàn độc lập với UDIS-D.\n",
+            "2. **CH-03 / Ablation A4 — Same-Homography Blending Trade-off:** Đánh giá sự đánh đổi giữa chất lượng và tài nguyên tính toán của 3 chế độ blending trong Stage 6 (**Feather**, **Multiband 3 mức**, **Multiband 5 mức**) khi cố định hoàn toàn cặp ảnh $RGB$, ma trận Homography $H$ gốc $B\\to A$ và canvas. Tự động xuất bảng LaTeX và trích xuất ảnh đường nối (seam crops) định tính.\n",
+            "\n",
+            "### Quy trình thực hiện (6 Phần tuần tự):\n",
+            "- **Phần 1 — Khởi tạo & GPU T4:** Kết nối Google Drive, giải nén mã nguồn mới nhất và kiểm tra GPU Tesla T4.\n",
+            "- **Phần 2 — Biên dịch Native Runners:** Build CMake Release cho `stress_multires_cuda` và `test_s6_cuda` trên `sm_75`.\n",
+            "- **Phần 3 — CH-05 Synthetic Stress-Test:** Sinh dữ liệu 720p/1080p/4K, chạy 2 campaign (`s6_only` & `end_to_end`), xuất báo cáo scaling và bảng LaTeX.\n",
+            "- **Phần 4 — CH-03/A4 Chuẩn bị Cohort & Khóa Registration:** Nạp cohort UDIS-D, khóa ma trận $H$ gốc và pre-registration trước khi render.\n",
+            "- **Phần 5 — CH-03/A4 Chạy 3 Blender & Xuất Kết Quả:** Chạy campaign native trên T4 với `--save-images`, xuất bảng telemetry LaTeX và trích xuất seam crops.\n",
+            "- **Phần 6 — Sao lưu Toàn bộ Bằng chứng:** Đóng gói toàn bộ artifacts thực nghiệm vào `MyDrive/p3_evidence/` để nghiệm thu."
+        ]
+    })
+
+    # Part 1: Setup Workspace & Verify GPU
+    cells.append({
+        "cell_type": "markdown",
+        "id": "part1-guide",
+        "metadata": {"id": "part1-guide"},
+        "source": [
+            "## Phần 1. Khởi Tạo Workspace & Xác Nhận Phần Cứng GPU Tesla T4\n",
+            "\n",
+            "Kết nối Google Drive, nạp mã nguồn từ `crossstage_stitch_source.zip` và kiểm tra GPU Tesla T4."
+        ]
+    })
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "id": "setup-gpu",
+        "metadata": {"id": "setup-gpu"},
+        "outputs": [],
+        "source": [
+            "# @title 1. Kết nối Drive, Nạp Mã Nguồn và Xác nhận GPU Tesla T4 { display-mode: \"form\" }\n",
+            "from google.colab import drive\n",
+            "import os, shutil, zipfile, subprocess, sys, json, time\n",
+            "from pathlib import Path\n",
+            "\n",
+            "# 1. Kết nối Google Drive\n",
+            "drive.mount('/content/drive')\n",
+            "REPO_DIR = Path('/content/crossstage-stitch')\n",
+            "SOURCE_ZIP = Path('/content/drive/MyDrive/crossstage_stitch_source.zip')\n",
+            "\n",
+            "# 2. Giải nén mã nguồn vào workspace\n",
+            "if SOURCE_ZIP.exists():\n",
+            "    print(f\"Đang giải nén mã nguồn {SOURCE_ZIP.name} vào {REPO_DIR}...\")\n",
+            "    with zipfile.ZipFile(SOURCE_ZIP, 'r') as zf:\n",
+            "        zf.extractall(REPO_DIR)\n",
+            "    print(f\"✅ Đã cập nhật mã nguồn thành công ({len(list(REPO_DIR.rglob('*')))} tệp).\")\n",
+            "else:\n",
+            "    print(f\"⚠️ Không tìm thấy {SOURCE_ZIP}, sử dụng mã nguồn hiện tại trong {REPO_DIR}.\")\n",
+            "\n",
+            "os.chdir(REPO_DIR)\n",
+            "\n",
+            "# 3. Khởi tạo Git repo cục bộ phục vụ provenance tracking nếu cần\n",
+            "if not (REPO_DIR / \".git\").exists():\n",
+            "    subprocess.run([\"git\", \"init\", \"-b\", \"chuong/p3-execution-plan\"], cwd=REPO_DIR, check=True)\n",
+            "    subprocess.run([\"git\", \"config\", \"user.name\", \"chuong\"], cwd=REPO_DIR, check=True)\n",
+            "    subprocess.run([\"git\", \"config\", \"user.email\", \"chuong@crossstage.local\"], cwd=REPO_DIR, check=True)\n",
+            "    subprocess.run([\"git\", \"add\", \".\"], cwd=REPO_DIR, check=True)\n",
+            "    subprocess.run([\"git\", \"commit\", \"-m\", \"chore: colab environment snapshot\"], cwd=REPO_DIR, check=True)\n",
+            "\n",
+            "# 4. Xác nhận phần cứng GPU bắt buộc là Tesla T4 (sm_75)\n",
+            "print(\"\\n=== KIỂM TRA PHẦN CỨNG GPU TESLA T4 ===\")\n",
+            "gpu_check = subprocess.run([\"nvidia-smi\", \"--query-gpu=name,driver_version,memory.total\", \"--format=csv,noheader\"], capture_output=True, text=True, check=True)\n",
+            "gpu_info = gpu_check.stdout.strip()\n",
+            "print(f\"GPU phát hiện: {gpu_info}\")\n",
+            "assert any(keyword in gpu_info for keyword in [\"Tesla T4\", \"T4\"]), \\\n",
+            "    f\"LỖI MÔI TRƯỜNG: GPU hiện tại là '{gpu_info}', không phải Tesla T4! Môi trường chuẩn của workshop yêu cầu Tesla T4.\"\n",
+            "print(\"✅ Phần cứng GPU Tesla T4 hợp lệ.\")\n",
+            "\n",
+            "# 5. Chụp receipt môi trường\n",
+            "ENV_RECEIPT = Path(\"build/ch03_ch05_receipt.json\")\n",
+            "ENV_RECEIPT.parent.mkdir(parents=True, exist_ok=True)\n",
+            "subprocess.run([sys.executable, \"-m\", \"tools.env.generate_receipt\", \"--output\", str(ENV_RECEIPT), \"--verbose\"], check=True)\n",
+            "print(f\"✅ Đã tạo Environment Receipt: {ENV_RECEIPT}\")\n"
+        ]
+    })
+
+    # Part 2: Build Native Runners
+    cells.append({
+        "cell_type": "markdown",
+        "id": "part2-guide",
+        "metadata": {"id": "part2-guide"},
+        "source": [
+            "## Phần 2. Biên Dịch Native Runners Trên Kiến Trúc `sm_75` (Tesla T4)\n",
+            "\n",
+            "Biên dịch bản Release của hai runner native:\n",
+            "- `stress_multires_cuda`: Runner phục vụ đo stress-test đa độ phân giải CH-05 (hỗ trợ capacity explicit và full/ROI verification).\n",
+            "- `test_s6_cuda`: Runner phục vụ đo độ trễ steady-state và workspace của S6 trong CH-03 / A4."
+        ]
+    })
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "id": "build-native",
+        "metadata": {"id": "build-native"},
+        "outputs": [],
+        "source": [
+            "# @title 2. Cấu hình CMake và Biên dịch Native Runners { display-mode: \"form\" }\n",
+            "import subprocess\n",
+            "from pathlib import Path\n",
+            "\n",
+            "BUILD_DIR = Path(\"build\")\n",
+            "BUILD_DIR.mkdir(parents=True, exist_ok=True)\n",
+            "\n",
+            "print(\"=== BẮT ĐẦU CẤU HÌNH VÀ BIÊN DỊCH CMAKE RELEASE (sm_75) ===\")\n",
+            "subprocess.run([\n",
+            "    \"cmake\", \"-S\", \".\", \"-B\", str(BUILD_DIR),\n",
+            "    \"-DCMAKE_BUILD_TYPE=Release\",\n",
+            "    \"-DCMAKE_CUDA_ARCHITECTURES=75\",\n",
+            "    \"-DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc\"\n",
+            "], check=True)\n",
+            "\n",
+            "print(\"\\n--- Biên dịch mục tiêu stress_multires_cuda và test_s6_cuda ---\")\n",
+            "subprocess.run([\n",
+            "    \"cmake\", \"--build\", str(BUILD_DIR),\n",
+            "    \"--target\", \"stress_multires_cuda\", \"test_s6_cuda\", \"-j2\"\n",
+            "], check=True)\n",
+            "\n",
+            "# Tìm vị trí binary\n",
+            "candidates_mr = list(BUILD_DIR.glob(\"**/stress_multires_cuda\"))\n",
+            "RUNNER_MULTIRES = candidates_mr[0] if candidates_mr else BUILD_DIR / \"harness\" / \"stress_multires_cuda\"\n",
+            "\n",
+            "candidates_s6 = list(BUILD_DIR.glob(\"**/test_s6_cuda\"))\n",
+            "RUNNER_S6 = candidates_s6[0] if candidates_s6 else BUILD_DIR / \"src\" / \"s6\" / \"test_s6_cuda\"\n",
+            "\n",
+            "assert RUNNER_MULTIRES.exists(), f\"LỖI: Không tìm thấy binary stress_multires_cuda tại {RUNNER_MULTIRES}\"\n",
+            "assert RUNNER_S6.exists(), f\"LỖI: Không tìm thấy binary test_s6_cuda tại {RUNNER_S6}\"\n",
+            "\n",
+            "print(f\"\\n✅ stress_multires_cuda sẵn sàng: {RUNNER_MULTIRES}\")\n",
+            "print(f\"✅ test_s6_cuda sẵn sàng:          {RUNNER_S6}\")\n",
+            "\n",
+            "# Chạy nhanh CTest kiểm tra correctness các module trọng yếu\n",
+            "print(\"\\n--- Kiểm tra CTest nhanh (test_s6_cuda | test_admission_control) ---\")\n",
+            "subprocess.run([\"ctest\", \"--test-dir\", str(BUILD_DIR), \"-R\", \"test_s6_cuda|test_admission_control\", \"--output-on-failure\"], check=True)\n",
+            "print(\"✅ Toàn bộ CTest kiểm tra an toàn bộ nhớ và kernel S6 đã PASS 100%.\")\n"
+        ]
+    })
+
+    # Part 3: CH-05 Synthetic Stress-Test
+    cells.append({
+        "cell_type": "markdown",
+        "id": "part3-guide",
+        "metadata": {"id": "part3-guide"},
+        "source": [
+            "## Phần 3. CH-05: Synthetic Multi-Resolution Stress Scaling (720p, 1080p, 4K)\n",
+            "\n",
+            "Quy trình thực nghiệm CH-05:\n",
+            "1. **Sinh dữ liệu synthetic:** 18 cặp ảnh chia đều cho 3 độ phân giải (1280×720, 1920×1080, 3840×2160), 3 mức overlap (30%, 50%, 70%) và 2 phép biến đổi phối cảnh (Affine, Projective).\n",
+            "2. **Campaign 1 (`s6_only`):** Đo lường riêng Stage 6 với ma trận $H_{\\text{gt}}$ đã khóa, kiểm tra workspace memory allocation và runtime scaling trên 3 blender.\n",
+            "3. **Campaign 2 (`end_to_end`):** Đo toàn bộ pipeline $S1\\to S6$ với cấu hình cố định, tính toán sai số góc chiếu (corner reprojection error) so với ground truth.\n",
+            "4. **Báo cáo:** Tự động tổng hợp bảng LaTeX `scaling_table.tex` và biểu đồ vector `workspace_scaling.svg`."
+        ]
+    })
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "id": "ch05-generate-data",
+        "metadata": {"id": "ch05-generate-data"},
+        "outputs": [],
+        "source": [
+            "# @title 3.1 Sinh Bộ Dữ Liệu Synthetic Multi-Resolution Chuẩn { display-mode: \"form\" }\n",
+            "import subprocess, sys, json\n",
+            "from pathlib import Path\n",
+            "\n",
+            "CH05_DATA = Path(\"data/ch05\")\n",
+            "if CH05_DATA.exists():\n",
+            "    shutil.rmtree(CH05_DATA)\n",
+            "\n",
+            "print(\"=== BẮT ĐẦU SINH DỮ LIỆU SYNTHETIC MULTI-RES (720p, 1080p, 4K) ===\")\n",
+            "subprocess.run([\n",
+            "    sys.executable, \"-m\", \"tools.data_prep.generate_synthetic_multires\",\n",
+            "    \"--output\", str(CH05_DATA),\n",
+            "    \"--seed\", \"20261030\",\n",
+            "    \"--scenes\", \"1\",\n",
+            "    \"--overlaps\", \"0.3\", \"0.5\", \"0.7\",\n",
+            "    \"--warps\", \"affine\", \"projective\",\n",
+            "    \"--host-budget-mib\", \"256\",\n",
+            "    \"--chunk-rows\", \"64\"\n",
+            "], check=True)\n",
+            "\n",
+            "print(\"\\n--- Xác minh tính bất biến dữ liệu (--verify-only) ---\")\n",
+            "subprocess.run([\n",
+            "    sys.executable, \"-m\", \"tools.data_prep.generate_synthetic_multires\",\n",
+            "    \"--output\", str(CH05_DATA),\n",
+            "    \"--verify-only\"\n",
+            "], check=True)\n",
+            "\n",
+            "manifest_data = json.loads((CH05_DATA / \"data_manifest.json\").read_text(encoding=\"utf-8\"))\n",
+            "pairs_count = len(manifest_data.get(\"pairs\", {}))\n",
+            "print(f\"✅ Đã sinh và xác minh thành công {pairs_count} cặp ảnh synthetic chuẩn tại: {CH05_DATA}\")\n"
+        ]
+    })
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "id": "ch05-run-campaigns",
+        "metadata": {"id": "ch05-run-campaigns"},
+        "outputs": [],
+        "source": [
+            "# @title 3.2 Chạy Hai Campaign CH-05 trên Tesla T4 (s6_only & end_to_end) { display-mode: \"form\" }\n",
+            "import subprocess, sys, json\n",
+            "from pathlib import Path\n",
+            "\n",
+            "CH05_MANIFEST = Path(\"data/ch05/data_manifest.json\")\n",
+            "OUT_S6 = Path(\"results/ch05-s6-t4\")\n",
+            "OUT_E2E = Path(\"results/ch05-e2e-t4\")\n",
+            "\n",
+            "if OUT_S6.exists(): shutil.rmtree(OUT_S6)\n",
+            "if OUT_E2E.exists(): shutil.rmtree(OUT_E2E)\n",
+            "\n",
+            "# 1. Campaign s6_only\n",
+            "print(\"============================================================\")\n",
+            "print(\"=== 1. CHẠY CAMPAIGN S6_ONLY (648 LƯỢT ĐO TRÊN TESLA T4) ===\")\n",
+            "print(\"============================================================\")\n",
+            "subprocess.run([\n",
+            "    sys.executable, \"-m\", \"tools.bench.stress_multires\",\n",
+            "    \"--manifest\", str(CH05_MANIFEST),\n",
+            "    \"--track\", \"s6_only\",\n",
+            "    \"--runner\", str(RUNNER_MULTIRES),\n",
+            "    \"--output\", str(OUT_S6),\n",
+            "    \"--expected-sm\", \"75\",\n",
+            "    \"--warmups\", \"2\",\n",
+            "    \"--repeats\", \"10\",\n",
+            "    \"--seed\", \"20261030\",\n",
+            "    \"--host-budget-mib\", \"512\",\n",
+            "    \"--device-reserve-mib\", \"256\",\n",
+            "    \"--timeout\", \"300\"\n",
+            "], check=True)\n",
+            "\n",
+            "print(\"\\n--- Xác minh bất biến Campaign s6_only (--verify-only) ---\")\n",
+            "subprocess.run([sys.executable, \"-m\", \"tools.bench.stress_multires\", \"--output\", str(OUT_S6), \"--verify-only\"], check=True)\n",
+            "print(f\"✅ Campaign s6_only hoàn tất và được xác minh tại: {OUT_S6}\")\n",
+            "\n",
+            "# 2. Campaign end_to_end\n",
+            "print(\"\\n============================================================\")\n",
+            "print(\"=== 2. CHẠY CAMPAIGN END_TO_END (648 LƯỢT ĐO TRÊN TESLA T4) ===\")\n",
+            "print(\"============================================================\")\n",
+            "subprocess.run([\n",
+            "    sys.executable, \"-m\", \"tools.bench.stress_multires\",\n",
+            "    \"--manifest\", str(CH05_MANIFEST),\n",
+            "    \"--track\", \"end_to_end\",\n",
+            "    \"--runner\", str(RUNNER_MULTIRES),\n",
+            "    \"--output\", str(OUT_E2E),\n",
+            "    \"--expected-sm\", \"75\",\n",
+            "    \"--scale\", \"0.5\",\n",
+            "    \"--keypoints\", \"1000\",\n",
+            "    \"--ransac\", \"256\",\n",
+            "    \"--warmups\", \"2\",\n",
+            "    \"--repeats\", \"10\",\n",
+            "    \"--seed\", \"20261030\",\n",
+            "    \"--host-budget-mib\", \"512\",\n",
+            "    \"--device-reserve-mib\", \"256\",\n",
+            "    \"--timeout\", \"300\"\n",
+            "], check=True)\n",
+            "\n",
+            "print(\"\\n--- Xác minh bất biến Campaign end_to_end (--verify-only) ---\")\n",
+            "subprocess.run([sys.executable, \"-m\", \"tools.bench.stress_multires\", \"--output\", str(OUT_E2E), \"--verify-only\"], check=True)\n",
+            "print(f\"✅ Campaign end_to_end hoàn tất và được xác minh tại: {OUT_E2E}\")\n"
+        ]
+    })
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "id": "ch05-generate-report",
+        "metadata": {"id": "ch05-generate-report"},
+        "outputs": [],
+        "source": [
+            "# @title 3.3 Xuất Báo Cáo Nghiệm Thu & Bảng LaTeX Scaling CH-05 { display-mode: \"form\" }\n",
+            "import subprocess, sys, json\n",
+            "from pathlib import Path\n",
+            "\n",
+            "REPORT_S6 = Path(\"results/ch05-s6-t4-report\")\n",
+            "REPORT_E2E = Path(\"results/ch05-e2e-t4-report\")\n",
+            "\n",
+            "if REPORT_S6.exists(): shutil.rmtree(REPORT_S6)\n",
+            "if REPORT_E2E.exists(): shutil.rmtree(REPORT_E2E)\n",
+            "\n",
+            "print(\"=== XUẤT BÁO CÁO NGHIỆM THU CH-05 CHO CẢ HAI TRACK ===\")\n",
+            "subprocess.run([\n",
+            "    sys.executable, \"-m\", \"tools.analysis.generate_multires_report\",\n",
+            "    \"--campaign\", \"results/ch05-s6-t4\", \"--output\", str(REPORT_S6)\n",
+            "], check=True)\n",
+            "subprocess.run([sys.executable, \"-m\", \"tools.analysis.generate_multires_report\", \"--campaign\", str(REPORT_S6), \"--verify-only\"], check=True)\n",
+            "\n",
+            "subprocess.run([\n",
+            "    sys.executable, \"-m\", \"tools.analysis.generate_multires_report\",\n",
+            "    \"--campaign\", \"results/ch05-e2e-t4\", \"--output\", str(REPORT_E2E)\n",
+            "], check=True)\n",
+            "subprocess.run([sys.executable, \"-m\", \"tools.analysis.generate_multires_report\", \"--campaign\", str(REPORT_E2E), \"--verify-only\"], check=True)\n",
+            "\n",
+            "print(\"\\n============================================================\")\n",
+            "print(\"=== BẢNG KẾT QUẢ LATENCY & WORKSPACE SCALING (s6_only) ===\")\n",
+            "print(\"============================================================\")\n",
+            "tex_file = REPORT_S6 / \"scaling_table.tex\"\n",
+            "if tex_file.exists():\n",
+            "    print(tex_file.read_text(encoding=\"utf-8\"))\n",
+            "\n",
+            "print(\"\\n🎉 CH-05 ĐÃ HOÀN TẤT ĐẦY ĐỦ VÀ SẴN SÀNG NGHIỆM THU!\")\n"
+        ]
+    })
+
+    # Part 4: CH-03 / A4 Same-Homography Blending
+    cells.append({
+        "cell_type": "markdown",
+        "id": "part4-guide",
+        "metadata": {"id": "part4-guide"},
+        "source": [
+            "## Phần 4. CH-03 / Ablation A4: Same-Homography Blending Trade-off\n",
+            "\n",
+            "Quy trình thực nghiệm A4:\n",
+            "1. **Chuẩn bị cohort UDIS-D:** Chọn lọc 10 cặp ảnh UDIS-D có độ phức tạp cao, độ phủ overlap lớn ($>85\\%$) và đã được xác thực ma trận Homography $H$ chuẩn từ Reference của CH-01.\n",
+            "2. **Khóa Pre-Registration:** Cố định tuyệt đối $RGB$, 9 hệ số ma trận $H$ gốc $B\\to A$, canvas bounds và footprint masks trước khi render.\n",
+            "3. **Chạy Native trên Tesla T4:** Thực thi 3 chế độ (**Feather**, **Multiband 3**, **Multiband 5**) với 10 repeats + 2 warmups mỗi mode, kích hoạt cờ `--save-images` để lưu panorama phục vụ kiểm tra đường nối.\n",
+            "4. **Xuất bảng LaTeX & Seam Crops:** Tự động tổng hợp bảng so sánh độ trễ / workspace và trích xuất ảnh crop lossless độ phân giải gốc tại vị trí đường biên chồng lấp."
+        ]
+    })
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "id": "a4-prep-cohort",
+        "metadata": {"id": "a4-prep-cohort"},
+        "outputs": [],
+        "source": [
+            "# @title 4.1 Khôi phục Data (nếu cần), Chuẩn bị Cohort và Khóa Manifest A4 { display-mode: \"form\" }\n",
+            "import json, shutil, zipfile\n",
+            "from pathlib import Path\n",
+            "\n",
+            "# 1. Kiểm tra ảnh training PPM trong data/p3/training/images/\n",
+            "P3_DIR = Path(\"data/p3\")\n",
+            "P3_BUNDLE = Path(\"/content/drive/MyDrive/p3_protocol_bundle.zip\")\n",
+            "IMG_SAMPLE = P3_DIR / \"training\" / \"images\" / \"000792_a.ppm\"\n",
+            "\n",
+            "if not IMG_SAMPLE.exists():\n",
+            "    if P3_BUNDLE.exists():\n",
+            "        print(f\"Đang khôi phục data/p3/ từ {P3_BUNDLE}...\")\n",
+            "        with zipfile.ZipFile(P3_BUNDLE, 'r') as zf:\n",
+            "            zf.extractall(P3_DIR)\n",
+            "        print(\"✅ Đã khôi phục data/p3/ thành công.\")\n",
+            "    else:\n",
+            "        raise FileNotFoundError(f\"Không tìm thấy ảnh tại {IMG_SAMPLE} và không có bundle {P3_BUNDLE} trên Drive!\")\n",
+            "\n",
+            "# 2. Cohort 10 cặp ảnh UDIS-D đại diện đã thẩm định homography gốc B->A (độ phủ overlap 85% - 99%)\n",
+            "VERIFIED_A4_COHORT = {\n",
+            "    \"000792\": {\"overlap\": 259739, \"H\": [[0.1619340088, 0.0006140107, -0.1104412126], [0.0022090297, 0.1622506532, -1.0], [-3.407e-07, 2.1265e-06, 0.1614410606]]},\n",
+            "    \"002674\": {\"overlap\": 243510, \"H\": [[0.0457401619, -0.000945388, -1.0], [0.000723042, 0.045800833, -0.0245273859], [1.7383e-06, 6.541e-07, 0.0451576908]]},\n",
+            "    \"003309\": {\"overlap\": 242282, \"H\": [[0.0312597384, 2.8259e-06, -1.0], [0.0001571107, 0.0308115205, 0.1577641564], [3.755e-07, -5.149e-07, 0.0311895999]]},\n",
+            "    \"010157\": {\"overlap\": 241030, \"H\": [[0.0248157705, 0.0014641863, -0.2976681747], [-0.0001016615, 0.0261282344, -1.0], [-1.6497e-06, 4.1388e-06, 0.0242181916]]},\n",
+            "    \"009477\": {\"overlap\": 240034, \"H\": [[0.0240716575, -0.0001559325, 1.0], [-0.0001315087, 0.0229927445, -0.1102576163], [-5.164e-07, 4.978e-07, 0.0223699359]]},\n",
+            "    \"009423\": {\"overlap\": 239321, \"H\": [[0.085660326, 0.0160033722, -1.0], [-0.0005946832, 0.0868240603, 0.6317751508], [7.08e-08, -1.65582e-05, 0.0891522505]]},\n",
+            "    \"009598\": {\"overlap\": 238154, \"H\": [[0.0189714439, -0.0014406256, 1.0], [0.0005263028, 0.0206289707, -0.1577696579], [-4.5647e-06, -3.735e-07, 0.0225711038]]},\n",
+            "    \"009583\": {\"overlap\": 229036, \"H\": [[0.0229553125, 0.000384352, -1.0], [0.0005427501, 0.0228599895, -0.3288075248], [2.5052e-06, 3.788e-07, 0.0222217098]]},\n",
+            "    \"009015\": {\"overlap\": 227797, \"H\": [[0.0154203899, 0.0002504391, 1.0], [-0.0013561203, 0.0167476303, 0.3229721246], [-4.566e-06, -6.94e-08, 0.0178481028]]},\n",
+            "    \"010285\": {\"overlap\": 225702, \"H\": [[0.0202297754, -0.0027266689, 0.5894646139], [-0.0012989617, 0.0202692488, 1.0], [-3.1339e-06, 7.73e-07, 0.022412242]]}\n",
+            "}\n",
+            "\n",
+            "A4_DATA_DIR = Path(\"data/a4\")\n",
+            "A4_DATA_DIR.mkdir(parents=True, exist_ok=True)\n",
+            "\n",
+            "manifest_a4 = {\n",
+            "    \"schema_version\": \"s6-same-h-v1\",\n",
+            "    \"evidence_type\": \"real_images\",\n",
+            "    \"split\": \"development\",\n",
+            "    \"pairs\": {}\n",
+            "}\n",
+            "\n",
+            "for pid, data in VERIFIED_A4_COHORT.items():\n",
+            "    img_a = f\"../p3/training/images/{pid}_a.ppm\"\n",
+            "    img_b = f\"../p3/training/images/{pid}_b.ppm\"\n",
+            "    assert (A4_DATA_DIR / img_a).resolve().exists(), f\"Thiếu ảnh {img_a}\"\n",
+            "    assert (A4_DATA_DIR / img_b).resolve().exists(), f\"Thiếu ảnh {img_b}\"\n",
+            "    manifest_a4[\"pairs\"][f\"pair_{pid}\"] = {\n",
+            "        \"a\": img_a,\n",
+            "        \"b\": img_b,\n",
+            "        \"H\": data[\"H\"]\n",
+            "    }\n",
+            "\n",
+            "manifest_path = A4_DATA_DIR / \"manifest.json\"\n",
+            "manifest_path.write_text(json.dumps(manifest_a4, indent=2), encoding=\"utf-8\")\n",
+            "print(f\"✅ Đã xuất manifest s6-same-h-v1 thành công ({len(manifest_a4['pairs'])} cặp) tại: {manifest_path}\")\n"
+        ]
+    })
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "id": "a4-lock-registration",
+        "metadata": {"id": "a4-lock-registration"},
+        "outputs": [],
+        "source": [
+            "# @title 4.2 Khóa Pre-Registration Trước Khi Render Native { display-mode: \"form\" }\n",
+            "import subprocess, sys\n",
+            "from pathlib import Path\n",
+            "\n",
+            "OUT_LOCK = Path(\"results/a4-lock-t4\")\n",
+            "if OUT_LOCK.exists(): shutil.rmtree(OUT_LOCK)\n",
+            "\n",
+            "print(\"=== BẮT ĐẦU KHÓA REGISTRATION CHO ABLATION A4 ===\")\n",
+            "subprocess.run([\n",
+            "    sys.executable, \"-m\", \"tools.bench.same_h\",\n",
+            "    \"--manifest\", \"data/a4/manifest.json\",\n",
+            "    \"--output\", str(OUT_LOCK),\n",
+            "    \"--prepare-only\",\n",
+            "    \"--warmups\", \"2\",\n",
+            "    \"--repeats\", \"10\",\n",
+            "    \"--seed\", \"20261030\"\n",
+            "], check=True)\n",
+            "\n",
+            "print(\"\\n--- Xác minh tính bất biến của Registration (--verify-only) ---\")\n",
+            "subprocess.run([\n",
+            "    sys.executable, \"-m\", \"tools.bench.same_h\",\n",
+            "    \"--output\", str(OUT_LOCK),\n",
+            "    \"--verify-only\"\n",
+            "], check=True)\n",
+            "\n",
+            "print(f\"✅ Registration đã khóa thành công tại: {OUT_LOCK / 'registration.json'}\")\n"
+        ]
+    })
+
+    # Part 5: Execute A4 Campaign & Export Visuals
+    cells.append({
+        "cell_type": "markdown",
+        "id": "part5-guide",
+        "metadata": {"id": "part5-guide"},
+        "source": [
+            "## Phần 5. Chạy Campaign A4 Trên Tesla T4 & Xuất Bảng / Seam Crops\n",
+            "\n",
+            "Thực thi native runner `test_s6_cuda` trên GPU Tesla T4 cho 10 cặp ảnh qua 3 chế độ (Feather, Multiband 3, Multiband 5). Kích hoạt `--save-images` để trích xuất ảnh đường nối trực quan."
+        ]
+    })
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "id": "a4-execute-campaign",
+        "metadata": {"id": "a4-execute-campaign"},
+        "outputs": [],
+        "source": [
+            "# @title 5.1 Thực thi Campaign A4 trên Tesla T4 (--save-images) { display-mode: \"form\" }\n",
+            "import subprocess, sys\n",
+            "from pathlib import Path\n",
+            "\n",
+            "OUT_A4 = Path(\"results/a4-t4\")\n",
+            "if OUT_A4.exists(): shutil.rmtree(OUT_A4)\n",
+            "\n",
+            "print(\"============================================================\")\n",
+            "print(\"=== BẮT ĐẦU CHẠY CAMPAIGN A4 TRÊN TESLA T4 (360 LƯỢT ĐO) ===\")\n",
+            "print(\"============================================================\")\n",
+            "subprocess.run([\n",
+            "    sys.executable, \"-m\", \"tools.bench.same_h\",\n",
+            "    \"--manifest\", \"data/a4/manifest.json\",\n",
+            "    \"--registration\", \"results/a4-lock-t4/registration.json\",\n",
+            "    \"--output\", str(OUT_A4),\n",
+            "    \"--runner\", str(RUNNER_S6),\n",
+            "    \"--warmups\", \"2\",\n",
+            "    \"--repeats\", \"10\",\n",
+            "    \"--seed\", \"20261030\",\n",
+            "    \"--save-images\"\n",
+            "], check=True)\n",
+            "\n",
+            "print(\"\\n--- Xác minh bất biến Campaign A4 (--verify-only) ---\")\n",
+            "subprocess.run([\n",
+            "    sys.executable, \"-m\", \"tools.bench.same_h\",\n",
+            "    \"--output\", str(OUT_A4),\n",
+            "    \"--verify-only\"\n",
+            "], check=True)\n",
+            "\n",
+            "print(f\"✅ Toàn bộ 3 blender trên 10 cặp ảnh đã render hoàn tất tại: {OUT_A4}\")\n"
+        ]
+    })
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "id": "a4-export-table-and-crops",
+        "metadata": {"id": "a4-export-table-and-crops"},
+        "outputs": [],
+        "source": [
+            "# @title 5.2 Xuất Bảng Telemetry LaTeX và Trích xuất Seam Crops Định tính { display-mode: \"form\" }\n",
+            "import subprocess, sys\n",
+            "from pathlib import Path\n",
+            "\n",
+            "OUT_TABLES = Path(\"results/a4-tables\")\n",
+            "OUT_VISUALS = Path(\"results/a4-visuals\")\n",
+            "\n",
+            "if OUT_TABLES.exists(): shutil.rmtree(OUT_TABLES)\n",
+            "if OUT_VISUALS.exists(): shutil.rmtree(OUT_VISUALS)\n",
+            "\n",
+            "# 1. Sinh bảng tổng hợp telemetry\n",
+            "print(\"=== 1. TỔNG HỢP BẢNG LATENCY & WORKSPACE A4 ===\")\n",
+            "subprocess.run([\n",
+            "    sys.executable, \"-m\", \"tools.analysis.generate_a4_table\",\n",
+            "    \"--campaign\", \"results/a4-t4\",\n",
+            "    \"--output\", str(OUT_TABLES)\n",
+            "], check=True)\n",
+            "subprocess.run([sys.executable, \"-m\", \"tools.analysis.generate_a4_table\", \"--campaign\", str(OUT_TABLES), \"--verify-only\"], check=True)\n",
+            "\n",
+            "tex_a4 = OUT_TABLES / \"a4_table.tex\"\n",
+            "if tex_a4.exists():\n",
+            "    print(\"\\n--- BẢNG LATEX A4 (FEATHER VS MULTIBAND) ---\")\n",
+            "    print(tex_a4.read_text(encoding=\"utf-8\"))\n",
+            "\n",
+            "# 2. Trích xuất ảnh crop đường nối seam crops\n",
+            "print(\"\\n=== 2. TRÍCH XUẤT SEAM CROPS ĐỊNH TÍNH ===\")\n",
+            "subprocess.run([\n",
+            "    sys.executable, \"-m\", \"tools.analysis.extract_seam_crops\",\n",
+            "    \"--campaign\", \"results/a4-t4\",\n",
+            "    \"--output\", str(OUT_VISUALS)\n",
+            "], check=True)\n",
+            "subprocess.run([sys.executable, \"-m\", \"tools.analysis.extract_seam_crops\", \"--campaign\", str(OUT_VISUALS), \"--verify-only\"], check=True)\n",
+            "\n",
+            "png_crops = list(OUT_VISUALS.glob(\"*.png\"))\n",
+            "print(f\"\\n✅ Đã trích xuất thành công {len(png_crops)} tệp ảnh seam crops tại: {OUT_VISUALS}\")\n",
+            "for p in sorted(png_crops)[:6]:\n",
+            "    print(f\"  - {p.name}\")\n",
+            "if (OUT_VISUALS / \"captions.txt\").exists():\n",
+            "    print(\"\\n--- Captions khách quan ---\")\n",
+            "    print((OUT_VISUALS / \"captions.txt\").read_text(encoding=\"utf-8\"))\n",
+            "\n",
+            "print(\"\\n🎉 CH-03 / A4 ĐÃ HOÀN TẤT ĐẦY ĐỦ VÀ SẴN SÀNG NGHIỆM THU!\")\n"
+        ]
+    })
+
+    # Part 6: Export & Backup to Google Drive
+    cells.append({
+        "cell_type": "markdown",
+        "id": "part6-guide",
+        "metadata": {"id": "part6-guide"},
+        "source": [
+            "## Phần 6. Đóng Gói và Sao Lưu Toàn Bộ Bằng Chứng Lên Google Drive\n",
+            "\n",
+            "Lưu trữ toàn bộ artifacts vào thư mục độc lập `MyDrive/p3_evidence/<timestamp>_ch03_ch05/`."
+        ]
+    })
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "id": "backup-evidence",
+        "metadata": {"id": "backup-evidence"},
+        "outputs": [],
+        "source": [
+            "# @title 6. Đóng Gói & Sao Lưu Gói Bằng Chứng CH-03 & CH-05 lên Google Drive { display-mode: \"form\" }\n",
+            "import shutil, datetime\n",
+            "from pathlib import Path\n",
+            "\n",
+            "timestamp = datetime.datetime.now(datetime.timezone.utc).strftime(\"%Y%m%d_%H%M%SZ\")\n",
+            "DRIVE_EVIDENCE_ROOT = Path(\"/content/drive/MyDrive/p3_evidence\")\n",
+            "DEST = DRIVE_EVIDENCE_ROOT / f\"run_{timestamp}_ch03_ch05\"\n",
+            "DEST.mkdir(parents=True, exist_ok=True)\n",
+            "\n",
+            "print(f\"Đang sao lưu kết quả thực nghiệm vào: {DEST}...\")\n",
+            "\n",
+            "# Copy các thư mục kết quả chính\n",
+            "items_to_copy = [\n",
+            "    (\"build/ch03_ch05_receipt.json\", DEST / \"environment_receipt.json\"),\n",
+            "    (\"results/ch05-s6-t4-report\", DEST / \"ch05-s6-report\"),\n",
+            "    (\"results/ch05-e2e-t4-report\", DEST / \"ch05-e2e-report\"),\n",
+            "    (\"results/ch05-s6-t4/multires_scaling_metrics.csv\", DEST / \"ch05_s6_metrics.csv\"),\n",
+            "    (\"results/ch05-e2e-t4/multires_scaling_metrics.csv\", DEST / \"ch05_e2e_metrics.csv\"),\n",
+            "    (\"results/a4-tables\", DEST / \"a4-tables\"),\n",
+            "    (\"results/a4-visuals\", DEST / \"a4-visuals\"),\n",
+            "    (\"results/a4-t4/a4_same_h_metrics.csv\", DEST / \"a4_same_h_metrics.csv\"),\n",
+            "    (\"results/a4-t4/report.json\", DEST / \"a4_report.json\"),\n",
+            "    (\"results/a4-t4/registration.json\", DEST / \"a4_registration.json\")\n",
+            "]\n",
+            "\n",
+            "for src_str, dst_path in items_to_copy:\n",
+            "    src = Path(src_str)\n",
+            "    if src.is_dir():\n",
+            "        if dst_path.exists(): shutil.rmtree(dst_path)\n",
+            "        shutil.copytree(src, dst_path)\n",
+            "        print(f\"  -> Đã lưu thư mục: {dst_path.name}/\")\n",
+            "    elif src.is_file():\n",
+            "        shutil.copy2(src, dst_path)\n",
+            "        print(f\"  -> Đã lưu tệp:     {dst_path.name}\")\n",
+            "\n",
+            "# Nén thành file bundle ZIP tổng hợp\n",
+            "zip_out = DRIVE_EVIDENCE_ROOT / f\"p3_ch03_ch05_bundle_{timestamp}\"\n",
+            "shutil.make_archive(str(zip_out), 'zip', root_dir=str(DEST))\n",
+            "print(f\"\\n✅ ĐÃ TẠO GÓI ARCHIVE THỰC NGHIỆM TẠI: {zip_out}.zip\")\n",
+            "print(f\"\\n🎉 HOÀN TẤT THỰC NGHIỆM CH-03 VÀ CH-05 TRÊN GOOGLE COLAB TESLA T4!\")\n"
+        ]
+    })
+
+    notebook_content = {
+        "cells": cells,
+        "metadata": {
+            "colab": {
+                "name": "phase3_ch03_ch05_experiments.ipynb",
+                "provenance": []
+            },
+            "kernelspec": {
+                "display_name": "Python 3",
+                "name": "python3"
+            },
+            "language_info": {
+                "name": "python"
+            },
+            "accelerator": "GPU"
+        },
+        "nbformat": 4,
+        "nbformat_minor": 0
+    }
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(notebook_content, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"Generated {output_path} successfully with {len(cells)} cells.")
+    return output_path
+
+
+def main() -> int:
+    build_ch03_ch05_notebook(Path("notebooks/phase3_ch03_ch05_experiments.ipynb"))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

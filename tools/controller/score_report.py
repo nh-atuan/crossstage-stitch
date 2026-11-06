@@ -194,7 +194,8 @@ def report(campaign, manifest, policies, quality_policy, probe):
             row = rows[0]
             chain = traces[mode][pair,'0','0'] if mode!='reference' else []
             initial_config = (f"S{float(chain[0]['S']):.2f}_K{chain[0]['K']}_R{chain[0]['R']}_Bfeather" if chain else REFERENCE)
-            branch = 'reference_start' if initial_config==REFERENCE else 'cheap_retry' if len(chain)>1 else 'cheap_stop'
+            branch = ('reference_start' if initial_config==REFERENCE else 'cheap_retry' if len(chain)>1
+                else 'cheap_stop' if chain[0]['action']=='ACCEPT' else 'cheap_reject')
             route_counts[branch] += 1
             false_accept = bool(chain and chain[-1]['action']=='ACCEPT' and outcomes[mode][pair]=='FAIL')
             route_counts['false_accept'] += int(false_accept)

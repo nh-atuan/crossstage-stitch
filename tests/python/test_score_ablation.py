@@ -216,6 +216,20 @@ def test_campaign_checkpoint_resume_and_report_with_cpu_fixtures(tmp_path,monkey
     counts=result['modes']['P0']['branch_counts']
     assert counts['cheap_retry']==1 and counts['alignment_false_reject']==1 and counts['false_accept']==0
     assert result['modes']['P0']['retry_attempt_ms_by_transition']['r_only']['median']==2
+    # A cheap terminal rejection is not a successful cheap stop.
+    for row in expanded:
+        if row['attempt_idx']=='0':
+            row['action']='REJECT';row['reason']='BUDGET_EXHAUSTED';row['num_matches']='3';row['homography_status']='4'
+    rejected=[r for r in expanded if r['attempt_idx']=='0']
+    with path.open('w',newline='') as handle:
+        writer=csv.DictWriter(handle,fieldnames=list(rejected[0]));writer.writeheader();writer.writerows(rejected)
+    # This fixture exercises reporting classification independently of a GPU.
+    from tools.controller import score_report
+    with monkeypatch.context() as patch:
+        patch.setattr(score_report,'diagnostics',lambda *args:{})
+        result=report(root/'campaign',manifest,mapping,Path('tools/qor/policy-pilot.json'),probe)
+    assert result['modes']['P0']['branch_counts']['cheap_reject']==1
+    assert result['modes']['P0']['branch_counts'].get('cheap_stop',0)==0
 
 
 def test_oracle_unavailable_never_launches_a_replacement_sweep(tmp_path):

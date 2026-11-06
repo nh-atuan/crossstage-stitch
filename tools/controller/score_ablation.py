@@ -5,6 +5,7 @@ import argparse
 import json
 from pathlib import Path
 import platform
+import shutil
 import subprocess
 import sys
 import time
@@ -224,6 +225,27 @@ def run(config):
         with (output/'source.tar').open('wb') as handle:
             subprocess.run(['git','archive','--format=tar','HEAD'],stdout=handle,check=True)
         write_json(output/'baseline-policy.json',baseline)
+        if config.get('SETUP_EVIDENCE_DIR'):
+            evidence=Path(config['SETUP_EVIDENCE_DIR'])
+            target=output/'setup-evidence'
+            target.mkdir(exist_ok=True)
+            for name in ['receipt.json','complete.json','runs.csv','features.csv','qor.csv','audit.json','configs.json']:
+                source=evidence/'calibration-grid'/name
+                if source.is_file():
+                    (target/'calibration-grid').mkdir(exist_ok=True)
+                    shutil.copy2(source,target/'calibration-grid'/name)
+            for folder in evidence.glob('fit-*'):
+                if folder.is_dir() and (folder/'policy.json').is_file():
+                    for source in folder.glob('*.json'):
+                        (target/folder.name).mkdir(exist_ok=True)
+                        shutil.copy2(source,target/folder.name/source.name)
+            for source in [*evidence.glob('fit-*.log'),evidence/'fit-complete.json']:
+                if source.is_file():shutil.copy2(source,target/source.name)
+            inputs=Path(config['SPLIT']).resolve().parent
+            for name in ['archive-source.json','cohort.json','prepared.json']:
+                if (inputs/name).is_file():shutil.copy2(inputs/name,target/name)
+            if (evidence/'build-test').is_dir():
+                shutil.copytree(evidence/'build-test',target/'build-test',dirs_exist_ok=True)
         (output/'split.json').write_bytes(Path(config['SPLIT']).read_bytes())
         (output/'quality-policy.json').write_bytes(quality_path.read_bytes())
         write_json(output/'input-hashes.json',dict(calibration={p:{s:digest(Path(e[s])) for s in ('a','b')} for p,e in calibration.items()},
@@ -234,26 +256,8 @@ def run(config):
         calibration_path, evaluation_path = output/'calibration.json',output/'evaluation.json'
         write_json(calibration_path,calibration)
         write_json(evaluation_path,evaluation)
-        build = root/'build/score-t4'
-        logs = output/'build-test';logs.mkdir(exist_ok=True)
-        commands = [('configure',['cmake','-S','.', '-B',str(build),'-DCMAKE_BUILD_TYPE=Release',
-            '-DCMAKE_CUDA_ARCHITECTURES=75','-DSTITCH_CONTROLLER_GPU_TESTS=ON','-DSTITCH_SOURCE_REV='+revision]),
-            ('build',['cmake','--build',str(build),'-j2']),
-            ('ctest',['ctest','--test-dir',str(build),'--output-on-failure']),
-            ('pytest',[sys.executable,'-m','pytest','tests/python','-q','-p','no:cacheprovider','--basetemp',str(build/'pytest')])]
-        for name,command in commands:
-            print('BUILD/TEST',name,flush=True)
-            log_path = logs/(name+'.log')
-            with log_path.open('w') as log:
-                code = subprocess.run(command,stdout=log,stderr=subprocess.STDOUT).returncode
-            if code:
-                print(log_path.read_text()[-12000:],flush=True)
-                raise RuntimeError(f'{name} failed; see {log_path}')
-            if name=='ctest':
-                text = log_path.read_text()
-                if 'Skipped' in text or 'Not Run' in text:
-                    raise RuntimeError('T4 integration test skipped; refusing incomplete GPU validation')
-        harness, probe = build/'harness/stitch_harness', build/'tests/pooled_probe'
+        from tools.controller.score_build import build_and_test
+        harness, probe = build_and_test(root,output/'build-test',revision)
         snapshot = lambda: export(output)
         # Profile only Reference on calibration, with this exact binary/session.
         measure(harness,calibration_path,{},output/'profile',revision,session,snapshot=snapshot)
@@ -272,12 +276,16 @@ def run(config):
             baseline_sha256=digest(Path(config['POLICY'])),profile_sha256=digest(output/'fallback-profile.json'),
             source=revision,seed=20261101,gate_threshold=baseline['gate_threshold'],
             score='fixed E2E + failure_proxy * predicted Reference E2E * fallback_fraction + unchanged extra_ms',
-            no_retraining=True,no_holdout_selection=True))
+            no_retraining_during_ablation=True,no_holdout_selection=True,
+            baseline_kind=config.get('BASELINE_KIND','historical-v4-photo'),
+            setup_complete_sha256=config.get('SETUP_COMPLETE_SHA256')))
         # Always smoke-test all routes before the full cohort; no manual policy choice.
         smoke = output/'smoke.json'
         write_json(smoke,{p:evaluation[p] for p in sorted(evaluation)[:3]})
         measure(harness,smoke,mapping,output/'smoke',revision,session,snapshot=snapshot)
         smoke_result = report(output/'smoke',smoke,mapping,quality_path,probe)
+        smoke_result['baseline_kind']=config.get('BASELINE_KIND','historical-v4-photo')
+        write_json(output/'smoke/summary.json',smoke_result)
         if any(s['quality_status'].get('EVALUATION_ERROR',0) for s in smoke_result['modes'].values()):
             raise ValueError('invalid smoke QoR; inspect smoke logs')
         print('SMOKE/ROUTE/PARITY PASS (QoR failures, if any, remain reported)',flush=True)
@@ -285,7 +293,9 @@ def run(config):
         if config['MODE']=='FULL':
             campaign = output/'campaign'
             measure(harness,evaluation_path,mapping,campaign,revision,session,snapshot=snapshot)
-            report(campaign,evaluation_path,mapping,quality_path,probe)
+            result=report(campaign,evaluation_path,mapping,quality_path,probe)
+            result['baseline_kind']=config.get('BASELINE_KIND','historical-v4-photo')
+            write_json(campaign/'summary.json',result)
         oracle = optional_oracle(config,output,harness,evaluation_path,quality_path,revision)
         write_json(output/'oracle-comparison.json',oracle)
         if (output/'failure.json').exists():

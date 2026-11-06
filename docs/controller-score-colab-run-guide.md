@@ -1,77 +1,77 @@
-# Chạy score ablation Controller v4 trên Colab T4
+# Chạy score ablation từ đầu trên Colab T4
 
-Notebook: [controller_v4_score_ablation_t4.ipynb](../notebooks/controller_v4_score_ablation_t4.ipynb).
-Đế chạy notebook và gửi ZIP về chat để phân tích. Agent không kết nối Colab,
-không khởi chạy GPU và chưa có kết quả benchmark của lần sửa này.
+Mở [controller_v4_score_ablation_t4.ipynb](../notebooks/controller_v4_score_ablation_t4.ipynb).
+Không cần model, manifest hoặc kết quả v4 cũ. Đế đã đồng ý dựng một baseline
+v4 photo mới vì không còn checkpoint. Sau khi dựng xong, cả P0–P5 dùng nguyên
+model đã khóa. Đây không phải tái lập đúng weights hoặc timing v4 lịch sử.
 
-## 1. Chuẩn bị GitHub và Secret
+## 1. Setup đơn giản
 
-Bản code chứa notebook cần có trên GitHub trước khi clone. Agent chỉ commit
-local; Đế tự push nhánh khi muốn chạy. Có thể mở notebook bằng cách upload
-file local ngay cả khi repo private.
+1. Bảo đảm nhánh `de/optimize-controller` trên GitHub đã có commit setup mới. Agent commit local, không tự push.
+2. Upload notebook mới vào [Colab](https://colab.research.google.com/). Chọn Runtime → Change runtime type → GPU T4.
+3. Trong Secrets, tạo `GITHUB_TOKEN`, bật Notebook access. Token Fine-grained chọn đúng repo và **Contents: Read-only**; xem [hướng dẫn GitHub](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens).
+4. CONFIG đã điền repo `nh-atuan/crossstage-stitch`, branch và ID dữ liệu mặc định. Nếu dùng repo/branch khác thì sửa hai giá trị đó. Giữ `MODE="FULL"` và `MOUNT_DRIVE=True`.
+5. Chọn Runtime → Run all, cấp quyền mount Drive nếu được hỏi. Không chọn từng policy, không nhập lệnh hoặc tự tạo manifest.
 
-Tạo token theo [hướng dẫn GitHub](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens):
+Nếu runtime đang giữ checkout từ notebook cũ, mở runtime mới trước khi Run all
+để clone commit setup mới. `LOCKED COMMIT` được in sau checkout và lưu trong
+kết quả. Token không xuất hiện trong URL, remote, checkpoint hoặc ZIP.
 
-1. GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.
-2. Chọn Resource owner sở hữu repo, đặt hạn dùng ngắn phù hợp.
-3. Repository access → Only select repositories → chọn đúng repository.
-4. Repository permissions → Contents → Read-only. Metadata Read-only được GitHub cấp tự động.
-5. Nếu tổ chức yêu cầu approval, đợi duyệt. Tài khoản cũng phải có quyền đọc repo; token không cấp thêm quyền tài khoản.
-6. Trong Colab, mở Secrets bằng biểu tượng chìa khóa, thêm tên `GITHUB_TOKEN`, lưu token vào Secret và bật Notebook access.
+## 2. Dữ liệu: tự tải hoặc upload một ZIP
 
-Không dán token vào CONFIG, cell, URL hoặc file. Nếu GitHub không hỗ trợ
-Fine-grained PAT cho loại quyền cộng tác hiện tại, nhờ owner cấp cơ chế đọc
-repo phù hợp; notebook dừng, không tự đổi sang token có quyền ghi.
+Mặc định để `TRAINING_ZIP=""`. Notebook tải **training.zip** từ File ID
+`1CTKa42BRdXO2vdYSadaQkvgQ8DR6l49a` đã có trong CONFIG. Dataset do
+[tác giả UDIS](https://github.com/nie-lang/UnsupervisedDeepImageStitching)
+cung cấp; công cụ tải dùng [gdown](https://github.com/wkentaro/gdown).
+Không tải testing.zip và không chuyển sang synthetic khi thiếu dữ liệu.
 
-Notebook dùng HTTPS URL sạch và ASKPASS tạm. File ASKPASS không chứa token;
-Git nhận token qua môi trường tiến trình con, môi trường notebook không được
-cập nhật. Output network được giữ kín. Credential helper bị tắt cho các lệnh
-đó; token không được lưu vào remote, checkpoint hoặc ZIP. Sau clone, source
-được khóa bằng full commit SHA; rerun cùng runtime dùng lại commit đã khóa.
+Nếu Google Drive báo quota hoặc không tải được:
 
-## 2. Chuẩn bị artifact trên Drive
+1. Mở [training.zip của tác giả](https://drive.google.com/file/d/1CTKa42BRdXO2vdYSadaQkvgQ8DR6l49a/view) trong trình duyệt và tải về máy.
+2. Upload nguyên `training.zip` vào MyDrive, ví dụ thư mục `UDIS`. Không giải nén, không tự đóng lại hoặc đổi cấu trúc.
+3. Chỉ sửa dòng CONFIG tương ứng rồi Run all:
 
-Cần các input thật từ checkpoint v4, không chỉ source Git:
+```python
+"TRAINING_ZIP": "/content/drive/MyDrive/UDIS/training.zip",
+```
 
-| CONFIG | Input |
-|---|---|
-| `POLICY` | `v4-fast-ablations/photo/policy.json` gốc: pre 0.85, gate 0.65, đủ ba ensemble và 48 cấu hình |
-| `SPLIT` | File split gốc có SHA-256 khớp `policy.provenance.input_sha256.split`; thường là `v4-inputs/split.json` |
-| `CALIBRATION_MANIFEST` | Manifest toàn calibration đã khóa; đường dẫn A/B đọc được trong runtime |
-| `EVALUATION_MANIFEST` | Manifest toàn validation của split; đường dẫn A/B đọc được trong runtime |
-| `ORACLE_SWEEP_DIR` | Không bắt buộc; full sweep tương thích có `runs.csv`, `qor.csv`, `configs.json`, `receipt.json` |
+Nếu đã có bản sao công khai trên Drive, có thể giữ TRAINING_ZIP trống và thay
+`TRAINING_DRIVE_ID` bằng File ID trong link `/file/d/FILE_ID/view`. File riêng
+tư không cần chia sẻ công khai: dùng đường dẫn đã mount như ví dụ trên.
+GitHub PAT chỉ dùng để đọc repo, không dùng để tải dataset.
 
-Manifest có dạng `{ "udis_train_000001": { "a": "images/a.ppm", "b": "images/b.ppm" } }`.
-Đường dẫn ảnh tương đối với manifest hoặc là đường dẫn tuyệt đối tồn tại trên
-Colab. Ảnh phải là P6 PPM 512×512 gốc; không resize hoặc thay ảnh để làm chạy.
-Nếu manifest cũ trỏ tới runtime đã mất, tạo bản relocated riêng, giữ nguyên
-manifest và split gốc. Notebook đối chiếu danh sách pair và hash ảnh, từ chối
-calibration/validation dùng chung ảnh. Checkpoint không mặc nhiên chứa dataset.
+Notebook đọc metadata của toàn archive để kiểm số pair, counterpart và nhóm
+ảnh trùng CRC/size. Chỉ decode 250 pair được chọn sang P6 PPM 512×512 gốc;
+không giải nén toàn dataset. Giữ seed 20261101, chia 200 calibration và 50
+validation theo component trước khi xem QoR/latency. Hash ZIP là hash quan
+sát được; không coi đó là checksum đã được tác giả công bố.
 
-Không sửa split để làm khớp model: hash split và quality policy phải đúng
-provenance. Preflight báo đường dẫn thiếu trước build. Không dùng UDIS-D test
-hoặc HPatches. Validation v4 đã xem luôn được ghi nhãn diagnostic; không gọi
-kết quả này là đánh giá độc lập và không chọn ngưỡng rồi báo lại trên nó.
+## 3. Lần đầu notebook tự làm gì?
 
-## 3. Mở notebook và Run all
+1. Kiểm đúng Tesla T4/nvcc, clone private repo và khóa full source SHA.
+2. Tải/đọc training.zip, kiểm cấu trúc và 10.440 pair; tạo split và manifest, giữ các pair khó hoặc lỗi.
+3. Build Release `sm_75`, chạy CTest và pytest. Lỗi test thì dừng và giữ log.
+4. Sweep 48 cấu hình trên 200 pair calibration, mỗi cấu hình 2 warmup/10 repeat; lưu raw CSV, metadata và checkpoint từng batch.
+5. Thu feature riêng, kiểm H/status/count không đổi so với sweep và chấm canonical QoR. Timing có feature instrumentation không thay timing fixed trong nhãn huấn luyện.
+6. Chạy pipeline `train_pooled.py` hiện có cho nhóm photo. Chỉ dùng calibration; giữ raw export, outer-fold evidence và training logs.
+7. Xuất baseline thử nghiệm với pre 0.85, gate 0.65 và extra_ms 0.429087 trước khi đo validation. Giữ nguyên các cây, feature và self-check của model mới; lưu cả threshold trainer đã chọn để tránh đánh tráo báo cáo training với policy cố định.
+8. Đóng model/split/ảnh đã chọn thành ZIP setup trên Drive; khóa model rồi tự smoke và chạy đủ Reference + P0–P5.
 
-1. Vào [Google Colab](https://colab.research.google.com/), chọn Open notebook → Upload và mở file `.ipynb` đã bàn giao.
-2. Runtime → Change runtime type → GPU → T4 nếu có lựa chọn. Cell kiểm môi trường dừng nếu GPU thực tế không phải Tesla T4.
-3. Chỉnh duy nhất cell CONFIG: `REPOSITORY=OWNER/REPO`, `GIT_REF` là branch hoặc full commit đã push, bốn đường dẫn input và `OUTPUT_ROOT`. Không điền token.
-4. Để `MODE="FULL"` rồi chọn Runtime → Run all. Notebook tự mount Drive, clone, cài requirements, kiểm input, build, test, smoke và đo đủ sáu policy. Việc cấp quyền Drive/Secret lần đầu có thể cần thao tác trên giao diện Google.
-5. Cell cuối tải ZIP. Nếu trình duyệt chặn tải tự động, lấy ZIP trong OUTPUT_ROOT trên Drive hoặc Colab Files, rồi gửi ZIP cùng full commit SHA về chat.
+Lần đầu lâu hơn notebook chỉ đo scoring vì phải thu lại sweep và huấn luyện.
+Chưa có log T4 của luồng setup này nên chưa chốt thời gian tổng. Không chạy
+training hoặc solver khác đồng thời với phép đo GPU.
 
-Có thể đặt `MODE="SMOKE"` để kiểm ba pair đầu trước; sau đó đổi thành FULL
-và Run all. FULL luôn tự smoke trước nên không bắt buộc chạy hai lần. Không
-có cell chọn từng policy hoặc yêu cầu nhập lệnh. Seed 20261101, hai warmup và
-mười repeat cố định trong code. Không cài quantum SDK cho campaign này.
+Sau khi setup hoàn tất, Run all dùng lại model/data đã kiểm hash; không fit
+lại giữa P0–P5 hoặc mỗi lần chạy. Baseline mặc định trong source không đổi.
+Build/test chỉ chạy một lần cho cùng source, binary và runtime; log được sao
+vào kết quả. Không ghép partial sweep từ hai phiên GPU.
 
-Source checkout được dùng lại trong cùng runtime để giữ binary/checkpoint
-ổn định. Muốn đổi repo/ref sau khi đã khóa, dùng runtime mới. Nếu clone bị
-dở trước khi tạo lock, xóa riêng `controller-score-source` dưới `/content`
-bằng Files rồi Run all; giữ nguyên checkpoint trên Drive.
+Nếu MODE=SMOKE khi chưa có model: notebook kiểm dataset/build/test và chỉ đo
+Reference trên 3 pair, không sweep/fit hoặc giả lập sáu policy. Đổi FULL rồi
+Run all để dựng baseline và chạy đủ thí nghiệm. Nếu model đã lưu, SMOKE chạy
+sáu policy trên 3 pair như trước. FULL tự smoke nên không bắt buộc chạy hai lần.
 
-## 4. Notebook đo gì?
+## 4. Những gì được giữ nguyên trong P0–P5
 
 | Policy | Score | Pre-threshold |
 |---|---|---:|
@@ -82,65 +82,60 @@ bằng Files rồi Run all; giữ nguyên checkpoint trên Drive.
 | P4 | reuse_approx | 0.70 |
 | P5 | reuse_approx | 0.50 |
 
-Giữ model XGBoost, feature, gate 0.65, self-check, QoR và fallback hai attempt.
-Không gọi trainer cho model này. Unit tests có thể huấn luyện fixture tổng
-hợp để kiểm export; chúng không thay policy thí nghiệm. Policy mặc định của
-harness vẫn giữ nguyên.
+Cả sáu dùng cùng model XGBoost đã khóa, feature photo, gate 0.65, self-check,
+QoR pilot và seed. Thay score/pre-threshold, không huấn luyện giữa policy.
+R-only trừ S1–S4 từ profile Reference calibration; đổi K trừ S1; đổi S giữ
+full cost. Giữ full S5/S6 và host overhead. `1-p_pre` là failure proxy;
+score là xấp xỉ vì fixed latency candidate đã gồm S6, nhưng candidate bị
+reject chưa render S6. E2E báo cáo là wall-clock do harness đo, không cộng stage.
 
-Notebook build Release `sm_75`, chạy CTest và pytest. Test fail hoặc GPU test
-bị skip thì dừng, giữ log. Sau đó đo Reference trên calibration bằng chính
-binary mới để lấy profile stage; đây là phép đo thêm, không phải retrain.
-R-only trừ S1–S4, đổi K trừ S1, đổi S giữ toàn bộ chi phí Reference. Dùng p95
-của tỷ lệ chi phí theo pair; giữ nguyên S5, S6 và host overhead. Các profile
-lỗi không tạo discount. Không dùng số retry A2/v3 cho mọi transition.
+Thứ tự mode xoay theo batch, checkpoint sau mỗi policy/batch. Latency lấy
+median mười repeat theo pair rồi mean/median/p95; bootstrap resample theo pair.
+Mẫu Reference-valid vẫn gồm candidate FAIL; PASS/FAIL/unknown giữ toàn cohort.
+False reject từ H candidate chỉ là alignment diagnostic, chưa chứng minh
+candidate pipeline đã render S6 thành công.
 
-Công thức mới là ranking approximation, không phải mô hình E2E chính xác:
-`L_hat(c) + (1-p_pre) * L_hat(ref) * fraction(c→ref) + extra_ms`.
-`1-p_pre` chỉ là failure proxy. `L_hat(c)` đã gồm S6, trong khi attempt bị
-reject không render S6; score vẫn thiên bảo thủ ở branch này. Không cộng
-score hoặc các stage để báo E2E. E2E là số host wall-clock do harness đo.
+Sweep setup thuộc calibration, không dùng làm Oracle validation. Không có
+sweep validation tương thích thì Oracle ghi UNAVAILABLE; không âm thầm chạy
+thêm full sweep. Không ghép timing v4 cũ với measurement mới, không khẳng định
+model dựng lại tương đương v4 cũ. Vì lịch sử split v4 bị mất, không chứng nhận
+cohort mới chưa từng được xem; chưa đưa ra claim đánh giá độc lập.
 
-Đo Reference và P0–P5 trên cùng cohort, xoay thứ tự theo batch. Smoke và FULL
-là hai campaign riêng. Python/C++ kiểm prediction, initial route và post-gate
-qua dữ liệu quan sát ngoài vùng timing. Không thêm logging từng candidate
-vào đường đo. Candidate diagnostics được tính sau measurement.
+## 5. File được lưu và cách gửi lại
 
-Oracle không tự kích hoạt sweep 48 cấu hình. Nếu có sweep đúng binary hash,
-seed, ảnh, policy và đủ repeat, notebook audit rồi đo lại cấu hình Oracle đã
-chọn trên cùng runtime. Timing sweep cũ giữ riêng, không ghép paired với
-campaign mới. Đối chứng đo lại không phải phép tìm minimum mới trên toàn grid.
-Thiếu provenance hoặc không có đáp án khả thi thì ghi UNAVAILABLE và lý do.
+Mặc định notebook tạo hai thư mục trên Drive:
 
-## 5. Checkpoint, output và gửi kết quả
+| Vị trí | Nội dung |
+|---|---|
+| `controller-score-work/` | ZIP gốc tải về, ảnh/split đã chuẩn bị, sweep/feature/training logs theo session, model và setup receipt |
+| `controller-score-work/controller_v4_reconstructed_setup_bundle.zip` | Model, split, manifest và ảnh PPM của 250 pair; giữ file này để không mất setup |
+| `controller-score-results/` | Campaign đo score và ZIP kết quả để gửi lại |
 
-Dưới OUTPUT_ROOT, mỗi MODE/commit/runtime có thư mục và ZIP riêng. Sau mỗi
-policy trong mỗi batch có CSV/trace, receipt/hash và ZIP checkpoint. Rerun
-trong cùng runtime chỉ tiếp tục shard đã khớp hash; runtime mới tạo thư mục
-mới, không trộn số đo thành paired campaign. Dữ liệu trong Drive tồn tại sau
-khi Colab mất runtime; ổ `/content` không có bảo đảm đó.
+ZIP kết quả có `comparison.csv`, `summary.json`, pair metrics, canonical QoR,
+raw CSV, attempt/feature traces, score diagnostics, model P0–P5, environment,
+source SHA, build/test logs và `artifact-hashes.json`. Khi có trên máy chạy,
+`setup-evidence/` kèm raw grid, nhãn, feature và export training để truy nguồn.
+Không đưa ZIP dataset gốc hoặc Secret vào ZIP kết quả.
 
-ZIP hoàn chỉnh chứa:
+Cell cuối tự tải ZIP kết quả. Gửi **ZIP nguyên vẹn + LOCKED COMMIT** trong
+chat tiếp theo. Không cần upload bộ dataset lớn lại cho agent. Giữ ZIP setup
+trên Drive hoặc tải về máy để dự phòng.
 
-- `environment.json`, `gpu.log`, `nvcc.log`, `python-packages.log`, `source.tar`, CONFIG và source SHA.
-- `baseline-policy.json`, `split.json`, `quality-policy.json`, input hashes và manifest relocated.
-- `fallback-profile.json`, `experiment-freeze.json`, `policies/P0.json` đến `P5.json`.
-- `build-test/`: log configure/build/CTest/pytest.
-- `profile/`, `smoke/`, `campaign/`: raw run CSV, attempt traces, feature observations, checkpoint receipts và freeze.
-- `campaign/comparison.csv`, `summary.json`, `pair-metrics.csv`, `qor.csv`, `diagnostics.json`, score diagnostics và parity CSV; ở chế độ SMOKE các báo cáo nằm trong `smoke/`.
-- `oracle-comparison.json` và đối chứng Oracle nếu input phù hợp.
-- `artifact-hashes.json` kiểm từng file. Nếu lỗi giữa chừng có `failure.json` và ZIP partial; không xem đó là completed campaign.
+Nếu muốn khôi phục trên Drive/máy khác, upload ZIP setup và điền duy nhất:
 
-Latency lấy median mười repeat của từng pair rồi mới mean/median/p95; paired
-speedup và bootstrap resample theo pair. Mẫu chính giữ mọi pair reference-valid,
-kể cả candidate FAIL; PASS/FAIL/unknown trên toàn cohort vẫn được xuất riêng.
-Có retry theo transition, cấu hình đầu/cuối, K500, false accept và candidate
-alignment false reject. Candidate bị từ chối chưa render S6 nên metric
-alignment đó không được gọi là pipeline success. Không drop lỗi hoặc pair chậm.
+```python
+"SETUP_BUNDLE_ZIP": "/content/drive/MyDrive/controller_v4_reconstructed_setup_bundle.zip",
+```
 
-Gửi **ZIP nguyên vẹn + full commit SHA**, không cần sửa CSV hay chép số bằng
-tay. Agent sẽ xác minh hash/seed/source rồi mới phân tích. Chưa có số liệu T4
-thì chưa kết luận score mới cải thiện và chưa đổi default policy.
+Dùng WORK_ROOT trống khi restore. Notebook kiểm member/hash, khôi phục model
+và ảnh rồi chạy scoring, không cần training.zip hoặc fit lại. File setup
+không chứa toàn bộ raw training evidence; giữ thư mục work nếu cần tái lập
+quá trình huấn luyện hoặc bàn giao sweep cho Thành.
 
-Nguồn xác thực GitHub và trang rà văn phong
-[Signs of AI writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing)
-được đọc ngày 06/11 (Thứ 6), năm 2026.
+Nếu ngắt phiên trước khi model được đóng gói, các shard/log vẫn ở Drive.
+Runtime mới mở setup measurement riêng để không trộn GPU session; dataset
+đã chuẩn bị được dùng lại. Nếu lỗi, gửi ZIP partial/log từ `setup-sessions/`;
+không coi partial là completed campaign.
+
+Nguồn UDIS, gdown và hướng dẫn PAT được đối chiếu ngày 06/11 (Thứ 6), năm
+2026; văn bản rà theo [Signs of AI writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing).

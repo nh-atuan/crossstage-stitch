@@ -1,11 +1,11 @@
 # Báo cáo nghiệm thu từng phần Phase 3
 
-Mốc đối chiếu 05/11 (Thứ 5), năm 2026. Phạm vi gồm CH-00, CH-01, CH-03/A4 và CH-05. Kết luận dưới đây áp dụng cho bằng chứng đã nhận đến mốc này. Deadline chung và phạm vi toàn phase được ghi trong [kế hoạch Phase 3](../plan.md#phase-3-đại-thực-nghiệm-ablation-và-phân-tích-độc-lập).
+Mốc đối chiếu 06/11 (Thứ 6), năm 2026. Phạm vi gồm CH-00, CH-01, CH-03/A4 và CH-05. Bản cập nhật này dùng kết quả Colab T4 của lượt `run_20261106_022310Z`. Deadline chung và phạm vi toàn phase được ghi trong [kế hoạch Phase 3](../plan.md#phase-3-đại-thực-nghiệm-ablation-và-phân-tích-độc-lập).
 
 | Hạng mục | Phần đã nghiệm thu | Phần còn mở |
 | --- | --- | --- |
 | CH-00 — Baseline | **Đóng.** Receipt đã được xác minh, build `sm_75` và 16/16 CTest pass trên Colab T4. | Kết quả này áp dụng cho snapshot đã kiểm. Kiểm tra Compute Sanitizer cho các campaign GPU được theo dõi riêng. |
-| CH-01 — Dữ liệu, protocol và reference | **Đạt tooling, ingestion, freeze protocol và smoke test T4.** Development gồm 200 fit và 50 validation. Test giữ đủ 1.105 cặp canonical. | Chấm QoR toàn bộ development, audit reference và xác nhận Fixed-Best. |
+| CH-01 — Dữ liệu, protocol và reference | **Đạt tooling, ingestion, freeze protocol, smoke test và thu đủ số liệu development T4.** Có 120.000 lượt đo, 24.000 warmup và 12.000 dòng QoR. | **Gate reference chưa đạt.** Reference dùng được trên 238/250 cặp. `selected_fixed_best=null`. |
 | CH-03/A4 — Same-H blending | **Đạt tooling.** Có runner, bộ kiểm correctness, raw telemetry, bảng và công cụ xuất seam crop. | Campaign A4 với RGB/H đã khóa trên T4. |
 | CH-05 — Synthetic multi-resolution | **Đạt tooling.** Có generator, hai track, kiểm soát cấp phát và báo cáo. | Kết quả stress-test GPU ở 720p, 1080p và 4K. |
 
@@ -33,7 +33,7 @@ Phiên resume xác nhận cả hai split vượt qua `udis_ingest --verify-only`
 | `train-unused` | 10.190 | Gồm 6.846 cặp cách ly và 3.344 cặp còn lại chưa được chọn. |
 | Test canonical | 1.105 | Giữ nguyên ID cho campaign test. |
 
-Graph nối các cặp có chung hash file nguồn hoặc hash RGB đã decode. Một cặp train có thể bị cách ly vì nối bắc cầu tới test qua nhiều cặp trung gian. Tỷ lệ 65,6% mô tả thành phần liên thông, không biểu thị tỷ lệ cặp trùng trực tiếp. Bằng chứng hiện tại chỉ xác lập cách ly theo ảnh trùng chính xác. Cách ly theo cảnh cần metadata cảnh đã xác minh. [Logic split và giới hạn](../../tools/data_prep/udis_split.py)
+Graph nối các cặp có chung hash file nguồn hoặc hash RGB đã decode. Tính lại từ hai data manifest cho thấy 4.754 cặp train có ít nhất một ảnh trùng trực tiếp với test và 2.092 cặp bị cách ly qua liên kết bắc cầu. Split tái tạo khớp `split_manifest.json`. Mỗi thành phần liên thông xuất hiện trong tối đa một split đang dùng. `scene_disjointness=not_certified` vì phép kiểm hash chỉ phát hiện ảnh trùng chính xác. [Logic split và giới hạn](../../tools/data_prep/udis_split.py)
 
 ### Smoke test và diễn giải QoR
 
@@ -46,13 +46,56 @@ Cell 3 chạy hai cặp `000003` và `000015` qua hai cấu hình, mỗi cấu h
 
 Cả hai cặp vượt các ngưỡng alignment đã khóa (`ΔSSIM ≥ −0,02`, `ΔPSNR ≥ −0,5 dB`, coverage `≥ 0,95`). Kết quả smoke xác nhận đường chạy từ ảnh thật qua harness và evaluator. Bằng chứng chọn Fixed-Best cần kết quả trên đủ cohort development. [Evaluator QoR](../../tools/qor/evaluate.py)
 
-### Điểm dừng của lần chạy được ghi nhận
+### Development sweep và đối chiếu artifact
 
-Log cuối của Cell 4 cho thấy `train-fit-runs.csv` đã xuất và evaluator bắt đầu chấm QoR fit. Grid có 48 cấu hình Feather, với hai warmup và mười lượt đo mỗi cặp/cấu hình. Tổng kế hoạch là **120.000 lượt đo và 24.000 warmup**, trong đó fit có 96.000 lượt đo và validation có 24.000 lượt đo. Đây là số kỳ vọng từ manifest và grid. Kiểm completeness phải đối chiếu CSV thực tế.
+Cell 4 hoàn tất cả hai sweep và xuất đủ bốn CSV. Cell 5 tạo audit, chạy `--verify-only` trên Colab và lưu gói vào `MyDrive/p3_evidence/run_20261106_022310Z/`. Sau khi sao lưu, Cell 5 dừng ở assertion vì audit trả kết quả chưa đạt. Output có trong bản notebook đã chạy tại `specs/phase3_ch01_resume.ipynb`. Gói xuất được lưu ở `specs/p3_evidence/` trong workspace. [Notebook nguồn](../../notebooks/phase3_ch01_resume.ipynb)
 
-Evaluator gom các lượt đo theo cặp/cấu hình và ghi CSV QoR sau khi chấm xong. Số dòng QoR kỳ vọng là 9.600 cho fit và 2.400 cho validation. Dòng log chờ chấm chưa cho biết số tổ hợp đã xử lý. Chưa nhận được bốn CSV hoàn chỉnh và `development-audit.json` cho lần chạy này. [Thứ tự chạy development](../../notebooks/phase3_ch01_resume.ipynb) · [Cách evaluator ghi kết quả](../../tools/qor/evaluate.py)
+| Split | Cặp | Cấu hình | Lượt đo | Warmup | Dòng QoR |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `train-fit` | 200 | 48 | 96.000 | 19.200 | 9.600 |
+| `train-val` | 50 | 48 | 24.000 | 4.800 | 2.400 |
+| Tổng | 250 | 48 | 120.000 | 24.000 | 12.000 |
 
-Để đóng reference và Fixed-Best, cần gói `p3_evidence/<run-id>/` gồm receipt phiên chạy, `protocol/`, bốn file `train-fit-{runs,qor}.csv` và `train-val-{runs,qor}.csv`, cùng `development-audit.json`. Chạy audit `--verify-only` với input gốc và đối chiếu `complete=true`, `reference_ready_for_review=true`, `selected_fixed_best` có cấu hình và `validation_of_fit_selection` báo kết quả trên cùng cấu hình. Review riêng ledger reference và các trường hợp `missing`, `reference_failure` hoặc `reference_unreliable`. Cờ sẵn sàng chỉ xác nhận các kiểm tra trong protocol, còn độ chính xác homography tuyệt đối cần bằng chứng hình học riêng. [Logic audit development](../../tools/data_prep/audit_development.py)
+Kiểm tra CSV xác nhận đủ 144.000 lượt chạy harness gồm cả warmup và lượt lỗi, đủ khóa bản ghi duy nhất và đủ 12.000 khóa cặp/cấu hình trong CSV QoR. Tất cả runs có nhãn `UDIS-D`, đúng split và seed harness `0`. Hai audit con tính lại từ CSV khớp hoàn toàn JSON gốc. Hash của năm đầu vào audit, sáu output protocol, hai data manifest và hai source receipt đều khớp metadata. Gói xuất có manifest nhưng thiếu ảnh PPM, nên lần đối chiếu này tái tạo split và audit từ metadata/CSV. Việc kiểm pixel và `--verify-only` đầy đủ dựa trên output Colab. [Audit sweep](../../tools/controller/audit_sweep.py)
+
+Receipt của lượt resume ghi snapshot Colab `c6eb9a1376e536bf6d01ce2b9433d2a351302b16`. Inventory đối chiếu khớp 222 file tracked của `33d4b21` và chứa thêm bảy file pilot Dev25. CSV ghi `git_rev=HEAD`, nên xác định source của phiên bằng receipt và notebook output. Gói audit có SHA-256 `6acaa640a2a43d0eb4a28c978d7319e99fcedaf88d211b92526035d5f150d7a6` cho `development-audit.json`.
+
+Tổng `t_e2e` trong CSV, tính cả warmup và lượt lỗi, là khoảng 475,73 giây cho fit và 114,49 giây cho validation. Hai số này là tổng thời gian được harness ghi theo lượt. Notebook thiếu phép đo wall-clock tách riêng sweep, chấm QoR và audit, nên mốc 26 phút được ghi trước đó không đủ để xác nhận thời lượng từng bước. Evaluator đọc RGB gốc và H từ runs rồi tính alignment trên CPU, với một dòng kết quả mỗi cặp/cấu hình. [Evaluator QoR](../../tools/qor/evaluate.py)
+
+### Reference và nguyên nhân gate chưa đạt
+
+Reference `S1.00_K2000_R1024_Bfeather` dùng được trên **192/200 cặp fit (96,0%)** và **46/50 cặp validation (92,0%)**, tổng cộng **238/250 (95,2%)**. Mỗi cặp dưới đây lặp lại cùng mã lỗi ở cả 10 lượt đo reference. Các mã mô tả lỗi quan sát được trong pipeline. Nguyên nhân cụ thể theo cảnh cần xem lại RGB, H và geometry của từng cặp.
+
+| Mã lỗi ở reference | `train-fit` | `train-val` | Diễn giải |
+| --- | --- | --- | --- |
+| `ERR_CANVAS_OVERFLOW` ở S6 | `006399`, `009444` | | Canvas của H reference vượt giới hạn runner. |
+| `DEGENERATE` ở S5 | `009726`, `009729`, `010327`, `010355` | `007175`, `009964`, `010118` | Estimator báo suy biến ở cấu hình reference. |
+| `NOT_ENOUGH_POINTS` ở S5 | `009955`, `009959` | `009957` | S5 báo thiếu điểm cho bước ước lượng. |
+
+Trong 12 cặp này, `006399`, `009444` và `007175` vẫn có lần lượt 33, 28 và 24 cấu hình khác chạy `OK`. Chín cặp còn lại không có cấu hình nào ghi `OK` trong grid đã đo. `OK` xác nhận lượt chạy pipeline thành công. Với ba cặp trên, QoR tương đối vẫn thiếu mốc đối chiếu vì reference thất bại. Kết quả cho thấy cần phân biệt lỗi của cấu hình reference với khả năng thực thi của cả grid.
+
+Hai audit con có đủ lượt đo và không có cấu hình thiếu latency. Gate `complete` còn yêu cầu mỗi lượt được phân loại `PASS` hoặc `FAIL`. Khi reference lỗi, 8 cặp fit và 4 cặp validation tạo lần lượt **3.840** và **1.920** lượt đo có nhãn `REFERENCE_FAILED` trên 48 cấu hình. Vì vậy `complete=false`, `reference_ready_for_review=false`, `selected_fixed_best=null` và `validation_of_fit_selection=null`. Thông báo assertion về đo lường trong notebook cần đọc cùng điều kiện gate này. [Logic audit development](../../tools/data_prep/audit_development.py)
+
+### Xếp hạng quan sát được trên development
+
+Audit con xếp hạng theo số cặp có đủ 10 lượt đạt QoR, rồi đến median latency qua các median theo cặp. Bảng giữ mẫu số toàn cohort, gồm các cặp reference lỗi. Thứ hạng validation dùng để mô tả kết quả đã đo, còn lựa chọn Fixed-Best chính thức cần qua gate trên fit và review validation.
+
+| Cấu hình | Hạng fit / val | QoR fit | Median fit (ms) | QoR val | Median val (ms) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `S1.00_K2000_R1024_Bfeather` | 1 / 1 | 192/200 | 7,51 | 46/50 | 7,27 |
+| `S1.00_K2000_R512_Bfeather` | 2 / 2 | 164/200 | 6,70 | 39/50 | 6,42 |
+| `S1.00_K1000_R1024_Bfeather` | 3 / 5 | 148/200 | 5,79 | 33/50 | 5,51 |
+| `S1.00_K2000_R256_Bfeather` | 4 / 3 | 148/200 | 6,24 | 35/50 | 6,10 |
+| `S1.00_K2000_R128_Bfeather` | 5 / 4 | 142/200 | 6,09 | 34/50 | 5,90 |
+| `S1.00_K1000_R512_Bfeather` | 6 / 6 | 140/200 | 4,96 | 30/50 | 4,68 |
+| `S0.75_K2000_R512_Bfeather` | 8 / 12 | 127/200 | 5,33 | 26/50 | 4,61 |
+
+- Hai cấu hình đầu giữ cùng thứ hạng trên fit và validation. Chỉ **9/48** cấu hình giữ đúng vị trí giữa hai bảng. Cấu hình `S0.75_K2000_R512_Bfeather` qua smoke nhưng chỉ đạt 63,5% trên fit và 52,0% trên validation.
+- Ở cùng `S=1.00` và `K=2000`, giảm `R` từ 1024 xuống 512 giảm median khoảng **10,8% trên fit** và **11,7% trên validation**. Tỷ lệ đạt QoR giảm lần lượt **14 điểm phần trăm** và **14 điểm phần trăm**. Đây là so sánh giữa hai cấu hình fixed trên development.
+- Mỗi cấu hình trong nhóm `S=0.25` đạt **2–3/200 cặp fit** và **0/50 cặp validation**. Kết quả mô tả grid, cohort và policy đã khóa.
+- Oracle của audit có ít nhất một cấu hình đạt trên **192/200 fit** và **46/50 validation**. Reference tự so với cùng H trên những cặp có nhãn hợp lệ, nên các số này phản ánh phạm vi chấm QoR hiện tại. Chúng chưa đánh giá độ chính xác H với ground truth hoặc chứng minh Oracle speedup trên đủ cohort.
+
+Giữ gói dữ liệu, hai split và 12 cặp lỗi khi review reference. Trước khi khóa Fixed-Best hoặc mở campaign test chính, cần quyết định cách xử lý reference failure, lưu quyết định và kiểm lại trên development. Nếu chốt theo gate hiện tại, cần `complete=true`, `reference_ready_for_review=true`, `selected_fixed_best` có giá trị và `validation_of_fit_selection` cho cùng cấu hình. Gói đã đo đủ là căn cứ cho bước review này.
 
 ## CH-03/A4 — Same-H blending
 
@@ -73,4 +116,9 @@ Tooling đã bàn giao trong `49eb731`, `ac3ba28`, `e859e78` và `eda297e`. Bộ
 
 Campaign chuẩn có 18 cặp synthetic ở ba độ phân giải, ba mode B và **648 dòng ledger kỳ vọng mỗi track**, gồm cả warmup và lượt lỗi. Khi báo cáo, giữ mẫu số đầy đủ cho OOM, timeout và canvas overflow. Latency dùng các lượt đủ điều kiện đo. Workspace S6, tổng workspace capacity và declared device allocation có scope riêng. ROI xác minh mask và màu vùng một nguồn cho mọi B, đồng thời kiểm màu vùng overlap cho Feather. Màu overlap của Multiband cần full golden để được kiểm trên toàn miền. Chưa có artifact stress-test GPU hoặc sanitizer ở các độ phân giải chuẩn trong bằng chứng đã nhận. [Tiêu chí nghiệm thu và artifact](../runbooks/ch05_multires_colab.md#10-báo-cáo-và-nghiệm-thu)
 
-CH-03 và CH-05 có thể chạy song song khi đã chuẩn bị input theo từng runbook. CH-05 dùng ảnh synthetic và có thể chạy độc lập với development audit UDIS-D. Khi cập nhật báo cáo, gắn từng kết luận với receipt, raw ledger và output `--verify-only` của chính campaign đó.
+## Bước tiếp theo trên Colab T4
+
+1. **Notebook CH-03/A4.** Chuẩn bị cohort UDIS-D và nguồn H gốc B→A cho từng cặp. Kiểm và khóa manifest cùng registration trước khi render. Chạy smoke/correctness, rồi campaign ba mode có lưu ảnh, verify, xuất bảng và crop. Các file `pairs_*.json` từ CH-01 cung cấp đường dẫn ảnh. Manifest A4 cần thêm H và provenance của H. Nếu dùng cohort test, giữ quy tắc chọn cặp và H độc lập với kết quả blender và mọi quyết định hiệu chỉnh benchmark chính. [Runbook A4](../runbooks/ch03_same_h_colab.md)
+2. **Notebook CH-05.** Sinh và verify manifest synthetic, build native `sm_75`, chạy fixture nhỏ để kiểm môi trường, rồi chạy `s6_only` và `end_to_end` vào hai thư mục campaign riêng. Verify và xuất báo cáo cho từng track. Bước này độc lập với dữ liệu UDIS-D và gate reference CH-01. [Runbook CH-05](../runbooks/ch05_multires_colab.md)
+
+Hai notebook dùng receipt và thư mục lưu riêng theo lượt chạy. Khi cập nhật nghiệm thu, đối chiếu raw ledger và output `--verify-only` của từng campaign. Bản cập nhật này ghi nhận kế hoạch mở hai campaign, còn kết quả nghiệm thu phụ thuộc vào lượt chạy T4 thực tế.

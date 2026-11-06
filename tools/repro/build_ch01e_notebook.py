@@ -61,7 +61,12 @@ def build_ch01e_notebook(output_path: Path) -> Path:
 
     drive.mount("/content/drive")
     DRIVE = Path("/content/drive/MyDrive")
-    SOURCE_ZIP = DRIVE / "phase3_ch01e_source.zip"  # @param {type:"raw"}
+    SOURCE_ZIP = next((p for p in (DRIVE / "phase3_ch01e_source.zip",
+                                   DRIVE / "crossstage_stitch_source.zip",
+                                   Path("/content/phase3_ch01e_source.zip"),
+                                   Path("/content/crossstage_stitch_source.zip"))
+                       if p.is_file()),
+                      DRIVE / "phase3_ch01e_source.zip")
 
     WORK = Path(tempfile.mkdtemp(prefix="crossstage-ch01e-", dir="/content"))
     REPO = WORK / "source"
@@ -177,10 +182,10 @@ def build_ch01e_notebook(output_path: Path) -> Path:
     def audit_ch01():
         if not ready("setup"):
             raise RuntimeError("Setup has not passed")
-        source = CH01_EXPORT_DIR
-        bundled = REPO / "specs/p3_evidence"
-        if not source.exists() and (bundled / "development-audit.json").is_file():
-            source = bundled
+        candidates = [CH01_EXPORT_DIR,
+                      REPO / "specs/p3_evidence",
+                      Path("/content/p3_evidence/run_20261106_022310Z")]
+        source = next((p for p in candidates if (p / "development-audit.json").is_file()), CH01_EXPORT_DIR)
         audit_file = source / "development-audit.json"
         print(f"CH-01 evidence: {source}")
         if not audit_file.is_file():
@@ -273,6 +278,8 @@ def build_ch01e_notebook(output_path: Path) -> Path:
     code(r'''
     # @title 4. Lấy bốn ảnh đã khóa và chạy adaptive smoke
     UDIS_BUNDLE = DRIVE / "p3_protocol_bundle.zip"  # @param {type:"raw"}
+    BUNDLE_GDRIVE_ID = "1YNkpnEay-0c7ooEUSkMSpFojGKBXjwhZ"
+    BUNDLE_URL = f"https://drive.google.com/uc?id={BUNDLE_GDRIVE_ID}"
     SMOKE_INPUT = EVIDENCE / "smoke-input"
     SMOKE_OUT = EVIDENCE / "smoke"
     SMOKE_MANIFEST = SMOKE_INPUT / "pairs_smoke.json"
@@ -283,10 +290,24 @@ def build_ch01e_notebook(output_path: Path) -> Path:
         if not ready("ch01-audit"):
             raise RuntimeError("The pinned CH-01 audit has not been replayed")
         marker = json.loads((STATUS / "ch01-audit.json").read_text(encoding="utf-8"))
-        if not UDIS_BUNDLE.is_file():
-            raise FileNotFoundError(f"Missing PPM bundle at {UDIS_BUNDLE}; set UDIS_BUNDLE to the ZIP used by A4")
+        bundle_path = UDIS_BUNDLE
+        if not bundle_path.is_file():
+            local_bundle = Path("/content/p3_protocol_bundle.zip")
+            if local_bundle.is_file():
+                bundle_path = local_bundle
+            else:
+                print(f"Không tìm thấy {bundle_path} trên Drive. Đang tự động tải từ Google Drive qua gdown...")
+                import gdown
+                try:
+                    gdown.download(BUNDLE_URL, str(bundle_path), quiet=False, fuzzy=True)
+                except Exception as exc:
+                    print(f"Không thể ghi trực tiếp vào Drive ({exc}), đang tải vào /content/p3_protocol_bundle.zip...")
+                    bundle_path = local_bundle
+                    gdown.download(BUNDLE_URL, str(bundle_path), quiet=False, fuzzy=True)
+        if not bundle_path.is_file():
+            raise FileNotFoundError(f"Missing PPM bundle at {bundle_path}; set UDIS_BUNDLE to the ZIP used by A4")
         module("ch01e-smoke-input", "tools.repro.ch01e_inputs",
-               "--evidence", marker["source"], "--bundle", UDIS_BUNDLE,
+               "--evidence", marker["source"], "--bundle", bundle_path,
                "--output", SMOKE_INPUT, "--audit-sha256", marker["audit_sha256"])
         return {"status": "READY", "receipt_sha256": sha(SMOKE_RECEIPT)}
 

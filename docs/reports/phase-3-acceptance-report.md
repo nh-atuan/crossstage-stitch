@@ -1,13 +1,13 @@
 # Báo cáo nghiệm thu từng phần Phase 3
 
-Mốc đối chiếu 06/11 (Thứ 6), năm 2026. Phạm vi gồm CH-00, CH-01, CH-03/A4 và CH-05. Bản cập nhật này dùng kết quả Colab T4 của lượt `run_20261106_022310Z`. Deadline chung và phạm vi toàn phase được ghi trong [kế hoạch Phase 3](../plan.md#phase-3-đại-thực-nghiệm-ablation-và-phân-tích-độc-lập).
+Mốc đối chiếu 06/11 (Thứ 6), năm 2026. Bằng chứng Colab T4 gồm lượt development `run_20261106_022310Z` và lượt A4/CH-05 `run_20261106_043655Z_ch03_ch05_gbfq3y9z`. Deadline chung và phạm vi toàn phase được ghi trong [kế hoạch Phase 3](../plan.md#phase-3-đại-thực-nghiệm-ablation-và-phân-tích-độc-lập).
 
 | Hạng mục | Phần đã nghiệm thu | Phần còn mở |
 | --- | --- | --- |
 | CH-00 — Baseline | **Đóng.** Receipt đã được xác minh, build `sm_75` và 16/16 CTest pass trên Colab T4. | Kết quả này áp dụng cho snapshot đã kiểm. Kiểm tra Compute Sanitizer cho các campaign GPU được theo dõi riêng. |
 | CH-01 — Dữ liệu, protocol và reference | **Đạt tooling, ingestion, freeze protocol, smoke test và thu đủ số liệu development T4.** Có 120.000 lượt đo, 24.000 warmup và 12.000 dòng QoR. | **Gate reference chưa đạt.** Reference dùng được trên 238/250 cặp. `selected_fixed_best=null`. |
-| CH-03/A4 — Same-H blending | **Đạt tooling.** Có runner, bộ kiểm correctness, raw telemetry, bảng và công cụ xuất seam crop. | Campaign A4 với RGB/H đã khóa trên T4. |
-| CH-05 — Synthetic multi-resolution | **Đạt tooling.** Có generator, hai track, kiểm soát cấp phát và báo cáo. | Kết quả stress-test GPU ở 720p, 1080p và 4K. |
+| CH-03/A4 — Same-H blending | **Đóng campaign T4 trên cohort development đã khóa.** 10/10 cặp đạt ở cả ba blender, có bảng và ảnh truy về artifact. | Phạm vi kết luận giới hạn ở 10 cặp overlap cao. |
+| CH-05 — Synthetic multi-resolution | **Đạt `s6_only` trên T4.** 54/54 case từ 720p đến 4K. `end_to_end` đã đo đủ và có kết quả âm đã xác minh. | Chưa thiết lập được đường scaling end-to-end của các lượt đăng ký ảnh hợp lệ. |
 
 Lần rà soát báo cáo chạy lại **79 test CPU** cho protocol UDIS-D, A4 và multi-resolution tại revision `33d4b21`. Tất cả đều pass. Các kết quả Colab bên dưới được đối chiếu từ output đã nhận.
 
@@ -108,28 +108,79 @@ python -m tools.data_prep.audit_development \
   --exported-data-root specs/p3_evidence/data --verify-only --verbose
 ```
 
-## CH-03/A4 — Same-H blending
+## Bằng chứng chung của lượt A4 và CH-05
 
-Tooling đã bàn giao trong `4650791`, `b62704c` và `2d7c8e3`. Runner khóa ảnh RGB, H gốc B→A, canvas và thứ tự mode trước khi render Feather, Multiband 3 và Multiband 5. Bộ kiểm đối chiếu union mask theo pixel và RGB với sai số tối đa 2 mức. Overlap count của native runner được đối chiếu với geometry oracle. Số byte workspace lấy từ API và allocation được ghi riêng. [Runbook A4](../runbooks/ch03_same_h_colab.md)
+Gói Colab đã tải về nằm tại `specs/run_20261106_043655Z_ch03_ch05_gbfq3y9z/`. Đối chiếu local xác nhận đủ **2.232 file**, không thiếu hoặc thừa so với inventory, tất cả SHA-256 khớp và 13 marker bước khớp `export_verified.json`. SHA-256 của marker export là `9ab6209f8e89809c2fa04cf205f4ceeeb67b8ff7ab6f3d9bb05a8be98dcf9679`. Hai summary CH-05 và summary A4 tái tạo đúng nội dung JSON đã xuất từ campaign gốc. Các file kết quả được lưu riêng khỏi Git. [Notebook nguồn](../../notebooks/phase3_ch03_ch05_experiments.ipynb)
 
-CTest S6 trên T4 là bằng chứng correctness ở phạm vi fixture. Lần thử A4 trong notebook CH-00/CH-01 dừng ở CLI do thiếu `--output`. Notebook resume chỉ chạy development sweep với Feather. Chưa có campaign A4 Phase 3 trong bằng chứng đã nhận.
+Thiết bị đo là **Tesla T4**, compute capability **7.5**, VRAM **15.360 MiB**, driver **580.82.07**. CMake cache xác nhận Release và CUDA architecture `75`, `nvcc` là `13.0.88`. Snapshot Colab `aec69534ff73702d545fdc9ce5345a8b8057db60` có inventory khớp 233 file tracked của `fb85db7` sau khi chuẩn hóa line endings khi cần, cùng bảy file pilot bổ sung. Source ZIP ghi SHA-256 riêng và thiếu Git comment, nên dùng inventory để đối chiếu source. Hash hai runner trong các campaign khớp `build-provenance/binaries.json`.
 
-Để nghiệm thu thực nghiệm, chuẩn bị manifest `s6-same-h-v1` với cohort và H đã khóa, chạy ba mode trên T4 và xác minh campaign bằng `--verify-only`. Gói kết quả cần `registration.json`, `report.json`, `a4_same_h_metrics.csv`, log/timing từng cặp, ảnh và mask phục vụ kiểm lại, bảng LaTeX và hai bộ seam crop cùng tọa độ. Báo latency và workspace theo B. SSIM/PSNR alignment phải bất biến với cùng RGB/H. Nhận xét seam hoặc ghosting dựa trên crop và giữ phạm vi định tính. [Đặc tả A4](../experiments/ablation-studies.md#24-ablation-a4-same-homography-blending-trade-off-trong-s6)
+Hai CTest `test_s6_cuda` và `test_admission_control` pass trong 0,48 giây. Fixture S6 có 0 lỗi memcheck, initcheck và synccheck, cùng 0 hazard racecheck. Native smoke CH-05 có 0 lỗi memcheck trên một case Feather 720p. Bằng chứng sanitizer áp dụng cho các fixture và smoke đã chạy. Correctness của campaign kích thước lớn dựa trên ledger, mask và oracle theo phạm vi bên dưới.
+
+## CH-03/A4 — Same-H blending trên T4
+
+Chọn 10 cặp có overlap pixel native cao nhất trong 46 cặp `train-val` có reference sử dụng được. Mỗi cặp khóa cùng RGB, H gốc B→A, canvas và mask cho ba blender. Tỷ lệ diện tích giao so với diện tích ảnh nguồn nhỏ hơn là **86,1–99,1%** theo registration. Đây là cohort development thiên về overlap cao. H được lấy từ cấu hình reference candidate CH-01 và phù hợp để cố định đầu vào A4. Gate reference trên toàn development vẫn mở. [Runbook A4](../runbooks/ch03_same_h_colab.md)
+
+Campaign có **30/30 case cặp–blender đạt**, tương ứng **300 lượt đo và 60 warmup**. Đối chiếu lại 20 ảnh PPM, H và canvas với registration. Cả 30 case khớp union mask từng pixel và sai số RGB tối đa quan sát được là **1 mức** trên oracle FP64, dưới tolerance 2. Intersection được đối chiếu bằng geometry oracle và overlap counter của native runner.
+
+| Blender | Cặp đạt | Median GPU (ms) | p95 GPU (ms) | Median host (ms) | Workspace S6 tối đa (MiB) | Throughput median (MPix/s) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Feather | 10/10 | 1,260 | 1,859 | 1,271 | 0,000 | 239,40 |
+| Multiband 3 | 10/10 | 4,833 | 8,355 | 4,843 | 23,839 | 62,49 |
+| Multiband 5 | 10/10 | 5,689 | 9,052 | 5,702 | 23,874 | 53,25 |
+
+Median và p95 lấy qua 10 median theo cặp, sau khi bỏ warmup. Throughput dùng toàn canvas. Workspace là giá trị query tối đa của S6. Giá trị 0 của Feather áp dụng cho workspace phụ trợ. Hai mode Multiband cấp thêm 256 byte guard ngoài query. Trên cohort này, median GPU của Multiband 3 và 5 gấp lần lượt **3,83×** và **4,51×** Feather. Multiband 5 tăng khoảng **17,7%** thời gian so với Multiband 3, trong khi workspace tối đa tăng khoảng **0,035 MiB**. Các con số đo phản ánh tổng chi phí render của từng mode.
+
+Gói visual có **15 PNG lossless** gồm ba bộ panorama đầy đủ và hai bộ crop 96×96, mỗi bộ có ba blender. `captions.txt` và `visual_manifest.json` đưa tổng số file lên 17. Đã so pixel sau decode của cả 15 PNG với PPM tương ứng và kiểm tọa độ crop. Hai crop đã khóa ở `009015` và `009583`. Trong panorama `009583`, Feather có viền kép rõ quanh ô tô trắng và xe đạp, giảm thấy được ở cả hai mode Multiband. Ở `002674`, Feather cho thấy dải bóng cạnh trụ và cờ, trong khi hai panorama Multiband có biên đơn rõ hơn ở các vị trí này. Hai crop hẹp cho thấy khác biệt ít rõ hơn, và quan sát trên các ví dụ đã chọn chưa đủ để xếp hạng Multiband 3 với Multiband 5 về chất lượng.
+
+Alignment SSIM/PSNR được đo một lần mỗi cặp từ RGB/H chung. SSIM quan sát nằm trong 0,462–0,932 và PSNR trong 14,65–33,88 dB. Các giá trị này mô tả alignment đầu vào. Kết luận về seam và ghosting ở trên dựa trên panorama/crop và giữ phạm vi định tính. **Đủ bằng chứng để đóng CH-03/A4 trên cohort development đã khóa.** [Đặc tả A4](../experiments/ablation-studies.md#24-ablation-a4-same-homography-blending-trade-off-trong-s6)
 
 ## CH-05 — Stress-test 720p, 1080p và 4K
 
-Tooling đã bàn giao trong `49eb731`, `ac3ba28`, `e859e78` và `eda297e`. Bộ kiểm lưu cho `eda297e` ghi **425 test Python pass**, **9 CTest host-only pass** và `stress_multires_cuda` cùng `stitch_harness` compile/link `sm_75`. Kiểm chứng local dùng fixture nhỏ, mock và kiểm geometry bằng số học. [Runbook CH-05](../runbooks/ch05_multires_colab.md)
+Hai track dùng cùng manifest synthetic, seed `20261030`, 18 cặp và ba blender. Mỗi track có **54 case cặp–blender**, với hai warmup và mười lượt đo mỗi case. Cả hai ledger đủ **648 dòng**. Tách riêng execution success, kiểm correctness và sai số đăng ký ảnh. [Runbook CH-05](../runbooks/ch05_multires_colab.md)
 
-| Track | H dùng để render | Bằng chứng cần từ Colab |
-| --- | --- | --- |
-| `s6_only` | `H_gt` cố định cho từng cặp | Latency S6, kích thước input/canvas, workspace, correctness và phạm vi kiểm full golden hoặc ROI. |
-| `end_to_end` | H ước lượng từ S5 | Latency từng stage và toàn pipeline, sai số corner reprojection so với `H_gt`, tình trạng lỗi và workspace. |
+### S6-only với H ground truth
 
-Campaign chuẩn có 18 cặp synthetic ở ba độ phân giải, ba mode B và **648 dòng ledger kỳ vọng mỗi track**, gồm cả warmup và lượt lỗi. Khi báo cáo, giữ mẫu số đầy đủ cho OOM, timeout và canvas overflow. Latency dùng các lượt đủ điều kiện đo. Workspace S6, tổng workspace capacity và declared device allocation có scope riêng. ROI xác minh mask và màu vùng một nguồn cho mọi B, đồng thời kiểm màu vùng overlap cho Feather. Màu overlap của Multiband cần full golden để được kiểm trên toàn miền. Chưa có artifact stress-test GPU hoặc sanitizer ở các độ phân giải chuẩn trong bằng chứng đã nhận. [Tiêu chí nghiệm thu và artifact](../runbooks/ch05_multires_colab.md#10-báo-cáo-và-nghiệm-thu)
+**54/54 case đạt**, gồm 540 lượt đo và 108 warmup thành công, 0 OOM và 0 timeout. Có sáu full-golden case, đều là Feather 720p. 48 case còn lại dùng oracle ROI, gồm toàn bộ 1080p và 4K. Tất cả mask khớp trong miền đã kiểm, RGB lệch tối đa 1 mức. Ở ROI, Multiband được kiểm màu vùng một nguồn và mask. Màu vùng overlap của Multiband ngoài phạm vi kiểm màu này.
 
-## Bước tiếp theo trên Colab T4
+| Input | Blender | Case đạt | Median GPU (ms) | p95 GPU (ms) | Workspace S6 tối đa (MiB) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 720p | Feather | 6/6 | 3,039 | 3,074 | 0,000 |
+| 720p | Multiband 3 | 6/6 | 11,985 | 21,350 | 105,492 |
+| 720p | Multiband 5 | 6/6 | 12,275 | 13,670 | 105,644 |
+| 1080p | Feather | 6/6 | 6,849 | 13,362 | 0,000 |
+| 1080p | Multiband 3 | 6/6 | 25,188 | 32,308 | 237,110 |
+| 1080p | Multiband 5 | 6/6 | 25,455 | 28,837 | 237,451 |
+| 4K | Feather | 6/6 | 26,651 | 27,157 | 0,000 |
+| 4K | Multiband 3 | 6/6 | 100,095 | 111,687 | 948,265 |
+| 4K | Multiband 5 | 6/6 | 101,039 | 112,257 | 949,611 |
 
-1. **Notebook CH-03/A4.** Chuẩn bị cohort UDIS-D và nguồn H gốc B→A cho từng cặp. Kiểm và khóa manifest cùng registration trước khi render. Chạy smoke/correctness, rồi campaign ba mode có lưu ảnh, verify, xuất bảng và crop. Các file `pairs_*.json` từ CH-01 cung cấp đường dẫn ảnh. Manifest A4 cần thêm H và provenance của H. Nếu dùng cohort test, giữ quy tắc chọn cặp và H độc lập với kết quả blender và mọi quyết định hiệu chỉnh benchmark chính. [Runbook A4](../runbooks/ch03_same_h_colab.md)
-2. **Notebook CH-05.** Sinh và verify manifest synthetic, build native `sm_75`, chạy fixture nhỏ để kiểm môi trường, rồi chạy `s6_only` và `end_to_end` vào hai thư mục campaign riêng. Verify và xuất báo cáo cho từng track. Bước này độc lập với dữ liệu UDIS-D và gate reference CH-01. [Runbook CH-05](../runbooks/ch05_multires_colab.md)
+Số pixel input tăng 9× từ 720p lên 4K. Median GPU tăng **8,77×**, **8,35×** và **8,23×** lần lượt cho Feather, Multiband 3 và Multiband 5. Đây là xu hướng gần với tăng theo pixel trên các recipe đã đo. Canvas 4K rộng **5.016–6.564 pixel**, khác kích thước input 3.840 pixel. Mức **949,611 MiB** là workspace query tối đa của S6. Tổng device allocation khai báo ở case lớn nhất của Multiband 5 là **1.052,390 MiB**. Cả hai có phạm vi riêng với peak VRAM. Mức 26,651 ms của Feather đo khoảng GPU của S6 với H đã biết. Nó không suy ra tốc độ ghép end-to-end.
 
-Hai notebook dùng receipt và thư mục lưu riêng theo lượt chạy. Khi cập nhật nghiệm thu, đối chiếu raw ledger và output `--verify-only` của từng campaign. Bản cập nhật này ghi nhận kế hoạch mở hai campaign, còn kết quả nghiệm thu phụ thuộc vào lượt chạy T4 thực tế.
+Mỗi ô p95 được tính từ sáu pair medians. Ở 720p, hai pair medians của Multiband 3 vượt 21 ms, trong khi bốn pair còn lại nằm khoảng 10,56–12,07 ms. Đây là lý do p95 của ô này cao hơn p95 Multiband 5 trong lượt đo. Cỡ mẫu và các log hiện có chưa tách được nguyên nhân của khác biệt đuôi.
+
+### End-to-end với H từ S5
+
+Track chạy fixed `S=0.5`, `K=1000`, `R=256` và trả `COMPLETED_WITH_FAILURES`. Exit 2 là disposition của campaign đã hoàn tất, với báo cáo và ledger đã verify. Ground truth được dùng sau lượt chạy để tính corner error.
+
+| Input | Cặp hoàn tất / tổng | Case hoàn tất / tổng | Dòng `SUCCESS` | Dòng `ERR_CANVAS_OVERFLOW` | Dòng `ERR_NOT_ENOUGH_POINTS` |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 720p | 1/6 | 3/18 | 36 | 180 | 0 |
+| 1080p | 0/6 | 0/18 | 0 | 0 | 216 |
+| 4K | 0/6 | 0/18 | 0 | 0 | 216 |
+| Tổng | 1/18 | 3/54 | 36 | 180 | 432 |
+
+Các dòng gồm cả warmup. Trong 540 lượt đo có 30 lượt `SUCCESS`, 150 overflow và 360 thiếu điểm. Cả track ghi 0 OOM và 0 timeout. Năm cặp 720p bị canvas guard từ chối. Các cặp 1080p và 4K dừng ở lỗi S5 thiếu điểm. Pattern tuần hoàn của synthetic là giả thuyết hợp lý cho bước chẩn đoán. Ledger này chưa tách được keypoint count, số match vượt ratio test và nguồn gây thiếu correspondences.
+
+Cặp duy nhất thực thi qua cả ba blender là `scene000_affine_overlap00_720p`. Canvas ước lượng **1340×1301**, có **4 inlier**, inlier ratio **1,65%**. Sai số L2 trung bình qua bốn góc là **1.295,27 px** và lớn nhất **2.260,88 px**. Median GPU span 6,622 / 17,881 / 19,037 ms chỉ mô tả lượt chạy xong của cặp này, theo thứ tự Feather / Multiband 3 / Multiband 5. Chỉ có một pair median cho mỗi mode, nên giá trị p95 trong bảng bằng median và không mô tả phân phối rộng. Kết quả này là **execution thành công nhưng đăng ký hình học kém**. `end_to_end` là kết quả âm hợp lệ của workload đã khóa, chưa có cơ sở để kết luận latency scaling cho pipeline đăng ký ảnh thành công ở ba độ phân giải.
+
+## Công việc còn mở
+
+| Task | Việc tiếp theo |
+| --- | --- |
+| CH-01 | Chốt reference và Fixed-Best từ development. Kết quả hiện tại vẫn `selected_fixed_best=null`. |
+| CH-01E | Chạy fixture adaptive, sanitizer và smoke trace cho revision tích hợp trên T4. Hai CTest của lượt A4/CH-05 chỉ xác nhận phạm vi build và fixture tương ứng. [Runbook adaptive](../runbooks/ch01e_adaptive_colab.md) |
+| CH-04a | Hiệu chỉnh và khóa 20 controller variants trên development/validation. |
+| CH-02 và CH-04b | Chạy benchmark chính và A5 trên 1.105 cặp test sau khi khóa reference, Fixed-Best và controller variants liên quan. |
+| CH-05 end-to-end | Giữ nguyên kết quả âm hiện tại. Nếu cần đường scaling đăng ký ảnh hợp lệ, thiết kế và khóa một cohort synthetic bổ sung có tín hiệu đặc trưng phân biệt được, kèm chẩn đoán S2/S4/S5. |
+| CH-06 | Dùng `s6_only` T4 đã verify làm baseline. Chạy cùng manifest, seed, mode và timing boundary trên L4/A100 với build target tương ứng. |
+| CH-07 và CH-08 | Có thể làm ngay bảng và hình cho A4 và `s6_only` T4. Các bảng tổng hợp và bàn giao paper còn phụ thuộc kết quả A5, benchmark chính và cross-architecture. |

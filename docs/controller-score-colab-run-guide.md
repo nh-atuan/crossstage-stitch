@@ -13,9 +13,23 @@ model đã khóa. Đây không phải tái lập đúng weights hoặc timing v4
 4. CONFIG đã điền repo `nh-atuan/crossstage-stitch`, branch và ID dữ liệu mặc định. Nếu dùng repo/branch khác thì sửa hai giá trị đó. Giữ `MODE="FULL"` và `MOUNT_DRIVE=True`.
 5. Chọn Runtime → Run all, cấp quyền mount Drive nếu được hỏi. Không chọn từng policy, không nhập lệnh hoặc tự tạo manifest.
 
-Nếu runtime đang giữ checkout từ notebook cũ, mở runtime mới trước khi Run all
-để clone commit setup mới. `LOCKED COMMIT` được in sau checkout và lưu trong
-kết quả. Token không xuất hiện trong URL, remote, checkpoint hoặc ZIP.
+Dùng notebook bản mới. Với GIT_REF là branch, mỗi Run all fetch lại branch
+và khóa full SHA cho lượt đó; có thể giữ runtime hiện tại để nhận bản sửa.
+Với GIT_REF là full SHA, notebook giữ đúng commit đó, nên cần đổi SHA khi muốn
+nhận bản sửa mới. Không ghi đè tracked files đã sửa tay. `LOCKED COMMIT` được
+in sau checkout và lưu trong kết quả. Token không xuất hiện trong URL,
+remote, checkpoint hoặc ZIP.
+
+Nếu gặp `ModuleNotFoundError: No module named 'tests.python'` ở pytest:
+
+1. Bảo đảm branch trên GitHub có bản sửa package test và dùng notebook mới.
+2. Giữ nguyên WORK_ROOT trên Drive; không xóa raw ZIP, images hoặc prepared.json.
+3. Run all lại. Notebook dùng lại archive/ảnh đã kiểm hash và chạy lại build/tests. Lỗi cũ xảy ra trước sweep và training, nên chưa có số đo cần ghép vào campaign mới.
+
+Nguyên nhân đã tái hiện local: thư mục tests chưa là regular package nên có
+thể bị package khác cùng tên tests trong site-packages che khuất. Bản sửa
+thêm package markers và dùng import tests.python nhất quán; không bỏ qua
+pytest hoặc loại test đang lỗi.
 
 ## 2. Dữ liệu: tự tải hoặc upload một ZIP
 

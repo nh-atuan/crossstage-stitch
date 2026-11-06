@@ -8,7 +8,7 @@ import pytest
 
 from tools.controller.p3_report import build, check_reuse_equivalence
 from tools.controller.p3_cases import export as export_cases
-from test_p3_evaluation import write_csv, run_row
+from tests.python.test_p3_evaluation import write_csv, run_row
 
 
 def test_end_to_end_report_assets_and_correctness_guard(tmp_path):

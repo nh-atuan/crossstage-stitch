@@ -57,14 +57,18 @@ def test_auth_token_only_in_child_environment_never_url_file_remote_or_errors(tm
         calls.append((list(command),env))
         return types.SimpleNamespace(returncode=0)
     monkeypatch.setattr(subprocess,'run',fake_run)
-    monkeypatch.setattr(subprocess,'check_output',lambda *a,**k:'a'*40+'\n')
+    monkeypatch.setattr(subprocess,'check_output',lambda command,**kwargs:'' if 'status' in command else 'a'*40+'\n')
     path,revision=bootstrap()('owner/repo','branch',tmp_path,lambda name:secret)
     assert revision=='a'*40
     assert all('SCORE_GITHUB_TOKEN' not in env for _,env in calls)
     assert all(secret not in p.read_text() for p in path.rglob('*') if p.is_file())
-    # Same runtime reuses the pinned checkout without reading the token or fetching a moving branch.
+    # Branch refs refresh so fixes are usable without restarting the GPU runtime.
+    assert bootstrap()('owner/repo','branch',tmp_path,lambda name:secret)==(path,revision)
+    assert len(calls)==6 and 'fetch' in calls[-2][0] and 'checkout' in calls[-1][0]
+    assert all('SCORE_GITHUB_TOKEN' not in env for _,env in calls)
+    # An explicit pinned SHA can be reused without network access.
     def unavailable(name):raise AssertionError('must not request a second token')
-    assert bootstrap()('owner/repo','branch',tmp_path,unavailable)==(path,revision)
+    assert bootstrap()('owner/repo',revision,tmp_path,unavailable)==(path,revision)
 
 
 def test_bad_repository_or_ref_never_reads_secret(tmp_path):
@@ -81,3 +85,43 @@ def test_auth_denied_does_not_expose_network_output(tmp_path,monkeypatch):
     with pytest.raises(RuntimeError,match='Contents: Read-only') as error:
         bootstrap()('owner/repo','main',tmp_path,lambda name:secret)
     assert secret not in str(error.value)
+
+
+def test_branch_refresh_uses_new_commit_and_preserves_local_data(tmp_path,monkeypatch):
+    """Exercise real local Git; substitute only the private remote transport."""
+    import shutil
+    if shutil.which('git') is None:pytest.skip('Git required for notebook checkout regression')
+    origin=tmp_path/'origin';origin.mkdir()
+    workspace=tmp_path/'client';workspace.mkdir()
+    real_run=subprocess.run
+    def git(*args):
+        return real_run(['git',*args],check=True,capture_output=True,text=True)
+    git('init','-b','main',str(origin))
+    (origin/'README').write_text('first\n')
+    git('-C',str(origin),'add','README')
+    git('-C',str(origin),'-c','user.name=Fixture','-c','user.email=fixture@example.invalid',
+        'commit','-m','test: first fixture')
+    first=git('-C',str(origin),'rev-parse','HEAD').stdout.strip()
+    def local_transport(command,**kwargs):
+        command=list(command)
+        if 'remote' in command and 'add' in command:command[-1]=str(origin)
+        return real_run(command,**kwargs)
+    monkeypatch.setattr(subprocess,'run',local_transport)
+    checkout,revision=bootstrap()('owner/repo','main',workspace,lambda name:'fixture-auth')
+    assert revision==first
+    (checkout/'keep-local-data').write_text('preserve me\n')
+    (origin/'README').write_text('second\n')
+    git('-C',str(origin),'add','README')
+    git('-C',str(origin),'-c','user.name=Fixture','-c','user.email=fixture@example.invalid',
+        'commit','-m','test: second fixture')
+    second=git('-C',str(origin),'rev-parse','HEAD').stdout.strip()
+    same,revision=bootstrap()('owner/repo','main',workspace,lambda name:'fixture-auth')
+    assert same==checkout and revision==second and first!=second
+    assert (checkout/'README').read_text()=='second\n'
+    assert (checkout/'keep-local-data').read_text()=='preserve me\n'
+    def unavailable(name):raise AssertionError('pinned SHA must not request authentication')
+    assert bootstrap()('owner/repo',second,workspace,unavailable)==(checkout,second)
+    (checkout/'README').write_text('user edit\n')
+    with pytest.raises(RuntimeError,match='tracked files'):
+        bootstrap()('owner/repo','main',workspace,unavailable)
+    assert (checkout/'README').read_text()=='user edit\n'

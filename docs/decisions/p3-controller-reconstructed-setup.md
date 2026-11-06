@@ -79,3 +79,29 @@ GPU. Kết quả local ngày 06/11 (Thứ 6):
 - Yêu cầu và lựa chọn trực tiếp của Đế trong phiên ngày 06/11 (Thứ 6).
 - [Pipeline huấn luyện hiện có](../../tools/controller/train_pooled.py), [chọn cohort](../../tools/controller/real_cohort.py), [hướng dẫn notebook](../controller-score-colab-run-guide.md).
 - [UDIS](https://github.com/nie-lang/UnsupervisedDeepImageStitching), [gdown](https://github.com/wkentaro/gdown), truy cập 06/11 (Thứ 6), năm 2026.
+
+## 7. Sửa lỗi import tests trên Colab
+
+- **Người yêu cầu:** Đế, báo lỗi pytest collection trong lần chạy notebook.
+- **Ngày:** 06/11 (Thứ 6), năm 2026.
+
+Đã tái hiện `ModuleNotFoundError: No module named 'tests.python'` local bằng
+một package tests khác trong PYTHONPATH. Chọn thêm package markers cho tests
+và tests/python, chuẩn hóa các import fixture còn dùng tên module trần.
+Regular package tránh bị site-packages cùng tên chiếm namespace; không đổi
+thuật toán, dữ liệu hoặc bỏ test. Chỉ sửa PYTHONPATH trong launcher không giải
+quyết tận gốc quy tắc import trên các môi trường khác nhau nên không chọn.
+
+Notebook mới fetch lại branch khi Run all rồi khóa SHA cho lượt đó; ref là
+full SHA vẫn được giữ nguyên. Kiểm tracked changes/HEAD trước khi cập nhật,
+không force checkout hoặc xóa dữ liệu. Tooling Python của repo được import
+lại sau refresh để không dùng module cũ trong kernel. Thiếu Secret/quyền đọc
+hoặc checkout đã bị sửa thì dừng; không ghi đè thay đổi. WORK_ROOT trên Drive
+được giữ để dùng lại ZIP và ảnh đã chuẩn bị.
+
+Kiểm chứng local: toàn suite trong môi trường có package tests trùng tên đạt
+499 PASS, 4 SKIP do thiếu quantum SDK. Regression Git local kiểm branch tiến
+sang commit mới, full SHA được giữ, file untracked được bảo toàn và tracked
+edit không bị ghi đè. Notebook qua schema/cú pháp và kiểm token không lưu vào
+URL/file/log. Chưa chạy lại Colab; log Đế gửi cho thấy lỗi xảy ra ở pytest,
+sau build/CTest và trước sweep/training.

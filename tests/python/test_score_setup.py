@@ -13,7 +13,7 @@ import pytest
 from tools.controller.score_data import acquire_archive,archive_index,prepare
 from tools.controller.score_profile import digest,write_json
 from tools.controller.score_setup import cached_setup,experiment_config,freeze_bundle,restore_bundle
-from test_score_ablation import baseline
+from tests.python.test_score_ablation import baseline
 
 QUALITY=Path(__file__).resolve().parents[2]/'tools/qor/policy-pilot.json'
 

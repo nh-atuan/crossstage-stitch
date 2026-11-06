@@ -1,17 +1,22 @@
 // Benchmark Harness entry point (stitch_harness).
 // Supports fixed baseline, oracle, and adaptive controller modes.
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include "controller/controller.hpp"
 #include "controller/policy.hpp"
+#include "common/admission_control.hpp"
+#include "harness/cuda_error.hpp"
 #include "harness/controller_policy.hpp"
 #include "harness/harness_types.hpp"
 #include "harness/json_parser.hpp"
@@ -31,16 +36,17 @@ void write_csv_header(std::ostream& out) {
         << "num_kp_a,num_kp_b,num_matches,num_inliers,inlier_ratio,inlier_coverage,reproj_residual,"
         << "h0,h1,h2,h3,h4,h5,h6,h7,h8,"
         << "canvas_pixels,overlap_pixels,blend_mode_effective,num_levels,peak_workspace_bytes,cache_hit,"
-        << "status,fail_stage\n";
+        << "status,fail_stage,policy_id,attempt_count,t_probe_gpu,t_stream_wait\n";
 }
 
 void write_csv_row(std::ostream& out, const RunRecord& r) {
     out << r.run_id << "," << r.git_rev << "," << r.dataset << "," << r.split << ","
         << r.pair_id << "," << r.config_id << "," << r.repeat_idx << "," << r.is_warmup << ","
-        << r.seed << ","
-        << std::fixed << std::setprecision(4) << r.S << ","
-        << r.K << "," << r.R << "," << r.blend_mode << ","
-        << std::setprecision(3)
+        << r.seed << ",";
+    if (r.policy_id.empty()) out << std::fixed << std::setprecision(4);
+    else out << std::defaultfloat << std::setprecision(std::numeric_limits<double>::max_digits10);
+    out << r.S << "," << r.K << "," << r.R << "," << r.blend_mode << ","
+        << std::fixed << std::setprecision(r.policy_id.empty() ? 3 : 6)
         << r.t_h2d << "," << r.t_s1 << "," << r.t_s2 << "," << r.t_s3 << ","
         << r.t_s4 << "," << r.t_s5 << "," << r.t_s6 << "," << r.t_controller << ","
         << r.t_d2h << "," << r.t_e2e << ","
@@ -50,13 +56,31 @@ void write_csv_row(std::ostream& out, const RunRecord& r) {
         << r.inlier_ratio << "," << r.inlier_coverage << "," << r.reproj_residual << ",";
 
     for (int i = 0; i < 9; ++i) {
-        out << std::setprecision(10) << r.H[i] << ",";
+        if (r.status == "OK" || r.policy_id.empty())
+            out << std::defaultfloat << std::setprecision(std::numeric_limits<double>::max_digits10) << r.H[i];
+        out << ',';
     }
 
     out << r.canvas_pixels << "," << r.overlap_pixels << ","
         << r.blend_mode_effective << "," << r.num_levels << ","
         << r.peak_workspace_bytes << "," << r.cache_hit << ","
-        << r.status << "," << r.fail_stage << "\n";
+        << r.status << "," << r.fail_stage << ',';
+    if (r.policy_id.empty()) out << ",,,";
+    else out << r.policy_id << ',' << r.attempt_count << ',' << std::fixed << std::setprecision(6)
+             << r.t_probe_gpu << ',' << r.t_stream_wait;
+    out << '\n';
+}
+
+void set_adaptive_config(RunRecord& run, const AttemptTrace& trace) {
+    if (!trace.count) return;
+    const auto& knobs = trace.records[trace.count - 1].knobs;
+    run.blend_mode = run.blend_mode_effective = attempt_blend_name(knobs.B);
+    std::ostringstream id;
+    id << 'S';
+    if (std::round(knobs.S * 100) / 100 == knobs.S) id << std::fixed << std::setprecision(2);
+    else id << std::setprecision(std::numeric_limits<double>::max_digits10);
+    id << knobs.S << "_K" << knobs.K << "_R" << knobs.R << "_B" << run.blend_mode;
+    run.config_id = id.str();
 }
 
 std::string generate_run_id() {
@@ -98,6 +122,7 @@ int main(int argc, char** argv) {
     std::string run_id = generate_run_id();
     std::string mode = "fixed";  // "fixed", "oracle", "adaptive"
     std::string controller_policy_path;
+    std::string trace_path;
 
     // Single run options
     std::string img_a_path, img_b_path;
@@ -138,6 +163,7 @@ int main(int argc, char** argv) {
             }
         }
         else if (arg == "--controller-policy" && i + 1 < argc) controller_policy_path = argv[++i];
+        else if (arg == "--trace-out" && i + 1 < argc) trace_path = argv[++i];
         else if (arg == "--img-a" && i + 1 < argc) img_a_path = argv[++i];
         else if (arg == "--img-b" && i + 1 < argc) img_b_path = argv[++i];
         else if (arg == "--pair-id" && i + 1 < argc) pair_id = argv[++i];
@@ -151,6 +177,7 @@ int main(int argc, char** argv) {
                       << "  --mode <fixed|oracle|adaptive>  Execution mode (default: fixed)\n"
                       << "  --adaptive                      Shortcut for --mode adaptive\n"
                       << "  --controller-policy <path|legacy-v1>   Adaptive policy (default: legacy-v1)\n"
+                      << "  --trace-out <path>              Adaptive attempt CSV\n"
                       << "  --oracle                        Shortcut for --mode oracle\n"
                       << "Batch options:\n"
                       << "  --manifest <path>               Pairs JSON manifest\n"
@@ -172,8 +199,27 @@ int main(int argc, char** argv) {
     }
 
     if ((mode != "adaptive" && mode != "fixed" && mode != "oracle") ||
-        (mode != "adaptive" && !controller_policy_path.empty()) || num_warmup < 0 || num_repeats <= 0) {
+        (mode != "adaptive" && (!controller_policy_path.empty() || !trace_path.empty())) ||
+        num_warmup < 0 || num_repeats <= 0 || num_warmup > std::numeric_limits<int>::max() - num_repeats) {
         std::cerr << "Invalid benchmark mode, policy option or repeat count\n";
+        return 1;
+    }
+    try {
+        const auto output = std::filesystem::weakly_canonical(out_path);
+        for (const auto& input : {manifest_path, configs_path, controller_policy_path, img_a_path, img_b_path}) {
+            if (input.empty() || input == "legacy-v1") continue;
+            std::error_code ec;
+            if (std::filesystem::weakly_canonical(input) == output ||
+                std::filesystem::equivalent(input, output, ec))
+                throw std::runtime_error("--out aliases a benchmark input");
+        }
+        if (!trace_path.empty()) {
+            const auto trace = std::filesystem::weakly_canonical(trace_path);
+            if (std::filesystem::exists(trace) || trace == output)
+                throw std::runtime_error("Attempt trace requires a fresh path distinct from --out");
+        }
+    } catch (const std::exception& error) {
+        std::cerr << "Output path error: " << error.what() << '\n';
         return 1;
     }
     std::vector<PairEntry> pairs;
@@ -201,6 +247,7 @@ int main(int argc, char** argv) {
         if (!configs_path.empty()) {
             try {
                 configs = parse_configs(configs_path);
+                if (seed_given) for (auto& config : configs) config.seed = seed;
             } catch (const std::exception& e) {
                 std::cerr << "Error parsing configs: " << e.what() << "\n";
                 return 1;
@@ -259,6 +306,15 @@ int main(int argc, char** argv) {
         return 1;
     }
     write_csv_header(csv_out);
+    std::ofstream trace_out;
+    if (!trace_path.empty()) {
+        trace_out.open(trace_path);
+        if (!trace_out) {
+            std::cerr << "Error opening attempt trace: " << trace_path << '\n';
+            return 1;
+        }
+        write_attempt_header(trace_out);
+    }
 
     std::cout << "Starting benchmark harness:\n"
               << "  Mode: " << mode << "\n"
@@ -270,54 +326,92 @@ int main(int argc, char** argv) {
 
     std::string manifest_dir = manifest_path.empty() ? "" : get_parent_dir(manifest_path);
 
-    int total_runs = 0;
+    std::uint64_t total_runs = 0;
     for (const auto& pair : pairs) {
         std::string path_a = join_paths(manifest_dir, pair.img_a_path);
         std::string path_b = join_paths(manifest_dir, pair.img_b_path);
 
-        HostImageRGB img_a, img_b;
+        std::string input_status, input_stage = "input";
+        bool upload_cuda_failure = false;
         try {
-            img_a = load_image(path_a);
-            img_b = load_image(path_b);
-        } catch (const std::exception& e) {
-            std::cerr << "Warning: skipping pair " << pair.pair_id << ": " << e.what() << "\n";
-            continue;
+            const auto img_a = load_image(path_a);
+            const auto img_b = load_image(path_b);
+            input_stage = "h2d";
+            runner.upload_pair(img_a, img_b);
+        } catch (const CudaError& error) {
+            input_status = error.code == cudaErrorMemoryAllocation ? "ERR_DEVICE_OOM" : "ERR_CUDA";
+            upload_cuda_failure = true;
+            std::cerr << "CUDA upload failed for " << pair.pair_id << ": " << error.what() << '\n';
+        } catch (const stitch::admission::Error& error) {
+            input_status = error.code;
+        } catch (const std::exception& error) {
+            std::cerr << "Input failed for " << pair.pair_id << ": " << error.what() << '\n';
+            input_status = "ERR_INPUT";
         }
 
-        // Upload images to GPU outside measurement window
-        runner.upload_pair(img_a, img_b);
-
-        if (mode == "adaptive") {
-            // Adaptive mode: governed by Controller
-            for (int w = 0; w < num_warmup; ++w) {
-                RunRecord rec;
-                runner.execute_adaptive_run(controller, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, w, 1, seed, &rec);
-                write_csv_row(csv_out, rec);
-            }
-            for (int r = 0; r < num_repeats; ++r) {
-                RunRecord rec;
-                runner.execute_adaptive_run(controller, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, r, 0, seed, &rec);
-                write_csv_row(csv_out, rec);
-                total_runs++;
+        auto emit_repeats = [&](const HarnessConfig* config) {
+            const bool adaptive = config == nullptr;
+            for (int i = 0; i < num_warmup + num_repeats; ++i) {
+                const bool warmup = i < num_warmup;
+                const int repeat = warmup ? i : i - num_warmup;
+                RunRecord record;
+                bool cuda_failed = false;
+                const AttemptTrace* trace = nullptr;
+                if (!input_status.empty()) {
+                    record.run_id = run_id;
+                    record.git_rev = STITCH_GIT_REV;
+                    record.dataset = dataset;
+                    record.split = split;
+                    record.pair_id = pair.pair_id;
+                    record.repeat_idx = repeat;
+                    record.is_warmup = warmup;
+                    record.seed = adaptive ? seed : config->seed;
+                    record.config_id = adaptive ? "adaptive_unstarted" : config->config_id;
+                    if (config) {
+                        record.S = config->S; record.K = config->K; record.R = config->R;
+                        record.blend_mode = record.blend_mode_effective = config->blend_mode_str;
+                    }
+                    record.status = input_status;
+                    record.fail_stage = input_stage;
+                } else if (adaptive) {
+                    try {
+                        runner.execute_adaptive_run(controller, run_id, STITCH_GIT_REV, dataset, split,
+                                                    pair.pair_id, repeat, warmup, seed, &record);
+                        cuda_failed = record.status == "CUDA_ERROR";
+                    } catch (const CudaError&) {
+                        cuda_failed = true;
+                    }
+                    trace = &runner.attempt_trace();
+                    set_adaptive_config(record, *trace);
+                } else {
+                    runner.execute_run(*config, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id,
+                                       repeat, warmup, &record);
+                }
+                if (adaptive) record.policy_id = controller_policy.id;
+                write_csv_row(csv_out, record);
+                if (trace && trace_out.is_open()) write_attempt_rows(trace_out, record, *trace);
+                if (!warmup) ++total_runs;
+                if (cuda_failed) {
+                    csv_out.flush();
+                    if (trace_out.is_open()) trace_out.flush();
+                    std::cerr << "CUDA failure stopped the adaptive campaign at " << pair.pair_id << '\n';
+                    return false;
+                }
             }
             csv_out.flush();
-        } else {
-            // Fixed-Best or Oracle mode
-            for (const auto& cfg : configs) {
-                for (int w = 0; w < num_warmup; ++w) {
-                    RunRecord rec;
-                    runner.execute_run(cfg, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, w, 1, &rec);
-                    write_csv_row(csv_out, rec);
-                }
-                for (int r = 0; r < num_repeats; ++r) {
-                    RunRecord rec;
-                    runner.execute_run(cfg, run_id, STITCH_GIT_REV, dataset, split, pair.pair_id, r, 0, &rec);
-                    write_csv_row(csv_out, rec);
-                    total_runs++;
-                }
-                csv_out.flush();
+            if (trace_out.is_open()) trace_out.flush();
+            if (!csv_out || (trace_out.is_open() && !trace_out)) {
+                std::cerr << "Failed to write benchmark output\n";
+                return false;
             }
+            return true;
+        };
+        if (mode == "adaptive") {
+            if (!emit_repeats(nullptr)) return 2;
+        } else {
+            for (const auto& config : configs) if (!emit_repeats(&config)) return 2;
         }
+        if (upload_cuda_failure) return 2;
     }
 
     std::cout << "Benchmark harness completed successfully. Total measurement runs: " << total_runs << "\n";

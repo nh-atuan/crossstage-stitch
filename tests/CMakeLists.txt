@@ -13,6 +13,11 @@ target_link_libraries(test_policy_loader PRIVATE stitch_controller)
 target_include_directories(test_policy_loader PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
 add_test(NAME test_policy_loader COMMAND test_policy_loader)
 
+add_executable(test_attempt_trace controller/test_attempt_trace.cpp)
+target_link_libraries(test_attempt_trace PRIVATE stitch_controller)
+target_include_directories(test_attempt_trace PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
+add_test(NAME test_attempt_trace COMMAND test_attempt_trace)
+
 # Compile the shared headers with nvcc (sm_75) when CUDA is available.
 if(CMAKE_CUDA_COMPILER)
   add_executable(test_common_cuda test_common_cuda.cu)

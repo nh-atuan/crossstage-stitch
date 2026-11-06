@@ -27,6 +27,7 @@ from tools.data_prep.prepare_dev_dataset import (
     write_source_receipt,
 )
 from tools.sweep.run_sweep import generate_grid_configs
+from tools.repro.io import sha256
 
 
 def query_gpu_meta() -> Dict[str, str]:
@@ -172,9 +173,18 @@ def main() -> int:
     parser.add_argument("--warmup", type=int, default=2, help="Warmup iterations per pair (default: 2)")
     parser.add_argument("--repeats", type=int, default=10, help="Measurement repeats per pair (default: 10)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
+    parser.add_argument("--controller-policy", default="legacy-v1",
+                        help="Versioned adaptive policy JSON or legacy-v1")
     parser.add_argument("--prepare-only", action="store_true", help="Only download and prepare dataset without running GPU harness")
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing")
     args = parser.parse_args()
+    policy_path = Path(args.controller_policy) if args.controller_policy != "legacy-v1" else None
+    if policy_path is not None and ("adaptive" not in args.modes or not policy_path.is_file()):
+        parser.error("--controller-policy requires an existing JSON file and adaptive mode")
+    policy_hash = sha256(policy_path) if policy_path is not None else None
+    adaptive_trace = args.out_dir / "adaptive_attempts.csv" if "adaptive" in args.modes else None
+    if adaptive_trace is not None and not (args.dry_run or args.prepare_only) and adaptive_trace.exists():
+        parser.error("adaptive attempt trace already exists; use a fresh --out-dir")
 
     split_label = "dev" if args.subset == "dev25" else "test"
     max_pairs = 25 if args.subset == "dev25" else 0
@@ -316,12 +326,16 @@ def main() -> int:
         produced_csvs.append(oracle_csv)
 
     # Step 4: Execute Adaptive Controller
-    if "adaptive" in args.modes:
+    if adaptive_trace is not None:
         adaptive_csv = args.out_dir / "adaptive_runs.csv"
         cmd = [
             str(args.harness),
             "--mode",
             "adaptive",
+            "--controller-policy",
+            args.controller_policy,
+            "--trace-out",
+            str(adaptive_trace),
             "--run-id",
             "adaptive_controller",
             "--dataset",
@@ -342,6 +356,10 @@ def main() -> int:
         rc = run_harness_cmd(cmd, dry_run=args.dry_run)
         if rc != 0:
             return rc
+        if not args.dry_run and (not adaptive_trace.is_file() or
+                                 (policy_path is not None and sha256(policy_path) != policy_hash)):
+            print("Error: missing adaptive trace or controller policy changed.", file=sys.stderr)
+            return 2
         produced_csvs.append(adaptive_csv)
 
     # Step 5: Merge into telemetry_results.csv and write meta.json
@@ -358,6 +376,10 @@ def main() -> int:
                 "repeats": args.repeats,
                 "seed": args.seed,
                 "telemetry_rows": total_rows,
+                "controller_policy": (policy_path.name if policy_path is not None else "legacy-v1")
+                if adaptive_trace is not None else None,
+                "controller_policy_sha256": policy_hash,
+                "adaptive_trace": adaptive_trace.name if adaptive_trace is not None else None,
             }
         )
         meta_path = args.out_dir / "meta.json"
@@ -367,7 +389,8 @@ def main() -> int:
         if args.gdrive_cache_dir is not None:
             dest_results = args.gdrive_cache_dir / "results" / args.subset
             dest_results.mkdir(parents=True, exist_ok=True)
-            for f in [*produced_csvs, telemetry_csv, meta_path]:
+            sidecars = [adaptive_trace] if adaptive_trace is not None else []
+            for f in [*produced_csvs, *sidecars, telemetry_csv, meta_path]:
                 if f.exists():
                     shutil.copy2(f, dest_results / f.name)
             print(f"Copied CSV outputs and meta.json to Google Drive: {dest_results}")

@@ -18,6 +18,7 @@
 #include "s5/s5.hpp"
 #include "s6/s6.hpp"
 #include "harness/harness_types.hpp"
+#include "harness/attempt_trace.hpp"
 #include "harness/image_loader.hpp"
 
 namespace stitch::harness {
@@ -73,6 +74,7 @@ public:
                               int is_warmup,
                               std::uint64_t seed,
                               RunRecord* record);
+    const AttemptTrace& attempt_trace() const noexcept { return attempt_trace_; }
 
 private:
     cudaStream_t stream_{nullptr};
@@ -147,7 +149,9 @@ private:
     bool initialized_{false};
     int input_capacity_w_ = 0, input_capacity_h_ = 0;
     int canvas_capacity_w_ = 0, canvas_capacity_h_ = 0;
+    int hypothesis_capacity_ = 0;
     double last_fixed_gpu_span_ms_ = -1;
+    AttemptTrace attempt_trace_{};
 };
 
 }  // namespace stitch::harness

@@ -162,6 +162,21 @@ def build_ch01e_notebook(output_path: Path) -> Path:
     data_p3 = REPO / "data/p3"
     test_manifest = data_p3 / "testing/data_manifest.json"
     train_manifest = data_p3 / "training/data_manifest.json"
+
+    # Kiểm tra nếu dữ liệu bị lồng ở thư mục con (ví dụ data/p3/data/p3 hoặc data/p3/p3)
+    if not (test_manifest.is_file() and train_manifest.is_file()):
+        for nested in (data_p3 / "data/p3", data_p3 / "p3"):
+            if (nested / "testing/data_manifest.json").is_file():
+                print(f"Phát hiện dữ liệu nằm ở thư mục con {nested}, đang di chuyển về {data_p3}...")
+                for item in nested.iterdir():
+                    dest = data_p3 / item.name
+                    if dest.exists():
+                        if dest.is_dir(): shutil.rmtree(dest)
+                        else: dest.unlink()
+                    shutil.move(str(item), str(dest))
+                break
+
+    # Nếu vẫn chưa có, giải nén từ bundle với cơ chế tự phát hiện prefix
     if not (test_manifest.is_file() and train_manifest.is_file()):
         data_p3.mkdir(parents=True, exist_ok=True)
         bundle = DRIVE / "p3_protocol_bundle.zip"
@@ -170,7 +185,29 @@ def build_ch01e_notebook(output_path: Path) -> Path:
             run_logged("gdown-bundle", "gdown", "--id", "1YNkpnEay-0c7ooEUSkMSpFojGKBXjwhZ", "-O", str(bundle))
         print("Đang giải nén p3_protocol_bundle.zip...")
         with zipfile.ZipFile(bundle) as zf:
-            zf.extractall(data_p3)
+            manifest_entry = next((name for name in zf.namelist() if name.endswith("testing/data_manifest.json")), None)
+            if manifest_entry is None:
+                raise FileNotFoundError(f"Không tìm thấy testing/data_manifest.json trong {bundle}")
+            prefix = manifest_entry[:-len("testing/data_manifest.json")]
+            print(f"Phát hiện archive prefix: '{prefix}'")
+            if prefix == "data/p3/":
+                zf.extractall(REPO)
+            elif prefix == "p3/":
+                zf.extractall(REPO / "data")
+            elif prefix == "":
+                zf.extractall(data_p3)
+            else:
+                for member in zf.infolist():
+                    if member.filename.startswith(prefix) and not member.is_dir():
+                        rel = member.filename[len(prefix):]
+                        target = data_p3 / rel
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        with zf.open(member) as src, target.open("wb") as dst:
+                            shutil.copyfileobj(src, dst)
+
+    assert test_manifest.is_file(), f"LỖI: Không tìm thấy {test_manifest} sau khi giải nén!"
+    assert train_manifest.is_file(), f"LỖI: Không tìm thấy {train_manifest} sau khi giải nén!"
+    print(f"✅ Đã xác nhận tồn tại {test_manifest} và {train_manifest}.")
 
     module("verify-testing", "tools.data_prep.udis_ingest", "--output", str(data_p3 / "testing"), "--verify-only")
     module("verify-training", "tools.data_prep.udis_ingest", "--output", str(data_p3 / "training"), "--verify-only")

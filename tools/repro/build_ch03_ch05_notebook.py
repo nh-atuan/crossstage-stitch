@@ -45,9 +45,10 @@ def build_ch03_ch05_notebook(output_path: Path) -> Path:
 
     drive.mount("/content/drive")
     DRIVE = Path("/content/drive/MyDrive")
-    SOURCE_ZIP = DRIVE / "phase3_ch03_ch05_source.zip"
-    if not SOURCE_ZIP.is_file():
-        raise FileNotFoundError(f"Missing versioned source archive: {SOURCE_ZIP}")
+    SOURCE_ZIP = next((DRIVE / name for name in ("phase3_ch03_ch05_source.zip", "crossstage_stitch_source.zip")
+                       if (DRIVE / name).is_file()), None)
+    if SOURCE_ZIP is None:
+        raise FileNotFoundError(f"Missing source archive on Drive: checked phase3_ch03_ch05_source.zip and crossstage_stitch_source.zip in {DRIVE}")
 
     WORK = Path(tempfile.mkdtemp(prefix="crossstage-ch03-ch05-", dir="/content"))
     REPO = WORK / "source"
@@ -308,16 +309,36 @@ def build_ch03_ch05_notebook(output_path: Path) -> Path:
     """)
     code(r'''
     # @title 4.1. Lấy H từ CH-01 và kiểm hash 20 ảnh PPM
-    CH01_EXPORT = DRIVE / "p3_evidence/run_20261106_022310Z"
+    CH01_EXPORT = next((p for p in (DRIVE / "p3_evidence/run_20261106_022310Z",
+                                   REPO / "specs/p3_evidence",
+                                   WORK / "p3_evidence/run_20261106_022310Z")
+                       if (p / "development-audit.json").is_file()),
+                       DRIVE / "p3_evidence/run_20261106_022310Z")
     UDIS_BUNDLE = DRIVE / "p3_protocol_bundle.zip"
+    BUNDLE_GDRIVE_ID = "1YNkpnEay-0c7ooEUSkMSpFojGKBXjwhZ"
+    BUNDLE_URL = f"https://drive.google.com/uc?id={BUNDLE_GDRIVE_ID}"
     CH01_AUDIT_SHA256 = "6acaa640a2a43d0eb4a28c978d7319e99fcedaf88d211b92526035d5f150d7a6"
     A4_IDS = "000792 002674 003309 010157 009477 009423 009598 009583 009015 010285".split()
 
     def make_a4_input():
         if not ready("setup"):
             raise RuntimeError("Setup has not passed")
+        bundle_path = UDIS_BUNDLE
+        if not bundle_path.is_file():
+            local_bundle = Path("/content/p3_protocol_bundle.zip")
+            if local_bundle.is_file():
+                bundle_path = local_bundle
+            else:
+                print(f"Không tìm thấy {bundle_path} trên Drive. Đang tự động tải từ Google Drive qua gdown...")
+                import gdown
+                try:
+                    gdown.download(BUNDLE_URL, str(bundle_path), quiet=False, fuzzy=True)
+                except Exception as exc:
+                    print(f"Không thể ghi trực tiếp vào Drive ({exc}), đang tải vào /content/p3_protocol_bundle.zip...")
+                    bundle_path = local_bundle
+                    gdown.download(BUNDLE_URL, str(bundle_path), quiet=False, fuzzy=True)
         module("a4-input", "tools.bench.prepare_a4_cohort", "--evidence", CH01_EXPORT,
-               "--bundle", UDIS_BUNDLE, "--output", A4_INPUT,
+               "--bundle", bundle_path, "--output", A4_INPUT,
                "--audit-sha256", CH01_AUDIT_SHA256, "--pair-ids", *A4_IDS)
         return {"status": "READY", "manifest_sha256": sha(A4_INPUT / "manifest.json")}
 

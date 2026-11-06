@@ -34,6 +34,14 @@ def package_source(output_zip: Path, repo_root: Path) -> Path:
                 if rel not in tracked_files:
                     extra_files.append(rel)
 
+    evidence_dir = repo_root / "specs/p3_evidence"
+    if evidence_dir.exists():
+        for p in evidence_dir.rglob("*"):
+            if p.is_file():
+                rel = p.relative_to(repo_root).as_posix()
+                if rel not in tracked_files:
+                    extra_files.append(rel)
+
     all_files = sorted(set(tracked_files + extra_files))
 
     # 3. Create zip

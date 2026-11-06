@@ -5,9 +5,10 @@ Mốc đối chiếu 06/11 (Thứ 6), năm 2026. Bằng chứng Colab T4 gồm l
 | Hạng mục | Phần đã nghiệm thu | Phần còn mở |
 | --- | --- | --- |
 | CH-00 — Baseline | **Đóng.** Receipt đã được xác minh, build `sm_75` và 16/16 CTest pass trên Colab T4. | Kết quả này áp dụng cho snapshot đã kiểm. Kiểm tra Compute Sanitizer cho các campaign GPU được theo dõi riêng. |
-| CH-01 — Dữ liệu, protocol và reference | **Đạt tooling, ingestion, freeze protocol, smoke test và thu đủ số liệu development T4.** Có 120.000 lượt đo, 24.000 warmup và 12.000 dòng QoR. | **Gate reference chưa đạt.** Reference dùng được trên 238/250 cặp. `selected_fixed_best=null`. |
+| CH-01 — Dữ liệu, protocol và reference | **Đóng trên development theo ngoại lệ đã duyệt.** Reference dùng được trên 238/250 cặp. Receipt riêng khóa Fixed-Best từ train-fit và giữ đủ mẫu số. | Campaign test vẫn phải ghi trạng thái reference thực tế của từng cặp. |
 | CH-01E — Hạ tầng adaptive | **Đóng nghiệm thu trên T4 cho revision đã đo.** Build `sm_75`, 4/4 CTest, memcheck fixture 0 lỗi và hai lượt adaptive smoke trên ảnh thật cùng seed. | Smoke bao phủ đường `ACCEPT` ngay attempt đầu với `legacy-v1`. Đánh giá policy đã hiệu chỉnh và QoR toàn test set thuộc các campaign riêng. |
 | CH-03/A4 — Same-H blending | **Đóng campaign T4 trên cohort development đã khóa.** 10/10 cặp đạt ở cả ba blender, có bảng và ảnh truy về artifact. | Phạm vi kết luận giới hạn ở 10 cặp overlap cao. |
+| CH-04a — Chuẩn bị A5 | **20/20 bộ self-check đã fit từ sweep thật.** 19 bộ tham số khác nhau và một cặp policy cho cùng tham số. | Chờ bundle PPM để fit scene rules, chạy adaptive validation trên T4 và xét khóa 20 controller. |
 | CH-05 — Synthetic multi-resolution | **Đạt `s6_only` trên T4.** 54/54 case từ 720p đến 4K. `end_to_end` đã đo đủ và có kết quả âm đã xác minh. | Chưa thiết lập được đường scaling end-to-end của các lượt đăng ký ảnh hợp lệ. |
 
 Lần rà soát báo cáo chạy lại **79 test CPU** cho protocol UDIS-D, A4 và multi-resolution tại revision `33d4b21`. Tất cả đều pass. Các kết quả Colab bên dưới được đối chiếu từ output đã nhận.
@@ -98,7 +99,7 @@ Audit con xếp hạng theo số cặp có đủ 10 lượt đạt QoR, rồi đ
 - Mỗi cấu hình trong nhóm `S=0.25` đạt **2–3/200 cặp fit** và **0/50 cặp validation**. Kết quả mô tả grid, cohort và policy đã khóa.
 - Oracle của audit có ít nhất một cấu hình đạt trên **192/200 fit** và **46/50 validation**. Reference tự so với cùng H trên những cặp có nhãn hợp lệ, nên các số này phản ánh phạm vi chấm QoR hiện tại. Chúng chưa đánh giá độ chính xác H với ground truth hoặc chứng minh Oracle speedup trên đủ cohort.
 
-**Xử lý lượt development hiện tại.** Giữ reference, ngưỡng QoR, hai split và cả 12 cặp lỗi. Các ca đó giữ nhãn `REFERENCE_FAILED`. Kết quả `OK` ở ba cặp có cấu hình thay thế dùng để chẩn đoán. Thay H theo cấu hình hoặc theo từng cặp sẽ đổi miền so sánh đã khóa. Loại cặp lỗi cũng sẽ đổi mẫu số sau khi đã xem kết quả. Vì vậy audit hiện tại kết thúc với disposition reference chưa đạt và Fixed-Best để trống. Việc mở campaign test chính vẫn cần evidence development mới đáp ứng gate hoặc một quy tắc reference mới do nhóm chốt trước khi mở test.
+**Kết quả audit gốc.** Audit giữ reference, ngưỡng QoR, hai split và cả 12 cặp `REFERENCE_FAILED`. Kết quả `OK` ở ba cặp có cấu hình thay thế dùng để chẩn đoán. Thay H theo cấu hình hoặc theo từng cặp sẽ đổi miền so sánh đã khóa. Loại cặp lỗi cũng sẽ đổi mẫu số sau khi đã xem kết quả. Audit gốc kết thúc với disposition reference chưa đạt và Fixed-Best để trống.
 
 Gói export đã được replay bằng lệnh sau. `verification_scope=exported_metadata_and_csv` và exit 0 xác nhận audit lưu trữ tái tạo được. Giá trị `selected_fixed_best=null` là kết quả của gate nghiên cứu. Kiểm chứng đầy đủ trên Colab vẫn dùng bundle có ảnh và bỏ cờ `--exported-data-root`.
 
@@ -108,6 +109,12 @@ python -m tools.data_prep.audit_development \
   --output specs/p3_evidence/development-audit.json \
   --exported-data-root specs/p3_evidence/data --verify-only --verbose
 ```
+
+### Khóa Fixed-Best theo disposition được duyệt
+
+Ngày 06/11 (Thứ 6), Chương phê duyệt ngoại lệ giới hạn ở đúng 12 lỗi trong audit trên. Công cụ kiểm SHA-256 của audit và mã lỗi qua đủ 10 lượt của từng reference, giữ các cặp trong mẫu số dưới nhãn `REFERENCE_FAILED` và yêu cầu tất cả kết quả khác có disposition `PASS` hoặc `FAIL`. Audit gốc giữ `selected_fixed_best=null` để lần replay cũ vẫn tái lập. Quyết định mới được ghi riêng trong `development-lock.json` và không áp dụng ngoại lệ này cho test. [Ledger phê duyệt](../../tools/data_prep/reference-exceptions-p3.json)
+
+Receipt đã sinh và chạy lại `--verify-only` từ CSV thật. Fixed-Best là **`S1.00_K2000_R1024_Bfeather`**, đạt **192/200** trên fit với median **7,509 ms**. Cùng cấu hình đạt **46/50** trên validation, median **7,270 ms**. Fixed-High và Fixed-Best dùng cùng cấu hình trong lượt này. SHA-256 của receipt là `f204d575f19535c63392c758c9c6b23925a29182ce18e98d90ddbca13260e95b`. [Cách tái tạo receipt](../runbooks/ch04a_a5_calibration.md#1-replay-và-khóa-ch-01)
 
 ## CH-01E — Adaptive smoke trên Colab T4
 
@@ -157,7 +164,13 @@ Mỗi cột tổng hợp 20 lượt đo, gồm 10 lượt mỗi cặp. Median l�
 
 S5 có median lớn nhất trong cả hai lượt. Ở lượt đầu, `000015` chuyển từ khoảng 10,32–11,05 ms ở năm lượt đo đầu xuống 6,44–6,48 ms ở năm lượt cuối. Các trường ngoài timing vẫn khớp giữa hai lượt. Evidence có thông tin thiết bị nhưng thiếu chuỗi đo xung nhịp và nhiệt độ, nên nguyên nhân dao động timing chưa xác định. `t_e2e` bắt đầu khi RGB đã sẵn sàng trên GPU. `t_controller` chỉ đo phần CPU của `begin_pair` và `observe`, còn `t_stream_wait` chồng lấp với thời gian GPU. Các median mô tả smoke, với hai lượt dùng cùng policy và không có baseline đối chứng để tính speedup. [Ranh giới timing](../runbooks/ch01e_adaptive_colab.md#policy-và-đầu-ra)
 
-**Nghiệm thu.** Đóng CH-01E cho hạ tầng adaptive của revision đã đo trên T4. CH-01 đã nghiệm thu replay, còn reference và Fixed-Best vẫn mở. Khi tích hợp revision có thay đổi harness hoặc controller, kết quả smoke cần được xác nhận lại trước campaign chính.
+**Nghiệm thu.** Đóng CH-01E cho hạ tầng adaptive của revision đã đo trên T4. Khi tích hợp revision có thay đổi harness hoặc controller, kết quả smoke cần được xác nhận lại trước campaign chính.
+
+## CH-04a — Chuẩn bị A5 trên development
+
+Đã fit self-check cho cả 20 policy từ sweep T4 lưu trữ. Tất cả chọn cùng Fixed-Best từ fit và có mốc **46/50 cặp `PASS`** trên validation. Có **19** bộ self-check khác nhau. Ở policy `δS=0,02, δP=0,5 dB`, gate fallback legacy chấp nhận **158/192** cặp fit có reference dùng được trong replay. Đây là chẩn đoán fit từ fixed sweep. Việc đánh giá toàn ladder và retry thực tế cần lượt adaptive validation riêng.
+
+Plan có trạng thái `FIT_GATES_READY`, SHA-256 `142f8850cf62ad3febc2843d1dafc729ad0380d7fd7cd7bcbe8d392fd09a314a`. Bước kế tiếp cần bundle 500 PPM đã kiểm hash để fit scene rules, sau đó chạy các ứng viên thật trên validation T4. Chỉ công bố `a5-lock.json` khi cả 20 policy có ứng viên đạt điều kiện. [Runbook CH-04a](../runbooks/ch04a_a5_calibration.md)
 
 ## Bằng chứng chung của lượt A4 và CH-05
 
@@ -169,7 +182,7 @@ Hai CTest `test_s6_cuda` và `test_admission_control` pass trong 0,48 giây. Fix
 
 ## CH-03/A4 — Same-H blending trên T4
 
-Chọn 10 cặp có overlap pixel native cao nhất trong 46 cặp `train-val` có reference sử dụng được. Mỗi cặp khóa cùng RGB, H gốc B→A, canvas và mask cho ba blender. Tỷ lệ diện tích giao so với diện tích ảnh nguồn nhỏ hơn là **86,1–99,1%** theo registration. Đây là cohort development thiên về overlap cao. H được lấy từ cấu hình reference candidate CH-01 và phù hợp để cố định đầu vào A4. Gate reference trên toàn development vẫn mở. [Runbook A4](../runbooks/ch03_same_h_colab.md)
+Chọn 10 cặp có overlap pixel native cao nhất trong 46 cặp `train-val` có reference sử dụng được. Mỗi cặp khóa cùng RGB, H gốc B→A, canvas và mask cho ba blender. Tỷ lệ diện tích giao so với diện tích ảnh nguồn nhỏ hơn là **86,1–99,1%** theo registration. Đây là cohort development thiên về overlap cao. H được lấy từ cấu hình reference CH-01 để cố định đầu vào A4. [Runbook A4](../runbooks/ch03_same_h_colab.md)
 
 Campaign có **30/30 case cặp–blender đạt**, tương ứng **300 lượt đo và 60 warmup**. Đối chiếu lại 20 ảnh PPM, H và canvas với registration. Cả 30 case khớp union mask từng pixel và sai số RGB tối đa quan sát được là **1 mức** trên oracle FP64, dưới tolerance 2. Intersection được đối chiếu bằng geometry oracle và overlap counter của native runner.
 
@@ -228,9 +241,8 @@ Cặp duy nhất thực thi qua cả ba blender là `scene000_affine_overlap00_7
 
 | Task | Việc tiếp theo |
 | --- | --- |
-| CH-01 | Chốt reference và Fixed-Best từ development. Kết quả hiện tại vẫn `selected_fixed_best=null`. |
-| CH-04a | Hiệu chỉnh và khóa 20 controller variants trên development/validation. |
-| CH-02 và CH-04b | Chạy benchmark chính và A5 trên 1.105 cặp test sau khi khóa reference, Fixed-Best và controller variants liên quan. |
+| CH-04a | Fit scene rules từ PPM development, chạy adaptive validation trên T4 và khóa đủ 20 controller variants nếu đạt gate. |
+| CH-02 và CH-04b | Chạy benchmark chính và A5 trên 1.105 cặp test khi controller tương ứng đã khóa. Đọc Fixed-Best từ receipt CH-01 và giữ reference failures trong ledger của từng campaign. |
 | CH-05 end-to-end | Giữ nguyên kết quả âm hiện tại. Nếu cần đường scaling đăng ký ảnh hợp lệ, thiết kế và khóa một cohort synthetic bổ sung có tín hiệu đặc trưng phân biệt được, kèm chẩn đoán S2/S4/S5. |
 | CH-06 | Dùng `s6_only` T4 đã verify làm baseline. Chạy cùng manifest, seed, mode và timing boundary trên L4/A100 với build target tương ứng. |
 | CH-07 và CH-08 | Có thể làm ngay bảng và hình cho A4 và `s6_only` T4. Các bảng tổng hợp và bàn giao paper còn phụ thuộc kết quả A5, benchmark chính và cross-architecture. |

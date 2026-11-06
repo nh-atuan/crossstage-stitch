@@ -24,14 +24,16 @@ def root_relative(path: Path, root: Path) -> str:
 
 def build_protocol(training_path: Path, testing_path: Path, output: Path, *, seed: int = 20261030,
                    development_count: int = 250, validation_count: int = 50,
-                   scenes_path: Path | None = None, require_scene_groups: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
-    root = output.parent
+                   scenes_path: Path | None = None, require_scene_groups: bool = False,
+                   exported_data_root: Path | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+    root = output.parent if exported_data_root is None else exported_data_root
     input_paths = {"training": training_path, "testing": testing_path}
     if scenes_path is not None:
         input_paths["scenes"] = scenes_path
     inputs = {name: {"path": root_relative(path, root), "sha256": sha256(path)}
               for name, path in input_paths.items()}
-    training, testing = verify_manifest(training_path), verify_manifest(testing_path)
+    training = verify_manifest(training_path, verify_pixels=exported_data_root is None)
+    testing = verify_manifest(testing_path, verify_pixels=exported_data_root is None)
     if training["split"] != "training" or testing["split"] != "testing":
         raise ValueError("training/testing manifests were interchanged")
     if training["evidence_type"] != testing["evidence_type"]:
@@ -73,7 +75,7 @@ def build_protocol(training_path: Path, testing_path: Path, output: Path, *, see
     return protocol, files
 
 
-def verify_protocol(output: Path) -> dict[str, Any]:
+def verify_protocol(output: Path, *, exported_data_root: Path | None = None) -> dict[str, Any]:
     value = read_json(output / "protocol_manifest.json")
     if not isinstance(value, dict) or value.get("schema_version") != SCHEMA:
         raise ValueError("unsupported/missing protocol manifest")
@@ -82,7 +84,7 @@ def verify_protocol(output: Path) -> dict[str, Any]:
         raise ValueError("invalid protocol input schema")
     resolved = {}
     for name, record in inputs.items():
-        path = safe_path(output.parent, record["path"])
+        path = safe_path(output.parent if exported_data_root is None else exported_data_root, record["path"])
         if sha256(path) != record["sha256"]:
             raise ValueError(f"protocol input SHA-256 mismatch: {name}")
         resolved[name] = path
@@ -90,7 +92,8 @@ def verify_protocol(output: Path) -> dict[str, Any]:
         if sha256(safe_path(output, name)) != expected:
             raise ValueError(f"frozen file SHA-256 mismatch: {name}")
     rebuilt, files = build_protocol(resolved["training"], resolved["testing"], output,
-                                     scenes_path=resolved.get("scenes"), **value["settings"])
+                                     scenes_path=resolved.get("scenes"), exported_data_root=exported_data_root,
+                                     **value["settings"])
     if rebuilt != value or any(read_json(output / name) != content for name, content in files.items()):
         raise ValueError("frozen protocol semantics do not match inputs")
     return value

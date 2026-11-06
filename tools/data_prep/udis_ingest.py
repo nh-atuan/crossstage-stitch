@@ -128,7 +128,7 @@ def ingest(archive_path: Path, source_path: Path, output: Path, *, split: str,
         raise
 
 
-def verify_manifest(path: Path) -> dict[str, Any]:
+def verify_manifest(path: Path, *, verify_pixels: bool = True) -> dict[str, Any]:
     value = read_json(path)
     if not isinstance(value, dict) or value.get("schema_version") != DATA_SCHEMA or value.get("status") != "ok":
         raise ValueError("missing/invalid data manifest")
@@ -151,12 +151,17 @@ def verify_manifest(path: Path) -> dict[str, Any]:
         for side, image in pair["images"].items():
             if image["path"] != f"images/{identifier}_{side}.ppm" or image["bit_depth"] != 8 or image["channels"] != 3:
                 raise ValueError("invalid converted image schema")
-            data = safe_path(path.parent, image["path"]).read_bytes()
-            if digest(data) != require_hash(image["ppm_sha256"]):
-                raise ValueError("converted PPM SHA-256 mismatch")
-            rgb = decode_rgb(data, 40_000_000)
-            if rgb.shape[:2] != (image["height"], image["width"]) or pixel_hash(rgb) != require_hash(image["pixel_sha256"]):
-                raise ValueError("converted geometry/pixel hash mismatch")
+            ppm_hash = require_hash(image["ppm_sha256"])
+            rgb_hash = require_hash(image["pixel_sha256"])
+            if any(type(image[key]) is not int or image[key] <= 0 for key in ("height", "width")):
+                raise ValueError("invalid converted image dimensions")
+            if verify_pixels:
+                data = safe_path(path.parent, image["path"]).read_bytes()
+                if digest(data) != ppm_hash:
+                    raise ValueError("converted PPM SHA-256 mismatch")
+                rgb = decode_rgb(data, 40_000_000)
+                if rgb.shape[:2] != (image["height"], image["width"]) or pixel_hash(rgb) != rgb_hash:
+                    raise ValueError("converted geometry/pixel hash mismatch")
             require_hash(image["source_sha256"])
         expected_ledger.append({"pair_id": identifier, "status": "ok", "errors": []})
     if value.get("ledger") != expected_ledger:

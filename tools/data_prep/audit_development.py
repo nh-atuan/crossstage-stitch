@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,11 @@ from tools.repro.io import atomic_json, execution_flags, log, read_json, safe_pa
 def audit_development(protocol_dir: Path, fit_runs: Path, fit_qor: Path,
                       val_runs: Path, val_qor: Path) -> dict[str, Any]:
     protocol = verify_protocol(protocol_dir)
+    return _audit_verified_protocol(protocol, protocol_dir, fit_runs, fit_qor, val_runs, val_qor)
+
+
+def _audit_verified_protocol(protocol: dict[str, Any], protocol_dir: Path, fit_runs: Path,
+                             fit_qor: Path, val_runs: Path, val_qor: Path) -> dict[str, Any]:
     root = protocol_dir.parent
     paths = {"protocol": protocol_dir / "protocol_manifest.json", "fit_runs": fit_runs,
              "fit_qor": fit_qor, "val_runs": val_runs, "val_qor": val_qor}
@@ -76,6 +82,39 @@ def audit_development(protocol_dir: Path, fit_runs: Path, fit_qor: Path,
             "limits": "Checks artifact consistency/execution/QoR and supplied reference status, not independent homography ground truth. No reference or controller is automatically approved. No test-set tuning or GPU execution is performed."}
 
 
+def reference_diagnostics(audit: dict[str, Any], reference: str, split: str,
+                          runs_path: Path) -> dict[str, Any]:
+    reliability = audit["reference_reliability"][split]
+    failures = {row["pair_id"]: row for row in reliability["ledger"]
+                if not (row["reference_status"] == "ok" and row["all_reference_repeats_pass"]
+                        and row["complete_latency"])}
+    statuses: dict[str, Counter[tuple[str, str]]] = defaultdict(Counter)
+    alternative_ok: dict[str, Counter[str]] = defaultdict(Counter)
+    with runs_path.open(encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            pair = row["pair_id"]
+            if pair not in failures or row["is_warmup"] != "0":
+                continue
+            if row["config_id"] == reference:
+                statuses[pair][(row["status"], row["fail_stage"])] += 1
+            elif row["status"] == "OK" and row["fail_stage"] in ("", "0", "none", "None"):
+                alternative_ok[pair][row["config_id"]] += 1
+    sweep = audit["audits"][split]
+    expected_repeats = sweep["expected_repeats"]
+    return {"expected_pairs": reliability["expected_pairs"],
+            "reference_ready_pairs": reliability["expected_pairs"] - len(failures),
+            "observed_measured_runs": sweep["observed_repeats"],
+            "expected_measured_runs": sweep["expected_measurements"],
+            "diagnostic_leader": sweep["fixed_best"],
+            "failures": [
+                {**row, "reference_execution": [
+                    {"status": status, "fail_stage": stage, "repeats": count}
+                    for (status, stage), count in sorted(statuses[pair].items())],
+                 "other_configs_all_repeats_execution_ok": sorted(
+                     config for config, count in alternative_ok[pair].items() if count == expected_repeats)}
+                for pair, row in failures.items()]}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--protocol", type=Path, required=True)
@@ -83,16 +122,22 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("fit-runs", "fit-qor", "val-runs", "val-qor"):
         parser.add_argument("--" + name, type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--exported-data-root", type=Path,
+                        help="With --verify-only, replay exported manifests and CSVs without verifying PPM pixels")
     execution_flags(parser)
     args = parser.parse_args(argv)
     try:
         root_relative(args.output, args.protocol.parent)
-        protocol = verify_protocol(args.protocol)
+        if args.exported_data_root is not None and not args.verify_only:
+            raise ValueError("exported manifests are supported only for replay with --verify-only")
+        protocol = verify_protocol(args.protocol, exported_data_root=args.exported_data_root)
         if protocol["evidence_type"] != ("real" if args.mode == "real" else "synthetic_fixture"):
             raise ValueError("real/fixture mode does not match frozen protocol")
         if args.verify_only:
             previous = read_json(args.output)
             paths = {}
+            if set(previous["inputs"]) != {"protocol", "fit_runs", "fit_qor", "val_runs", "val_qor"}:
+                raise ValueError("invalid audit input schema")
             for name, record in previous["inputs"].items():
                 path = safe_path(args.protocol.parent, record["path"])
                 if sha256(path) != record["sha256"]:
@@ -100,7 +145,8 @@ def main(argv: list[str] | None = None) -> int:
                 paths[name] = path
             if paths["protocol"].resolve() != (args.protocol / "protocol_manifest.json").resolve():
                 raise ValueError("different protocol")
-            value = audit_development(args.protocol, *(paths[name] for name in ("fit_runs", "fit_qor", "val_runs", "val_qor")))
+            values = [paths[name] for name in ("fit_runs", "fit_qor", "val_runs", "val_qor")]
+            value = _audit_verified_protocol(protocol, args.protocol, *values)
             if value != previous:
                 raise ValueError("audit no longer reproduces")
         else:
@@ -109,13 +155,17 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("fit and validation runs/QoR are required")
             if args.output.exists():
                 raise ValueError("audit output already exists")
-            value = audit_development(args.protocol, *values)
+            value = _audit_verified_protocol(protocol, args.protocol, *values)
             if not args.dry_run:
                 atomic_json(args.output, value)
         log("development_audited", complete=value["complete"],
             reference_ready_for_review=value["reference_ready_for_review"],
-            selected_fixed_best=value["selected_fixed_best"], dry_run=args.dry_run)
-        log("audit_details", verbose=args.verbose, debug=True, reliability=value["reference_reliability"])
+            selected_fixed_best=value["selected_fixed_best"], dry_run=args.dry_run,
+            verification_scope="exported_metadata_and_csv" if args.exported_data_root is not None else "full_bundle")
+        if args.verbose:
+            for split, runs in (("train-fit", values[0]), ("train-val", values[2])):
+                log("reference_diagnostics", split=split,
+                    **reference_diagnostics(value, protocol["reference_config_id"], split, runs))
         return 0
     except (ValueError, OSError, KeyError, TypeError) as exc:
         log("error", message=str(exc))

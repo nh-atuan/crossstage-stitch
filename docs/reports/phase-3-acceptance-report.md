@@ -95,7 +95,16 @@ Audit con xếp hạng theo số cặp có đủ 10 lượt đạt QoR, rồi đ
 - Mỗi cấu hình trong nhóm `S=0.25` đạt **2–3/200 cặp fit** và **0/50 cặp validation**. Kết quả mô tả grid, cohort và policy đã khóa.
 - Oracle của audit có ít nhất một cấu hình đạt trên **192/200 fit** và **46/50 validation**. Reference tự so với cùng H trên những cặp có nhãn hợp lệ, nên các số này phản ánh phạm vi chấm QoR hiện tại. Chúng chưa đánh giá độ chính xác H với ground truth hoặc chứng minh Oracle speedup trên đủ cohort.
 
-Giữ gói dữ liệu, hai split và 12 cặp lỗi khi review reference. Trước khi khóa Fixed-Best hoặc mở campaign test chính, cần quyết định cách xử lý reference failure, lưu quyết định và kiểm lại trên development. Nếu chốt theo gate hiện tại, cần `complete=true`, `reference_ready_for_review=true`, `selected_fixed_best` có giá trị và `validation_of_fit_selection` cho cùng cấu hình. Gói đã đo đủ là căn cứ cho bước review này.
+**Xử lý lượt development hiện tại.** Giữ reference, ngưỡng QoR, hai split và cả 12 cặp lỗi. Các ca đó giữ nhãn `REFERENCE_FAILED`. Kết quả `OK` ở ba cặp có cấu hình thay thế dùng để chẩn đoán. Thay H theo cấu hình hoặc theo từng cặp sẽ đổi miền so sánh đã khóa. Loại cặp lỗi cũng sẽ đổi mẫu số sau khi đã xem kết quả. Vì vậy audit hiện tại kết thúc với disposition reference chưa đạt và Fixed-Best để trống. Việc mở campaign test chính vẫn cần evidence development mới đáp ứng gate hoặc một quy tắc reference mới do nhóm chốt trước khi mở test.
+
+Gói export đã được replay bằng lệnh sau. `verification_scope=exported_metadata_and_csv` và exit 0 xác nhận audit lưu trữ tái tạo được. Giá trị `selected_fixed_best=null` là kết quả của gate nghiên cứu. Kiểm chứng đầy đủ trên Colab vẫn dùng bundle có ảnh và bỏ cờ `--exported-data-root`.
+
+```bash
+python -m tools.data_prep.audit_development \
+  --protocol specs/p3_evidence/protocol \
+  --output specs/p3_evidence/development-audit.json \
+  --exported-data-root specs/p3_evidence/data --verify-only --verbose
+```
 
 ## CH-03/A4 — Same-H blending
 

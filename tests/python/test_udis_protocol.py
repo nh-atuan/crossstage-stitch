@@ -204,6 +204,29 @@ def test_test_split_including_warmup_cannot_enter_selection(bundle: Path) -> Non
         audit_development(protocol, *paths)
 
 
+def test_export_replay_checks_metadata_and_never_replaces_full_verification(bundle: Path) -> None:
+    protocol = freeze(bundle)
+    paths, _ = sweep_fixture(protocol)
+    output = bundle / "development-audit.json"
+    atomic_json(output, audit_development(protocol, *paths))
+    export = bundle / "export"
+    for split in ("training", "testing"):
+        target = export / "data" / split
+        target.mkdir(parents=True)
+        shutil.copyfile(bundle / split / "data_manifest.json", target / "data_manifest.json")
+    shutil.copytree(protocol, export / "protocol")
+    for path in [*paths, output]:
+        shutil.copyfile(path, export / path.name)
+    args = ["--protocol", str(export / "protocol"), "--output", str(export / output.name), "--mode", "fixture"]
+    metadata = ["--exported-data-root", str(export / "data")]
+    assert audit_main([*args, "--verify-only"]) == 2
+    assert audit_main([*args, *metadata]) == 2
+    assert audit_main([*args, *metadata, "--verify-only", "--verbose"]) == 0
+    with (export / "data/training/data_manifest.json").open("ab") as handle:
+        handle.write(b" ")
+    assert audit_main([*args, *metadata, "--verify-only"]) == 2
+
+
 def test_incomplete_grid_or_unreliable_reference_cannot_authorize_selection(bundle: Path) -> None:
     protocol = freeze(bundle)
     paths, rows = sweep_fixture(protocol)

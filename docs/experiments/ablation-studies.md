@@ -67,7 +67,9 @@ flowchart TD
   - Lọc ra các cặp ảnh kích hoạt escalation trong tập UDIS-D test set.
   - So sánh thời gian thực thi của attempt leo thang ở 2 trường hợp:
     1. *With Reuse:* Giữ nguyên buffer descriptor match trong VRAM, kernel S5 chỉ sinh thêm $R_{\text{new}} - R_{\text{old}}$ giả thuyết và cập nhật best consensus model.
-    2. *No Reuse:* Giải phóng buffer, chạy lại toàn bộ kernel S4 Hamming matching và S5 RANSAC từ vòng 0 đến $R_{\text{new}}$.
+    2. *No Reuse:* Giữ workspace đã cấp phát, chạy lại toàn bộ kernel S4 Hamming matching và reset S5 để chạy RANSAC từ vòng 0 đến $R_{\text{new}}$.
+  - Hai biến thể dùng cùng cách quản lý bộ nhớ; không giải phóng/cấp phát buffer trong vùng retry. A2 đo lợi ích tránh tính lại, không đo lợi ích tránh allocator. Quyết định và trade-off ở [p3-de-a2-reuse.md](../decisions/p3-de-a2-reuse.md).
+  - Chỉ so latency sau khi kiểm hai biến thể có cùng path, trạng thái, số match/inlier và homography trong sai số đã khóa. Báo quy mô cohort R-only retry, giữ cả kết quả không tăng tốc; không suy rộng thành speedup toàn dataset.
 - **Đầu ra bàn giao:**
   - Bảng đối sánh độ trễ $t_{\text{s4}} + t_{\text{s5}}$ giữa 2 trường hợp.
   - Biểu đồ minh họa phần trăm thời gian tiết kiệm được ở các nấc retry.

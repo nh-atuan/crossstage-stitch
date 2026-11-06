@@ -262,4 +262,12 @@ Status s4_match(const Keypoints& a, const Descriptors& da,
     return launch_status();
 }
 
+Status s4_forward_neighbors(int capacity_a,int capacity_b,const Config& config,
+    const void* workspace,std::size_t workspace_bytes,const Top2** output) {
+    std::size_t required=0;
+    if(!output || s4_workspace_bytes(capacity_a,capacity_b,config,&required)!=Status::OK ||
+        !capacity_a || !workspace || workspace_bytes<required ||
+        reinterpret_cast<std::uintptr_t>(workspace)%alignof(Top2)) return Status::INVALID_ARGUMENT;
+    *output=static_cast<const Top2*>(workspace);return Status::OK;
+}
 }  // namespace stitch::s4

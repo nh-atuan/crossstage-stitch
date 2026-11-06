@@ -2,7 +2,10 @@ cmake_minimum_required(VERSION 3.18)
 
 find_package(OpenCV QUIET)
 
-add_executable(stitch_harness main.cpp pipeline_runner.cu)
+add_executable(stitch_harness main.cpp pipeline_runner.cu ../src/controller/features.cu ../src/controller/relational_features.cu)
+if(DEFINED STITCH_SOURCE_REV)
+  target_compile_definitions(stitch_harness PRIVATE STITCH_GIT_REV="${STITCH_SOURCE_REV}")
+endif()
 target_link_libraries(stitch_harness PRIVATE
   stitch_common
   stitch_controller

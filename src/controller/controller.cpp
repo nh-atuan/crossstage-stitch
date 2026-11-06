@@ -40,6 +40,41 @@ Status Controller::initialize(const Knobs* ladder, std::size_t count) noexcept {
 Status Controller::begin_pair(const SceneSignals& scene, Knobs* first) noexcept {
     if (phase_ != Phase::Idle || !first || !detail::valid_scene(scene, policy_.probe_scale))
         return Status::INVALID_ARGUMENT;
+    if (policy_.pooled) {
+        if (!scene.features_present) return Status::INVALID_ARGUMENT;
+        const auto values=selector_features(scene.features);
+        std::copy(values.begin(),values.end(),pooled_context_.begin());
+        for(int j=0;j<6;++j)pooled_context_[33+j]=scene.features[26+j];
+        const auto& model=*policy_.pooled;
+        const auto set_config=[&](std::size_t index) {
+            pooled_context_[30]=ladder_[index].S;pooled_context_[31]=ladder_[index].K/2000.;
+            pooled_context_[32]=ladder_[index].R/1024.;
+        };
+        set_config(model.reference_index);
+        const double reference_ms=predict_ensemble(model.latency,pooled_context_.data());
+        if (!std::isfinite(reference_ms)) return Status::INVALID_ARGUMENT;
+        double best=reference_ms;ladder_position_=model.reference_index;
+        for(std::size_t i=0;i<count_ && model.pre_threshold<1.;++i) if(i!=model.reference_index) {
+            set_config(i);
+            const double p=predict_ensemble(model.pre_quality,pooled_context_.data());
+            const double latency=predict_ensemble(model.latency,pooled_context_.data());
+            if(!std::isfinite(p) || !std::isfinite(latency))return Status::INVALID_ARGUMENT;
+            const double cost=latency+(1-p)*reference_ms+model.extra_ms;
+            if(p>=model.pre_threshold && cost<best) {best=cost;ladder_position_=i;}
+        }
+        set_config(ladder_position_);*first=ladder_[ladder_position_];
+        phase_=Phase::AwaitingFeedback;return Status::OK;
+    }
+    if (policy_.selector.count) {
+        if (!scene.features_present) return Status::INVALID_ARGUMENT;
+        const auto values=selector_features(scene.features);
+        const int selected = predict_tree(policy_.selector, values.data(), selector_feature_count);
+        if (selected < 0 || selected >= static_cast<int>(count_)) return Status::INVALID_ARGUMENT;
+        ladder_position_ = static_cast<std::size_t>(selected);
+        *first = ladder_[ladder_position_];
+        phase_ = Phase::AwaitingFeedback;
+        return Status::OK;
+    }
     const double gradient = std::min(scene.a.mean_abs_gradient, scene.b.mean_abs_gradient);
     for (std::size_t i = 0; i < policy_.scene_rule_count; ++i) {
         const auto& rule = policy_.scene_rules[i];
@@ -66,20 +101,42 @@ Status Controller::observe(const Feedback& feedback, Decision* decision) noexcep
     } else {
         result.reason = detail::self_check_reason(feedback.homography,
                                                  policy_.self_checks[ladder_position_]);
+        if(policy_.pooled && ladder_position_!=policy_.pooled->reference_index &&
+                result.reason==Reason::SELF_CHECK_PASSED) {
+            std::array<double,77> values{};
+            std::copy_n(pooled_context_.begin(),33,values.begin());
+            std::copy_n(feedback.features.begin(),24,values.begin()+33);
+            std::copy_n(pooled_context_.begin()+33,6,values.begin()+57);
+            std::copy_n(feedback.features.begin()+24,14,values.begin()+63);
+            const double p=feedback.features_present?predict_ensemble(policy_.pooled->post_quality,values.data()):-1.;
+            if(!std::isfinite(p) || p<policy_.pooled->gate_threshold) result.reason=Reason::QUALITY_PREDICTOR_REJECTED;
+        }
+        if (policy_.selector.count && result.reason == Reason::SELF_CHECK_PASSED) {
+            if (!feedback.features_present || predict_tree(policy_.gates[ladder_position_],
+                    feedback.features.data(), gate_feature_count) != 1)
+                result.reason = Reason::QUALITY_PREDICTOR_REJECTED;
+        }
         if (result.reason == Reason::SELF_CHECK_PASSED) {
             result.action = Action::ACCEPT;
             phase_ = Phase::Finished;
         } else {
-            std::size_t next = ladder_position_ + 1;
-            if (result.reason == Reason::TOO_FEW_MATCHES) {
-                while (next < count_ && ladder_[next].S == feedback.executed.S &&
-                       ladder_[next].K == feedback.executed.K)
-                    ++next;
-            }
+            std::size_t next = policy_.pooled ?
+                (ladder_position_==policy_.pooled->reference_index?count_:policy_.pooled->reference_index) :
+                policy_.retry_target_count ? policy_.retry_targets[ladder_position_] : ladder_position_+1;
+            // Changing R cannot add matches. Skip candidates whose inlier
+            // requirement already exceeds the available correspondence count.
+            while (next < count_ && ladder_[next].S == feedback.executed.S &&
+                   ladder_[next].K == feedback.executed.K &&
+                   feedback.homography.num_matches < policy_.self_checks[next].min_inliers)
+                next=policy_.retry_target_count ? policy_.retry_targets[next] : next+1;
             if (next < count_) {
                 result.action = Action::RETRY;
                 result.next = ladder_[next];
                 ladder_position_ = next;
+                if(policy_.pooled) {
+                    pooled_context_[30]=ladder_[next].S;pooled_context_[31]=ladder_[next].K/2000.;
+                    pooled_context_[32]=ladder_[next].R/1024.;
+                }
             } else {
                 result.reason = Reason::BUDGET_EXHAUSTED;
                 phase_ = Phase::Finished;

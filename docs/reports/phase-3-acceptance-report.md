@@ -72,6 +72,8 @@ Reference `S1.00_K2000_R1024_Bfeather` dùng được trên **192/200 cặp fit 
 | `DEGENERATE` ở S5 | `009726`, `009729`, `010327`, `010355` | `007175`, `009964`, `010118` | Estimator báo suy biến ở cấu hình reference. |
 | `NOT_ENOUGH_POINTS` ở S5 | `009955`, `009959` | `009957` | S5 báo thiếu điểm cho bước ước lượng. |
 
+Chiếu lại bốn góc B bằng H trong CSV và hợp với khung A cho thấy canvas xấp xỉ `8487×1369` ở `006399` và `9758×6497` ở `009444`. Cả hai vượt chiều rộng cấp phát 4096 của harness lượt này. Cặp thứ hai cũng vượt giới hạn diện tích 16.777.216 pixel của geometry policy. Đối chiếu này dùng H đã ghi và kích thước ảnh từ manifest.
+
 Trong 12 cặp này, `006399`, `009444` và `007175` vẫn có lần lượt 33, 28 và 24 cấu hình khác chạy `OK`. Chín cặp còn lại không có cấu hình nào ghi `OK` trong grid đã đo. `OK` xác nhận lượt chạy pipeline thành công. Với ba cặp trên, QoR tương đối vẫn thiếu mốc đối chiếu vì reference thất bại. Kết quả cho thấy cần phân biệt lỗi của cấu hình reference với khả năng thực thi của cả grid.
 
 Hai audit con có đủ lượt đo và không có cấu hình thiếu latency. Gate `complete` còn yêu cầu mỗi lượt được phân loại `PASS` hoặc `FAIL`. Khi reference lỗi, 8 cặp fit và 4 cặp validation tạo lần lượt **3.840** và **1.920** lượt đo có nhãn `REFERENCE_FAILED` trên 48 cấu hình. Vì vậy `complete=false`, `reference_ready_for_review=false`, `selected_fixed_best=null` và `validation_of_fit_selection=null`. Thông báo assertion về đo lường trong notebook cần đọc cùng điều kiện gate này. [Logic audit development](../../tools/data_prep/audit_development.py)

@@ -1,11 +1,12 @@
 # Báo cáo nghiệm thu từng phần Phase 3
 
-Mốc đối chiếu 06/11 (Thứ 6), năm 2026. Bằng chứng Colab T4 gồm lượt development `run_20261106_022310Z` và lượt A4/CH-05 `run_20261106_043655Z_ch03_ch05_gbfq3y9z`. Deadline chung và phạm vi toàn phase được ghi trong [kế hoạch Phase 3](../plan.md#phase-3-đại-thực-nghiệm-ablation-và-phân-tích-độc-lập).
+Mốc đối chiếu 06/11 (Thứ 6), năm 2026. Bằng chứng Colab T4 gồm lượt development `run_20261106_022310Z`, lượt A4/CH-05 `run_20261106_043655Z_ch03_ch05_gbfq3y9z` và lượt CH-01E `run_20261106_081406Z_ch01e_9x1qcuvw`. Deadline chung và phạm vi toàn phase được ghi trong [kế hoạch Phase 3](../plan.md#phase-3-đại-thực-nghiệm-ablation-và-phân-tích-độc-lập).
 
 | Hạng mục | Phần đã nghiệm thu | Phần còn mở |
 | --- | --- | --- |
 | CH-00 — Baseline | **Đóng.** Receipt đã được xác minh, build `sm_75` và 16/16 CTest pass trên Colab T4. | Kết quả này áp dụng cho snapshot đã kiểm. Kiểm tra Compute Sanitizer cho các campaign GPU được theo dõi riêng. |
 | CH-01 — Dữ liệu, protocol và reference | **Đạt tooling, ingestion, freeze protocol, smoke test và thu đủ số liệu development T4.** Có 120.000 lượt đo, 24.000 warmup và 12.000 dòng QoR. | **Gate reference chưa đạt.** Reference dùng được trên 238/250 cặp. `selected_fixed_best=null`. |
+| CH-01E — Hạ tầng adaptive | **Đóng nghiệm thu trên T4 cho revision đã đo.** Build `sm_75`, 4/4 CTest, memcheck fixture 0 lỗi và hai lượt adaptive smoke trên ảnh thật cùng seed. | Smoke bao phủ đường `ACCEPT` ngay attempt đầu với `legacy-v1`. Đánh giá policy đã hiệu chỉnh và QoR toàn test set thuộc các campaign riêng. |
 | CH-03/A4 — Same-H blending | **Đóng campaign T4 trên cohort development đã khóa.** 10/10 cặp đạt ở cả ba blender, có bảng và ảnh truy về artifact. | Phạm vi kết luận giới hạn ở 10 cặp overlap cao. |
 | CH-05 — Synthetic multi-resolution | **Đạt `s6_only` trên T4.** 54/54 case từ 720p đến 4K. `end_to_end` đã đo đủ và có kết quả âm đã xác minh. | Chưa thiết lập được đường scaling end-to-end của các lượt đăng ký ảnh hợp lệ. |
 
@@ -108,6 +109,56 @@ python -m tools.data_prep.audit_development \
   --exported-data-root specs/p3_evidence/data --verify-only --verbose
 ```
 
+## CH-01E — Adaptive smoke trên Colab T4
+
+### Nguồn, build và kiểm thử
+
+Lượt `run_20261106_081406Z_ch01e_9x1qcuvw` chạy trên Tesla T4 với compute capability 7.5, VRAM 15.360 MiB, driver `580.82.07` và `nvcc 13.0.88`. Snapshot Colab là `2832a01429b58467b0be776e15e9dc9e130f4bdb`. SHA-256 của source ZIP là `1f061b25b39ae5040293908c270caebd52f5f30b4f5bac68576642c4ff6fbaa3`. ZIP khớp 245/245 hash trong receipt. Mã các cell đã chạy khớp notebook nguồn tại `29938fc`. [Notebook nguồn](../../notebooks/phase3_ch01e_adaptive_verify.ipynb)
+
+Gói xuất được lưu tại `specs/run_20261106_081406Z_ch01e_9x1qcuvw/` trong workspace. Kiểm lại đủ **39/39 file** theo SHA-256 và sáu marker bước đều khớp với `export_verified.json`, có SHA-256 `a4b1c138b6489f5bf48e1b71e94bb22a851745f75974cc3e800ee890bdbc3964`. Dữ liệu thô và output notebook lưu riêng khỏi Git.
+
+Build Release `sm_75` hoàn tất và `compile_commands.json` xác nhận target `sm_75` ở 18/18 mục CUDA. CTest chạy đủ `test_adaptive_upload`, `test_policy_loader`, `test_attempt_trace` và `test_admission_control`, **4/4 pass, 0 skip**, trong 0,45 giây. Compute Sanitizer memcheck trên `test_adaptive_upload` báo **0 lỗi**, exit `0`. Fixture upload kiểm probe nhận ảnh mới, tính nhất quán của trace và việc reset trace khi lỗi xảy ra trước attempt. Phạm vi memcheck là fixture này. [Runbook](../runbooks/ch01e_adaptive_colab.md)
+
+### Replay CH-01 và kiểm input smoke
+
+Cell 2 replay thành công từ metadata và CSV của audit đã khóa, với `verification_scope=exported_metadata_and_csv`. Kết quả vẫn là **192/200 cặp fit** và **46/50 cặp validation** có reference dùng được. Marker replay `READY` xác nhận audit tái lập được. Gate nghiên cứu giữ `complete=false`, `reference_ready_for_review=false` và `selected_fixed_best=null`.
+
+Cell 4 lấy bốn PPM của `000003` và `000015` từ `p3_protocol_bundle.zip`. Cả bốn SHA-256 khớp training manifest đã khóa. `source_receipt.json` cũng khớp hash của audit, protocol, manifest `train-fit` và manifest smoke. Hai lượt chạy dùng `--controller-policy legacy-v1 --seed 0 --warmup 2 --repeats 10`.
+
+### Kết quả terminal và attempt trace
+
+Mỗi lượt có **24/24 terminal `OK`** gồm 4 warmup và 20 lượt đo, kèm 24 attempt. Hai cặp chọn cùng `(S=0.5, K=1000, R=128, B=Feather)` và đều `ACCEPT` với `SELF_CHECK_PASSED` tại attempt `0`.
+
+| Cặp `train-fit` | Inliers / matches | Inlier ratio | Inlier coverage | RMS residual (px S1) | Retry |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `000003` | 373 / 391 | 95,40% | 0,3895 | 1,077 | 0 |
+| `000015` | 412 / 423 | 97,40% | 0,4665 | 1,148 | 0 |
+
+`inlier_coverage` đo diện tích bounding box của inlier phía A trong hệ S1. Đây là tín hiệu self-check của controller. QoR tương đối dùng overlap coverage, PSNR và SSIM từ evaluator riêng. [Định nghĩa feedback S5](../stages/controller-contract.md)
+
+Đối chiếu lại `runs.csv` và `attempts.csv` của hai lượt xác nhận đủ khóa `(pair_id, is_warmup, repeat_idx)`, `attempt_count=1`, `attempt_idx=0`, status và S/K/R/B khớp terminal. Chín hệ số H khớp giữa terminal và attempt. So sánh giữa hai lượt khớp mọi trường CSV sau khi bỏ `run_id` và các cột `t_*`, gồm quyết định, inlier, residual và H. Kết quả này xác nhận tính tất định của trace được ghi trên hai cặp và cùng seed. Đường retry, reject và policy khác cần evidence từ workload riêng. [Logic đối chiếu trace](../../tools/repro/ch01e_trace.py)
+
+### Timing của hai lượt smoke
+
+Mỗi cột tổng hợp 20 lượt đo, gồm 10 lượt mỗi cặp. Median lấy trực tiếp từ CSV của từng lượt. `determinism_verification.json` giữ median của lượt đầu, nên cột chạy lại lấy từ `smoke-rerun/runs.csv`.
+
+| Chỉ số | Lượt đầu (ms) | Lượt chạy lại (ms) |
+| --- | ---: | ---: |
+| `t_e2e` | 10,437 | 6,303 |
+| `t_probe_gpu` | 0,0568 | 0,0517 |
+| `t_controller` | 0,000706 | 0,000450 |
+| `t_stream_wait` | 10,244 | 6,073 |
+| S1 (gồm probe) | 0,168 | 0,160 |
+| S2 | 0,184 | 0,111 |
+| S3 | 0,254 | 0,149 |
+| S4 | 1,147 | 0,663 |
+| S5 | 7,029 | 4,202 |
+| S6 | 1,596 | 0,919 |
+
+S5 có median lớn nhất trong cả hai lượt. Ở lượt đầu, `000015` chuyển từ khoảng 10,32–11,05 ms ở năm lượt đo đầu xuống 6,44–6,48 ms ở năm lượt cuối. Các trường ngoài timing vẫn khớp giữa hai lượt. Evidence có thông tin thiết bị nhưng thiếu chuỗi đo xung nhịp và nhiệt độ, nên nguyên nhân dao động timing chưa xác định. `t_e2e` bắt đầu khi RGB đã sẵn sàng trên GPU. `t_controller` chỉ đo phần CPU của `begin_pair` và `observe`, còn `t_stream_wait` chồng lấp với thời gian GPU. Các median mô tả smoke, với hai lượt dùng cùng policy và không có baseline đối chứng để tính speedup. [Ranh giới timing](../runbooks/ch01e_adaptive_colab.md#policy-và-đầu-ra)
+
+**Nghiệm thu.** Đóng CH-01E cho hạ tầng adaptive của revision đã đo trên T4. CH-01 đã nghiệm thu replay, còn reference và Fixed-Best vẫn mở. Khi tích hợp revision có thay đổi harness hoặc controller, kết quả smoke cần được xác nhận lại trước campaign chính.
+
 ## Bằng chứng chung của lượt A4 và CH-05
 
 Gói Colab đã tải về nằm tại `specs/run_20261106_043655Z_ch03_ch05_gbfq3y9z/`. Đối chiếu local xác nhận đủ **2.232 file**, không thiếu hoặc thừa so với inventory, tất cả SHA-256 khớp và 13 marker bước khớp `export_verified.json`. SHA-256 của marker export là `9ab6209f8e89809c2fa04cf205f4ceeeb67b8ff7ab6f3d9bb05a8be98dcf9679`. Hai summary CH-05 và summary A4 tái tạo đúng nội dung JSON đã xuất từ campaign gốc. Các file kết quả được lưu riêng khỏi Git. [Notebook nguồn](../../notebooks/phase3_ch03_ch05_experiments.ipynb)
@@ -178,7 +229,6 @@ Cặp duy nhất thực thi qua cả ba blender là `scene000_affine_overlap00_7
 | Task | Việc tiếp theo |
 | --- | --- |
 | CH-01 | Chốt reference và Fixed-Best từ development. Kết quả hiện tại vẫn `selected_fixed_best=null`. |
-| CH-01E | Chạy fixture adaptive, sanitizer và smoke trace cho revision tích hợp trên T4. Hai CTest của lượt A4/CH-05 chỉ xác nhận phạm vi build và fixture tương ứng. [Runbook adaptive](../runbooks/ch01e_adaptive_colab.md) |
 | CH-04a | Hiệu chỉnh và khóa 20 controller variants trên development/validation. |
 | CH-02 và CH-04b | Chạy benchmark chính và A5 trên 1.105 cặp test sau khi khóa reference, Fixed-Best và controller variants liên quan. |
 | CH-05 end-to-end | Giữ nguyên kết quả âm hiện tại. Nếu cần đường scaling đăng ký ảnh hợp lệ, thiết kế và khóa một cohort synthetic bổ sung có tín hiệu đặc trưng phân biệt được, kèm chẩn đoán S2/S4/S5. |

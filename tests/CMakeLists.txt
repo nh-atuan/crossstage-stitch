@@ -8,6 +8,11 @@ target_link_libraries(test_harness_config PRIVATE stitch_common stitch_s6_geomet
 target_include_directories(test_harness_config PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 add_test(NAME test_harness_config COMMAND test_harness_config)
 
+add_executable(test_policy_loader controller/test_policy_loader.cpp)
+target_link_libraries(test_policy_loader PRIVATE stitch_controller)
+target_include_directories(test_policy_loader PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
+add_test(NAME test_policy_loader COMMAND test_policy_loader)
+
 # Compile the shared headers with nvcc (sm_75) when CUDA is available.
 if(CMAKE_CUDA_COMPILER)
   add_executable(test_common_cuda test_common_cuda.cu)

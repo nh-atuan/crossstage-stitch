@@ -12,6 +12,7 @@
 
 #include "controller/controller.hpp"
 #include "controller/policy.hpp"
+#include "harness/controller_policy.hpp"
 #include "harness/harness_types.hpp"
 #include "harness/json_parser.hpp"
 #include "harness/image_loader.hpp"
@@ -96,6 +97,7 @@ int main(int argc, char** argv) {
     std::string split = "dev";
     std::string run_id = generate_run_id();
     std::string mode = "fixed";  // "fixed", "oracle", "adaptive"
+    std::string controller_policy_path;
 
     // Single run options
     std::string img_a_path, img_b_path;
@@ -108,6 +110,7 @@ int main(int argc, char** argv) {
     int num_warmup = 2;
     int num_repeats = 10;
     std::uint64_t seed = 0;
+    bool seed_given = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -122,7 +125,19 @@ int main(int argc, char** argv) {
         else if (arg == "--oracle") mode = "oracle";
         else if (arg == "--warmup" && i + 1 < argc) num_warmup = std::stoi(argv[++i]);
         else if (arg == "--repeats" && i + 1 < argc) num_repeats = std::stoi(argv[++i]);
-        else if (arg == "--seed" && i + 1 < argc) seed = std::stoull(argv[++i]);
+        else if (arg == "--seed" && i + 1 < argc) {
+            const std::string value = argv[++i];
+            try {
+                if (value.empty() || value.find_first_not_of("0123456789") != std::string::npos)
+                    throw std::invalid_argument("seed");
+                seed = std::stoull(value);
+                seed_given = true;
+            } catch (const std::exception&) {
+                std::cerr << "Invalid --seed value\n";
+                return 1;
+            }
+        }
+        else if (arg == "--controller-policy" && i + 1 < argc) controller_policy_path = argv[++i];
         else if (arg == "--img-a" && i + 1 < argc) img_a_path = argv[++i];
         else if (arg == "--img-b" && i + 1 < argc) img_b_path = argv[++i];
         else if (arg == "--pair-id" && i + 1 < argc) pair_id = argv[++i];
@@ -135,6 +150,7 @@ int main(int argc, char** argv) {
                       << "Modes:\n"
                       << "  --mode <fixed|oracle|adaptive>  Execution mode (default: fixed)\n"
                       << "  --adaptive                      Shortcut for --mode adaptive\n"
+                      << "  --controller-policy <path|legacy-v1>   Adaptive policy (default: legacy-v1)\n"
                       << "  --oracle                        Shortcut for --mode oracle\n"
                       << "Batch options:\n"
                       << "  --manifest <path>               Pairs JSON manifest\n"
@@ -149,8 +165,17 @@ int main(int argc, char** argv) {
                       << "  --blend <mode>                  Blend mode: feather|multiband3|multiband5\n";
             return 0;
         }
+        else {
+            std::cerr << "Unknown option or missing value: " << arg << "\n";
+            return 1;
+        }
     }
 
+    if ((mode != "adaptive" && mode != "fixed" && mode != "oracle") ||
+        (mode != "adaptive" && !controller_policy_path.empty()) || num_warmup < 0 || num_repeats <= 0) {
+        std::cerr << "Invalid benchmark mode, policy option or repeat count\n";
+        return 1;
+    }
     std::vector<PairEntry> pairs;
     std::vector<HarnessConfig> configs;
 
@@ -201,35 +226,20 @@ int main(int argc, char** argv) {
 
     // Configure Controller if in adaptive mode
     stitch::controller::Controller controller;
-    const std::vector<stitch::controller::Knobs> default_ladder = {
-        {0.25,  500,  128, stitch::s6::BlendMode::Feather},
-        {0.50, 1000,  128, stitch::s6::BlendMode::Feather},
-        {0.50, 1000,  256, stitch::s6::BlendMode::Feather},
-        {0.75, 2000,  512, stitch::s6::BlendMode::Feather},
-        {1.00, 2000, 1024, stitch::s6::BlendMode::Feather}
-    };
-    const std::vector<stitch::controller::SelfCheck> default_checks = {
-        {15, 0.15, 0.05, 4.0},
-        {20, 0.15, 0.05, 3.5},
-        {25, 0.20, 0.05, 3.0},
-        {30, 0.20, 0.05, 2.5},
-        {35, 0.20, 0.05, 2.0}
-    };
-    const std::vector<stitch::controller::SceneRule> default_rules = {
-        {0.08, 0},
-        {0.04, 1},
-        {0.00, 2}
-    };
-    const stitch::controller::Policy default_policy{
-        0.25,
-        default_rules.data(), default_rules.size(),
-        default_checks.data(), default_checks.size()
-    };
-
+    ControllerPolicy controller_policy;
     if (mode == "adaptive") {
-        if (controller.configure(default_policy) != stitch::Status::OK ||
-            controller.initialize(default_ladder.data(), default_ladder.size()) != stitch::Status::OK) {
-            std::cerr << "Error: failed to configure and initialize Controller.\n";
+        try {
+            controller_policy = controller_policy_path.empty() || controller_policy_path == "legacy-v1"
+                ? legacy_controller_policy() : parse_controller_policy(JsonValue::parse_file(controller_policy_path));
+            if (controller_policy.seed) {
+                if (seed_given && seed != *controller_policy.seed)
+                    throw std::runtime_error("CLI seed differs from policy provenance.seed");
+                seed = *controller_policy.seed;
+            }
+            if (controller_policy.configure(controller) != stitch::Status::OK)
+                throw std::runtime_error("failed to initialize Controller");
+        } catch (const std::exception& error) {
+            std::cerr << "Controller policy error: " << error.what() << '\n';
             return 1;
         }
     }
@@ -253,7 +263,8 @@ int main(int argc, char** argv) {
     std::cout << "Starting benchmark harness:\n"
               << "  Mode: " << mode << "\n"
               << "  Pairs: " << pairs.size() << "\n"
-              << "  Configs: " << (mode == "adaptive" ? default_ladder.size() : configs.size()) << "\n"
+              << "  Configs: " << (mode == "adaptive" ? controller_policy.ladder.size() : configs.size()) << "\n"
+              << "  Policy: " << (mode == "adaptive" ? controller_policy.id : "none") << "\n"
               << "  Warmup: " << num_warmup << ", Repeats: " << num_repeats << "\n"
               << "  Output: " << out_path << "\n";
 

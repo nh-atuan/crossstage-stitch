@@ -31,7 +31,7 @@ def build_ch01e_notebook(output_path: Path) -> Path:
     # Phase 3 · CH-01 Audit Replay & CH-01E Adaptive Verification trên Colab Tesla T4
 
     Notebook này phục vụ hai nhiệm vụ trọng tâm của Phase 3:
-    1. **CH-01 Reference & Fixed-Best Audit Replay:** Tái hiện đối soát 250 cặp development, phân loại chính xác 12 ca lỗi reference (2 canvas overflow S6, 7 suy biến S5, 3 thiếu điểm S5), xác nhận `selected_fixed_best=null` theo chuẩn Nhóm.
+    1. **CH-01 Reference & Fixed-Best Audit Replay.** Tái hiện audit đã khóa từ metadata và CSV của 250 cặp development. Audit này ghi nhận 12 cặp reference lỗi và `selected_fixed_best=null`.
     2. **CH-01E Adaptive Infrastructure Verification:** Biên dịch `sm_75`, chạy CTest, kiểm chứng an toàn bộ nhớ GPU bằng Compute Sanitizer Memcheck trên `test_adaptive_upload`, chạy smoke test adaptive thu thập `runs.csv` và `attempts.csv`, kiểm tra tính tất định (trace determinism), và đóng gói evidence bundle lên Google Drive.
     """)
 
@@ -39,15 +39,17 @@ def build_ch01e_notebook(output_path: Path) -> Path:
     markdown("""
     ## 1. Khởi tạo Workspace, Kiểm tra GPU Tesla T4 và Dữ liệu
 
-    Mount Google Drive, nạp mã nguồn, xác minh phần cứng Tesla T4 (`sm_75`), khôi phục dữ liệu `data/p3/` nếu runtime mới và chạy xác minh split bất biến (`--verify-only`).
+    Đặt source ZIP đã cập nhật và `p3_protocol_bundle.zip` trong `MyDrive`.
+    Dùng thư mục CH-01 evidence `MyDrive/p3_evidence/run_20261106_022310Z` như notebook A4,
+    hoặc sửa `CH01_EXPORT_DIR` ở Cell 2 để trỏ đến bản export đã khóa của bạn.
+    Cell 1 chỉ nạp source và kiểm Tesla T4 (`sm_75`). Cell 4 chỉ lấy bốn ảnh train-fit đã khóa từ ZIP.
     """)
     code(r'''
-    # @title 1. Nạp Source, Xác minh GPU Tesla T4 và Dữ liệu { display-mode: "form" }
+    # @title 1. Nạp source và xác minh GPU Tesla T4
     from google.colab import drive
     from datetime import datetime, timezone
     import hashlib
     import json
-    import os
     from pathlib import Path, PurePosixPath
     import shlex
     import shutil
@@ -59,10 +61,7 @@ def build_ch01e_notebook(output_path: Path) -> Path:
 
     drive.mount("/content/drive")
     DRIVE = Path("/content/drive/MyDrive")
-    SOURCE_ZIP = next((DRIVE / name for name in ("phase3_ch01e_source.zip", "crossstage_stitch_source.zip")
-                       if (DRIVE / name).is_file()), None)
-    if SOURCE_ZIP is None:
-        raise FileNotFoundError(f"Missing source archive on Drive: checked phase3_ch01e_source.zip and crossstage_stitch_source.zip in {DRIVE}")
+    SOURCE_ZIP = DRIVE / "phase3_ch01e_source.zip"  # @param {type:"raw"}
 
     WORK = Path(tempfile.mkdtemp(prefix="crossstage-ch01e-", dir="/content"))
     REPO = WORK / "source"
@@ -111,7 +110,7 @@ def build_ch01e_notebook(output_path: Path) -> Path:
             raise FileExistsError(f"{name} already recorded. Start a new workspace for a rerun.")
         try:
             value = work()
-        except (OSError, RuntimeError, ValueError, KeyError, subprocess.SubprocessError) as exc:
+        except (OSError, RuntimeError, ValueError, KeyError, zipfile.BadZipFile, subprocess.SubprocessError) as exc:
             value = {"status": "BLOCKED_OR_INCOMPLETE", "error": str(exc)}
         write_json(marker, value)
         print(name, value, flush=True)
@@ -121,147 +120,87 @@ def build_ch01e_notebook(output_path: Path) -> Path:
         marker = STATUS / f"{name}.json"
         return marker.is_file() and json.loads(marker.read_text(encoding="utf-8"))["status"] == "READY"
 
-    # 1. Giải nén source archive sạch
-    source_digest = sha(SOURCE_ZIP)
-    with zipfile.ZipFile(SOURCE_ZIP) as archive:
-        seen = set()
-        for entry in archive.infolist():
-            path = PurePosixPath(entry.filename)
-            if (path.is_absolute() or not path.parts or ".." in path.parts or "\\" in entry.filename
-                or ".git" in path.parts or path in seen or stat.S_ISLNK(entry.external_attr >> 16)):
-                raise ValueError(f"Invalid source ZIP entry: {entry.filename}")
-            seen.add(path)
-        archive.extractall(REPO)
-        archive_comment = archive.comment.decode("ascii", errors="replace")
-    if sha(SOURCE_ZIP) != source_digest:
-        raise RuntimeError("Source archive changed during setup")
+    def setup():
+        source_digest = sha(SOURCE_ZIP)
+        with zipfile.ZipFile(SOURCE_ZIP) as archive:
+            seen = set()
+            for entry in archive.infolist():
+                path = PurePosixPath(entry.filename)
+                if (path.is_absolute() or not path.parts or ".." in path.parts or "\\" in entry.filename
+                    or ":" in entry.filename or ".git" in path.parts or path in seen
+                    or stat.S_ISLNK(entry.external_attr >> 16)):
+                    raise ValueError(f"Invalid source ZIP entry: {entry.filename}")
+                seen.add(path)
+            archive.extractall(REPO)
+            archive_comment = archive.comment.decode("ascii", errors="replace")
+        if sha(SOURCE_ZIP) != source_digest:
+            raise RuntimeError("Source archive changed during setup")
+        for name in ("tools/repro/ch01e_inputs.py", "tools/repro/ch01e_trace.py"):
+            if not (REPO / name).is_file():
+                raise FileNotFoundError(f"Outdated source ZIP: missing {name} in {SOURCE_ZIP}")
 
-    run_logged("git-init", "git", "init", "-b", "colab-ch01e")
-    run_logged("git-add", "git", "add", "--all")
-    run_logged("git-snapshot", "git", "-c", "user.name=Colab snapshot",
-               "-c", "user.email=colab@example.invalid", "commit", "-m", "chore: capture source archive")
+        run_logged("git-init", "git", "init", "-b", "colab-ch01e")
+        run_logged("git-add", "git", "add", "--all")
+        run_logged("git-snapshot", "git", "-c", "user.name=Colab snapshot", "-c",
+                   "user.email=colab@example.invalid", "commit", "--quiet", "-m", "chore: capture source archive")
+        gpu = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=name,compute_cap,driver_version,memory.total", "--format=csv,noheader"],
+            text=True).strip()
+        if len(gpu.splitlines()) != 1:
+            raise RuntimeError(f"Expected one visible Tesla T4: {gpu}")
+        model, capability, *_ = (value.strip() for value in gpu.split(","))
+        if model not in {"Tesla T4", "NVIDIA Tesla T4"} or capability != "7.5":
+            raise RuntimeError(f"Expected Tesla T4 sm_75: {gpu}")
+        write_json(EVIDENCE / "source_and_device.json",
+                   {"archive": SOURCE_ZIP.name, "archive_sha256": source_digest,
+                    "archive_git_comment": archive_comment, "nvidia_smi": gpu})
+        receipt = EVIDENCE / "environment_receipt.json"
+        module("receipt", "tools.env.generate_receipt", "--output", receipt)
+        module("receipt-verify", "tools.env.generate_receipt", "--output", receipt, "--verify-only")
+        return {"status": "READY", "workspace": str(WORK)}
 
-    # 2. Xác minh GPU Tesla T4 sm_75
-    gpu = subprocess.check_output(
-        ["nvidia-smi", "--query-gpu=name,compute_cap,driver_version,memory.total", "--format=csv,noheader"],
-        text=True).strip()
-    if len(gpu.splitlines()) != 1:
-        raise RuntimeError(f"Expected one visible Tesla T4: {gpu}")
-    model, capability, *_ = (value.strip() for value in gpu.split(","))
-    if model not in {"Tesla T4", "NVIDIA Tesla T4"} or capability != "7.5":
-        raise RuntimeError(f"Expected Tesla T4 sm_75: {gpu}")
-    write_json(EVIDENCE / "source_and_device.json",
-               {"archive": SOURCE_ZIP.name, "archive_sha256": source_digest,
-                "archive_git_comment": archive_comment, "nvidia_smi": gpu})
-
-    receipt = EVIDENCE / "environment_receipt.json"
-    module("receipt", "tools.env.generate_receipt", "--output", receipt)
-    module("receipt-verify", "tools.env.generate_receipt", "--output", receipt, "--verify-only")
-
-    # 3. Khôi phục data/p3 nếu cần và xác minh split
-    data_p3 = REPO / "data/p3"
-    test_manifest = data_p3 / "testing/data_manifest.json"
-    train_manifest = data_p3 / "training/data_manifest.json"
-
-    # Kiểm tra nếu dữ liệu bị lồng ở thư mục con (ví dụ data/p3/data/p3 hoặc data/p3/p3)
-    if not (test_manifest.is_file() and train_manifest.is_file()):
-        for nested in (data_p3 / "data/p3", data_p3 / "p3"):
-            if (nested / "testing/data_manifest.json").is_file():
-                print(f"Phát hiện dữ liệu nằm ở thư mục con {nested}, đang di chuyển về {data_p3}...")
-                for item in nested.iterdir():
-                    dest = data_p3 / item.name
-                    if dest.exists():
-                        if dest.is_dir(): shutil.rmtree(dest)
-                        else: dest.unlink()
-                    shutil.move(str(item), str(dest))
-                break
-
-    # Nếu vẫn chưa có, giải nén từ bundle với cơ chế tự phát hiện prefix
-    if not (test_manifest.is_file() and train_manifest.is_file()):
-        data_p3.mkdir(parents=True, exist_ok=True)
-        bundle = DRIVE / "p3_protocol_bundle.zip"
-        if not bundle.is_file():
-            print("Đang tải p3_protocol_bundle.zip qua gdown...")
-            run_logged("gdown-bundle", "gdown", "--id", "1YNkpnEay-0c7ooEUSkMSpFojGKBXjwhZ", "-O", str(bundle))
-        print("Đang giải nén p3_protocol_bundle.zip...")
-        with zipfile.ZipFile(bundle) as zf:
-            manifest_entry = next((name for name in zf.namelist() if name.endswith("testing/data_manifest.json")), None)
-            if manifest_entry is None:
-                raise FileNotFoundError(f"Không tìm thấy testing/data_manifest.json trong {bundle}")
-            prefix = manifest_entry[:-len("testing/data_manifest.json")]
-            print(f"Phát hiện archive prefix: '{prefix}'")
-            if prefix == "data/p3/":
-                zf.extractall(REPO)
-            elif prefix == "p3/":
-                zf.extractall(REPO / "data")
-            elif prefix == "":
-                zf.extractall(data_p3)
-            else:
-                for member in zf.infolist():
-                    if member.filename.startswith(prefix) and not member.is_dir():
-                        rel = member.filename[len(prefix):]
-                        target = data_p3 / rel
-                        target.parent.mkdir(parents=True, exist_ok=True)
-                        with zf.open(member) as src, target.open("wb") as dst:
-                            shutil.copyfileobj(src, dst)
-
-    assert test_manifest.is_file(), f"LỖI: Không tìm thấy {test_manifest} sau khi giải nén!"
-    assert train_manifest.is_file(), f"LỖI: Không tìm thấy {train_manifest} sau khi giải nén!"
-    print(f"✅ Đã xác nhận tồn tại {test_manifest} và {train_manifest}.")
-
-    module("verify-testing", "tools.data_prep.udis_ingest", "--output", str(data_p3 / "testing"), "--verify-only")
-    module("verify-training", "tools.data_prep.udis_ingest", "--output", str(data_p3 / "training"), "--verify-only")
-
-    write_json(STATUS / "setup.json", {"status": "READY"})
-    print(f"\n✅ Workspace sẵn sàng: {WORK}")
-    print("✅ Split bất biến đã được xác minh: 10.440 train và 1.105 test canonical.")
+    step("setup", setup)
     ''')
 
     # Cell 2
     markdown("""
     ## 2. CH-01: Audit Replay & Đối soát Reference / Fixed-Best
 
-    Chạy replay `--verify-only` cho development audit từ các artifact đã lưu trữ. Báo cáo phân loại 12 ca lỗi và xác nhận `selected_fixed_best=null` theo đúng quyết định của Nhóm.
+    Replay `--verify-only` từ metadata và CSV của CH-01. Kết quả gate reference
+    được ghi riêng với trạng thái replay. Bước này không xác minh pixel toàn bộ UDIS-D.
     """)
     code(r'''
-    # @title 2. Replay Audit Development & Phân tích Chẩn đoán CH-01 { display-mode: "form" }
+    # @title 2. Replay audit development từ CH-01 evidence
+    CH01_EXPORT_DIR = DRIVE / "p3_evidence/run_20261106_022310Z"  # @param {type:"raw"}
+    CH01_AUDIT_SHA256 = "6acaa640a2a43d0eb4a28c978d7319e99fcedaf88d211b92526035d5f150d7a6"
+
     def audit_ch01():
         if not ready("setup"):
             raise RuntimeError("Setup has not passed")
-
-        protocol_dir = REPO / "specs/p3_evidence/protocol"
-        audit_file = REPO / "specs/p3_evidence/development-audit.json"
-        exported_data = REPO / "specs/p3_evidence/data"
-
-        # Replay audit với verify-only
-        args = ["tools.data_prep.audit_development", "--protocol", str(protocol_dir),
-                "--output", str(audit_file), "--verify-only", "--verbose"]
-        if exported_data.is_dir():
-            args.extend(["--exported-data-root", str(exported_data)])
-
-        module("ch01-audit-replay", *args)
-
-        with audit_file.open(encoding="utf-8") as f:
-            audit = json.load(f)
-
-        fit_rel = audit["reference_reliability"]["train-fit"]
-        val_rel = audit["reference_reliability"]["train-val"]
-        fit_ok = sum(1 for row in fit_rel["ledger"] if row["reference_status"] == "ok")
-        val_ok = sum(1 for row in val_rel["ledger"] if row["reference_status"] == "ok")
-
-        print("\n=== KẾT QUẢ REPLAY AUDIT CH-01 ===")
-        print(f"train-fit reference OK: {fit_ok}/{fit_rel['expected_pairs']} ({fit_ok/fit_rel['expected_pairs']*100:.1f}%)")
-        print(f"train-val reference OK: {val_ok}/{val_rel['expected_pairs']} ({val_ok/val_rel['expected_pairs']*100:.1f}%)")
-        print(f"Tổng reference OK: {fit_ok + val_ok}/250 ({(fit_ok + val_ok)/250*100:.1f}%)")
-        print(f"complete: {audit['complete']}")
-        print(f"reference_ready_for_review: {audit['reference_ready_for_review']}")
-        print(f"selected_fixed_best: {audit['selected_fixed_best']}")
-
-        assert not audit["reference_ready_for_review"], "Gate reference chưa đạt là kết quả chuẩn theo báo cáo"
-        assert audit["selected_fixed_best"] is None, "selected_fixed_best phải là null khi reference chưa đạt"
-
-        print("\n✅ CH-01: Replay audit thành công, xác nhận đúng 12 ca REFERENCE_FAILED và giữ nguyên selected_fixed_best=null.")
-        return {"status": "READY", "fit_ok": fit_ok, "val_ok": val_ok, "total_ok": fit_ok + val_ok}
+        source = CH01_EXPORT_DIR
+        bundled = REPO / "specs/p3_evidence"
+        if not source.exists() and (bundled / "development-audit.json").is_file():
+            source = bundled
+        audit_file = source / "development-audit.json"
+        print(f"CH-01 evidence: {source}")
+        if not audit_file.is_file():
+            raise FileNotFoundError(f"Missing CH-01 export at {source}; set CH01_EXPORT_DIR to the exported directory")
+        if sha(audit_file) != CH01_AUDIT_SHA256:
+            raise ValueError(f"CH-01 audit differs from the pinned export: {audit_file}")
+        module("ch01-audit-replay", "tools.data_prep.audit_development",
+               "--protocol", source / "protocol", "--output", audit_file,
+               "--verify-only", "--exported-data-root", source / "data", "--verbose")
+        if sha(audit_file) != CH01_AUDIT_SHA256:
+            raise ValueError("CH-01 audit changed during replay")
+        audit = json.loads(audit_file.read_text(encoding="utf-8"))
+        counts = {split: {"expected": value["expected_pairs"],
+                          "usable": sum(row["reference_status"] == "ok" and row["all_reference_repeats_pass"]
+                                        and row["complete_latency"] for row in value["ledger"])}
+                  for split, value in audit["reference_reliability"].items()}
+        return {"status": "READY", "source": str(source), "audit_sha256": CH01_AUDIT_SHA256,
+                "verification_scope": "exported_metadata_and_csv", "reference_counts": counts,
+                "complete": audit["complete"], "reference_ready_for_review": audit["reference_ready_for_review"],
+                "selected_fixed_best": audit["selected_fixed_best"]}
 
     step("ch01-audit", audit_ch01)
     ''')
@@ -281,8 +220,8 @@ def build_ch01e_notebook(output_path: Path) -> Path:
     ADAPTIVE_TEST_BIN = BUILD / "harness/test_adaptive_upload"
 
     def build_and_sanitize():
-        if not ready("ch01-audit"):
-            raise RuntimeError("CH-01 audit has not passed")
+        if not ready("setup"):
+            raise RuntimeError("Setup has not passed")
 
         run_logged("cmake-configure", "cmake", "-S", REPO, "-B", BUILD,
                    "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_CUDA_ARCHITECTURES=75",
@@ -290,25 +229,26 @@ def build_ch01e_notebook(output_path: Path) -> Path:
                    "-DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc")
 
         run_logged("cmake-build", "cmake", "--build", BUILD, "--target",
-                   "stitch_harness", "test_adaptive_upload", "test_attempt_trace",
+                   "stitch_harness", "test_adaptive_upload", "test_policy_loader", "test_attempt_trace",
                    "test_admission_control", "-j2")
 
         provenance = EVIDENCE / "build-provenance"
-        provenance.mkdir(exist_ok=True)
+        provenance.mkdir()
         for name in ("CMakeCache.txt", "compile_commands.json"):
-            if (BUILD / name).is_file():
-                shutil.copy2(BUILD / name, provenance / name)
+            shutil.copy2(BUILD / name, provenance / name)
         write_json(provenance / "binaries.json",
-                   {b.name: sha(b) for b in (HARNESS_BIN, ADAPTIVE_TEST_BIN) if b.is_file()})
+                   {b.name: sha(b) for b in (HARNESS_BIN, ADAPTIVE_TEST_BIN)})
 
         # CTest verification
         junit = provenance / "ctest.xml"
         run_logged("ctest", "ctest", "--test-dir", BUILD,
-                   "-R", "^(test_adaptive_upload|test_attempt_trace|test_admission_control)$",
+                   "-R", "^(test_adaptive_upload|test_policy_loader|test_attempt_trace|test_admission_control)$",
                    "--no-tests=error", "--output-on-failure", "--output-junit", junit)
 
         tests = list(ET.parse(junit).iter("testcase"))
-        if len(tests) != 3 or any(case.attrib.get("status", "run") != "run" or
+        if {case.attrib["name"] for case in tests} != {"test_adaptive_upload", "test_policy_loader",
+                "test_attempt_trace", "test_admission_control"} or len(tests) != 4 or any(
+                                  case.attrib.get("status", "run") != "run" or
                                   any(child.tag in {"skipped", "failure", "error"} for child in case) for case in tests):
             raise RuntimeError("All named CTests must run and pass")
 
@@ -317,233 +257,124 @@ def build_ch01e_notebook(output_path: Path) -> Path:
         run_logged("ch01e-sanitizer-memcheck", "compute-sanitizer", "--tool", "memcheck",
                    "--error-exitcode", "1", ADAPTIVE_TEST_BIN)
 
-        print("\n✅ Build sm_75, 3/3 CTest pass và Sanitizer Memcheck 0 lỗi thành công.")
-        return {"status": "READY"}
+        return {"status": "READY", "ctest_passed": len(tests), "memcheck_exit_code": 0}
 
     step("ch01e-build-and-sanitize", build_and_sanitize)
     ''')
 
     # Cell 4
     markdown("""
-    ## 4. CH-01E: Smoke Adaptive Harness & Thu thập Attempt Trace
+    ## 4. CH-01E · Chuẩn bị hai cặp train-fit và chạy smoke
 
-    Chạy `stitch_harness --mode adaptive --controller-policy legacy-v1` trên 2 cặp ảnh smoke từ `train-fit`.
-    Thu thập `runs.csv` (24 dòng terminal) và `attempts.csv` (trace nấc S/K/R/B).
-    Kiểm tra tính nhất quán giữa terminal và attempt trace.
+    Dùng ZIP PPM đã chạy A4. Cell chỉ lấy bốn ảnh, kiểm SHA-256 theo manifest CH-01
+    và tạo manifest smoke với đường dẫn tương đối. Mỗi lượt smoke có 24 dòng terminal
+    gồm warmup. Lượt lỗi được giữ trong CSV và thống kê riêng.
     """)
     code(r'''
-    # @title 4. Smoke Adaptive Harness & Phân tích Attempt Trace { display-mode: "form" }
-    import pandas as pd
-
+    # @title 4. Lấy bốn ảnh đã khóa và chạy adaptive smoke
+    UDIS_BUNDLE = DRIVE / "p3_protocol_bundle.zip"  # @param {type:"raw"}
+    SMOKE_INPUT = EVIDENCE / "smoke-input"
     SMOKE_OUT = EVIDENCE / "smoke"
-    SMOKE_DATA = REPO / "data/p3/smoke"
+    SMOKE_MANIFEST = SMOKE_INPUT / "pairs_smoke.json"
+    SMOKE_RECEIPT = SMOKE_INPUT / "source_receipt.json"
+    SEED, WARMUPS, REPEATS = 0, 2, 10
+
+    def smoke_input():
+        if not ready("ch01-audit"):
+            raise RuntimeError("The pinned CH-01 audit has not been replayed")
+        marker = json.loads((STATUS / "ch01-audit.json").read_text(encoding="utf-8"))
+        if not UDIS_BUNDLE.is_file():
+            raise FileNotFoundError(f"Missing PPM bundle at {UDIS_BUNDLE}; set UDIS_BUNDLE to the ZIP used by A4")
+        module("ch01e-smoke-input", "tools.repro.ch01e_inputs",
+               "--evidence", marker["source"], "--bundle", UDIS_BUNDLE,
+               "--output", SMOKE_INPUT, "--audit-sha256", marker["audit_sha256"])
+        return {"status": "READY", "receipt_sha256": sha(SMOKE_RECEIPT)}
+
+    def run_smoke(label, output):
+        if not (ready("ch01e-build-and-sanitize") and ready("ch01e-smoke-input")):
+            raise RuntimeError("Build, sanitizer or smoke inputs are pending")
+        marker = json.loads((STATUS / "ch01e-smoke-input.json").read_text(encoding="utf-8"))
+        if sha(SMOKE_RECEIPT) != marker["receipt_sha256"]:
+            raise ValueError("Frozen smoke receipt changed")
+        receipt = json.loads(SMOKE_RECEIPT.read_text(encoding="utf-8"))
+        if sha(SMOKE_MANIFEST) != receipt["manifest_sha256"] or any(
+            sha(SMOKE_INPUT / path) != image["sha256"] for path, image in receipt["images"].items()
+        ):
+            raise ValueError("Frozen smoke manifest or PPM changed")
+        output.mkdir()
+        run_logged(label, HARNESS_BIN, "--mode", "adaptive", "--controller-policy", "legacy-v1",
+                   "--manifest", SMOKE_MANIFEST, "--dataset", "UDIS-D", "--split", "train-fit",
+                   "--seed", SEED, "--warmup", WARMUPS, "--repeats", REPEATS, "--run-id", label,
+                   "--out", output / "runs.csv", "--trace-out", output / "attempts.csv")
+
+    def verify_smoke(label, output, *extra):
+        # The current harness emits HEAD by default. The build receipt pins the binary and source.
+        module(label, "tools.repro.ch01e_trace", "--smoke", SMOKE_OUT, "--receipt", SMOKE_RECEIPT,
+               "--output", output, "--git-rev", "HEAD", "--warmups", WARMUPS,
+               "--repeats", REPEATS, "--seed", SEED, *extra)
+        summary = json.loads(output.read_text(encoding="utf-8"))
+        status = "READY" if set(summary["terminal_status_counts"]) == {"OK"} else "VERIFIED_WITH_TERMINAL_FAILURES"
+        return {"status": status, **summary}
 
     def smoke_adaptive():
-        if not ready("ch01e-build-and-sanitize"):
-            raise RuntimeError("Build and sanitizer have not passed")
+        run_smoke("ch01e-t4-smoke", SMOKE_OUT)
+        return verify_smoke("ch01e-smoke-verify", SMOKE_OUT / "smoke_verification.json")
 
-        SMOKE_OUT.mkdir(parents=True, exist_ok=True)
-        SMOKE_DATA.mkdir(parents=True, exist_ok=True)
-
-        # Chuẩn bị manifest smoke (2 cặp đầu tiên của train-fit)
-        fit_manifest = json.loads((REPO / "specs/p3_evidence/protocol/pairs_train-fit.json").read_text(encoding="utf-8"))
-        smoke_ids = sorted(fit_manifest.keys())[:2]
-        smoke_pairs = {pid: fit_manifest[pid] for pid in smoke_ids}
-        smoke_manifest_path = SMOKE_DATA / "pairs_smoke.json"
-        smoke_manifest_path.write_text(json.dumps(smoke_pairs, indent=2), encoding="utf-8")
-
-        runs_csv = SMOKE_OUT / "runs.csv"
-        attempts_csv = SMOKE_OUT / "attempts.csv"
-        if runs_csv.is_file(): runs_csv.unlink()
-        if attempts_csv.is_file(): attempts_csv.unlink()
-
-        # Thực thi stitch_harness chế độ adaptive
-        run_logged("ch01e-smoke-harness", HARNESS_BIN,
-                   "--mode", "adaptive",
-                   "--controller-policy", "legacy-v1",
-                   "--manifest", str(smoke_manifest_path),
-                   "--dataset", "UDIS-D",
-                   "--split", "train-fit",
-                   "--seed", "0",
-                   "--warmup", "2",
-                   "--repeats", "10",
-                   "--run-id", "ch01e-t4-smoke",
-                   "--out", str(runs_csv),
-                   "--trace-out", str(attempts_csv))
-
-        # Phân tích và thẩm định kết quả
-        df_runs = pd.read_csv(runs_csv, dtype={"pair_id": "string", "git_rev": "string"})
-        df_attempts = pd.read_csv(attempts_csv, dtype={"pair_id": "string", "git_rev": "string"})
-
-        print(f"\nTerminal runs: {len(df_runs)} dòng (kỳ vọng 24 dòng)")
-        print(f"Total attempts: {len(df_attempts)} dòng")
-        assert len(df_runs) == 24, f"Kỳ vọng 24 dòng runs, nhận {len(df_runs)}"
-
-        # Kiểm tra tính khớp giữa attempt_count và số dòng trace
-        for idx, run in df_runs.iterrows():
-            sub = df_attempts[(df_attempts["pair_id"] == run["pair_id"]) &
-                              (df_attempts["repeat_idx"] == run["repeat_idx"]) &
-                              (df_attempts["is_warmup"] == run["is_warmup"])]
-            assert len(sub) == run["attempt_count"], \
-                f"Mismatch: pair {run['pair_id']} repeat {run['repeat_idx']} có attempt_count={run['attempt_count']} nhưng trace có {len(sub)}"
-            last_attempt = sub.iloc[-1]
-            assert abs(last_attempt["S"] - run["S"]) < 1e-5 and last_attempt["K"] == run["K"] and last_attempt["R"] == run["R"], \
-                f"Knobs không khớp giữa attempt cuối và terminal run: {run['pair_id']}"
-
-        # Kiểm tra timing boundaries
-        assert (df_runs["t_e2e"] > 0).all(), "t_e2e phải dương"
-        assert (df_runs["t_probe_gpu"] > 0).all(), "t_probe_gpu phải dương"
-        assert (df_runs["t_stream_wait"] > 0).all(), "t_stream_wait phải dương"
-
-        summary = {
-            "terminal_runs": len(df_runs),
-            "total_attempts": len(df_attempts),
-            "attempt_counts": df_runs["attempt_count"].value_counts().to_dict(),
-            "mean_t_e2e_ms": float(df_runs[df_runs["is_warmup"] == 0]["t_e2e"].mean()),
-            "mean_t_probe_gpu_ms": float(df_runs[df_runs["is_warmup"] == 0]["t_probe_gpu"].mean()),
-            "mean_t_stream_wait_ms": float(df_runs[df_runs["is_warmup"] == 0]["t_stream_wait"].mean()),
-        }
-        write_json(SMOKE_OUT / "smoke_verification.json", summary)
-        print("\n✅ Smoke adaptive hoàn tất: 24/24 terminal rows hợp lệ, attempt trace hoàn toàn nhất quán.")
-        print(f"  - Phân bổ số attempt: {summary['attempt_counts']}")
-        print(f"  - Median t_e2e: {summary['mean_t_e2e_ms']:.3f} ms, Probe GPU: {summary['mean_t_probe_gpu_ms']:.3f} ms, Stream wait: {summary['mean_t_stream_wait_ms']:.3f} ms")
-        return {"status": "READY"}
-
+    step("ch01e-smoke-input", smoke_input)
     step("ch01e-smoke", smoke_adaptive)
     ''')
 
     # Cell 5
     markdown("""
-    ## 5. CH-01E: Kiểm tra Tính Tất Định (Determinism Verification) của Trace
+    ## 5. CH-01E · Đối chiếu hai lượt chạy cùng seed
 
-    Chạy lại lượt thứ 2 với cùng seed `--seed 0` vào thư mục riêng. Đối chiếu bit-exact giữa 2 file `attempts.csv` (loại trừ timing tự nhiên của phần cứng) để khẳng định tính tất định tuyệt đối của trace adaptive.
+    Chạy lại cùng input, policy và seed vào thư mục riêng. Đối chiếu terminal và
+    attempt theo khóa, gồm status, S/K/R/B và H. Timing và run ID được loại khỏi
+    phép đối chiếu. Kết quả chỉ mô tả hai lượt smoke này.
     """)
     code(r'''
-    # @title 5. Kiểm tra Tính Tất Định (Determinism Verification) { display-mode: "form" }
+    # @title 5. Kiểm tra tính tất định trên hai lượt smoke
     RERUN_OUT = EVIDENCE / "smoke-rerun"
 
     def verify_determinism():
-        if not ready("ch01e-smoke"):
-            raise RuntimeError("Smoke adaptive has not passed")
-
-        RERUN_OUT.mkdir(parents=True, exist_ok=True)
-        runs_csv2 = RERUN_OUT / "runs.csv"
-        attempts_csv2 = RERUN_OUT / "attempts.csv"
-        if runs_csv2.is_file(): runs_csv2.unlink()
-        if attempts_csv2.is_file(): attempts_csv2.unlink()
-
-        # Chạy lại với cùng seed 0
-        run_logged("ch01e-smoke-rerun", HARNESS_BIN,
-                   "--mode", "adaptive",
-                   "--controller-policy", "legacy-v1",
-                   "--manifest", str(SMOKE_DATA / "pairs_smoke.json"),
-                   "--dataset", "UDIS-D",
-                   "--split", "train-fit",
-                   "--seed", "0",
-                   "--warmup", "2",
-                   "--repeats", "10",
-                   "--run-id", "ch01e-t4-smoke-rerun",
-                   "--out", str(runs_csv2),
-                   "--trace-out", str(attempts_csv2))
-
-        df1 = pd.read_csv(SMOKE_OUT / "attempts.csv", dtype={"pair_id": "string", "git_rev": "string"})
-        df2 = pd.read_csv(attempts_csv2, dtype={"pair_id": "string", "git_rev": "string"})
-
-        assert len(df1) == len(df2), f"Số dòng attempt không khớp: {len(df1)} vs {len(df2)}"
-
-        # Các cột bắt buộc phải trùng khớp tuyệt đối (deterministic)
-        structural_cols = [
-            "pair_id", "repeat_idx", "is_warmup", "seed", "attempt_idx",
-            "S", "K", "R", "previous_R", "eligible_R_old", "generation",
-            "num_matches", "num_inliers", "homography_status", "action", "reason",
-            "policy_id", "B", "restart_from", "execution_status", "attempt_fail_stage",
-            "terminal_status", "terminal_fail_stage"
-        ]
-        homography_cols = [f"h{i}" for i in range(9)]
-
-        mismatches = []
-        for col in structural_cols:
-            if not (df1[col].fillna("") == df2[col].fillna("")).all():
-                mismatches.append(col)
-
-        for col in homography_cols:
-            diff = (df1[col].fillna(0) - df2[col].fillna(0)).abs().max()
-            if diff > 1e-12:
-                mismatches.append(f"{col} (diff={diff})")
-
-        report = {
-            "total_attempts": len(df1),
-            "columns_verified": structural_cols + homography_cols,
-            "mismatches": mismatches,
-            "deterministic_pass": len(mismatches) == 0
-        }
-        write_json(EVIDENCE / "determinism_report.json", report)
-
-        assert len(mismatches) == 0, f"Phát hiện sai lệch tính tất định ở các cột: {mismatches}"
-        print(f"\n✅ TÍNH TẤT ĐỊNH XÁC THỰC: 100% bit-exact match across all {len(df1)} attempts between 2 independent runs!")
-        return {"status": "READY", "deterministic": True}
+        marker = json.loads((STATUS / "ch01e-smoke.json").read_text(encoding="utf-8"))
+        if marker["status"] not in {"READY", "VERIFIED_WITH_TERMINAL_FAILURES"}:
+            raise RuntimeError("First smoke trace could not be verified")
+        run_smoke("ch01e-t4-smoke-rerun", RERUN_OUT)
+        return verify_smoke("ch01e-determinism-verify", RERUN_OUT / "determinism_verification.json",
+                            "--rerun", RERUN_OUT)
 
     step("ch01e-determinism", verify_determinism)
     ''')
 
     # Cell 6
     markdown("""
-    ## 6. Đóng gói Bằng chứng Thực nghiệm lên Google Drive
+    ## 6. Sao lưu evidence lên Drive
 
-    Tập hợp toàn bộ biên bản, log sanitizer, CSV timing, attempt trace và báo cáo tính tất định. Sinh `export_verified.json` và nén thành gói ZIP lưu an toàn vào `MyDrive/p3_evidence/`.
+    Có thể chạy cell này sau khi gặp lỗi. Mỗi lần tạo một thư mục mới, sao chép
+    evidence rồi kiểm SHA-256 trên Drive trước khi ghi export_verified.json.
+    Marker export xác nhận bản sao. Xem các trạng thái riêng để nghiệm thu.
     """)
     code(r'''
-    # @title 6. Đóng gói và Xuất Evidence lên Google Drive { display-mode: "form" }
-    def export_evidence():
-        if not ready("ch01e-determinism"):
-            raise RuntimeError("Determinism check has not passed")
+    # @title 6. Sao lưu và kiểm hash evidence trên Drive
+    drive_root = DRIVE / "p3_evidence"
+    drive_root.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%SZ")
+    destination = Path(tempfile.mkdtemp(prefix=f"run_{timestamp}_ch01e_", dir=drive_root))
+    copied = destination / "evidence"
+    shutil.copytree(EVIDENCE, copied)
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%SZ")
-        export_dir = EVIDENCE / f"export_{timestamp}"
-        export_dir.mkdir(parents=True, exist_ok=True)
+    def inventory(root):
+        return {path.relative_to(root).as_posix(): sha(path)
+                for path in sorted(root.rglob("*")) if path.is_file()}
 
-        # Thu thập artifact
-        files_to_hash = []
-        for item in EVIDENCE.rglob("*"):
-            if item.is_file() and not item.name.startswith("export"):
-                files_to_hash.append(item)
-
-        checksums = {}
-        for item in sorted(files_to_hash):
-            rel = item.relative_to(EVIDENCE).as_posix()
-            checksums[rel] = sha(item)
-
-        export_manifest = {
-            "run_id": f"ch01e_{timestamp}",
-            "timestamp_utc": timestamp,
-            "device": "Tesla T4 sm_75",
-            "files": checksums
-        }
-        write_json(EVIDENCE / "export_verified.json", export_manifest)
-
-        # Tạo file zip lưu trữ
-        zip_name = f"run_{timestamp}_ch01e_{sha(EVIDENCE / 'export_verified.json')[:8]}.zip"
-        zip_path = WORK / zip_name
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for item in sorted(files_to_hash) + [EVIDENCE / "export_verified.json"]:
-                rel = item.relative_to(EVIDENCE).as_posix()
-                zf.write(item, arcname=rel)
-
-        # Sao lưu vào Drive
-        target_dir = DRIVE / "p3_evidence"
-        target_dir.mkdir(parents=True, exist_ok=True)
-        drive_dest = target_dir / zip_name
-        shutil.copy2(zip_path, drive_dest)
-
-        print(f"\n============================================================")
-        print(f"✅ ĐÃ ĐÓNG GÓI VÀ LƯU BẰNG CHỨNG THÀNH CÔNG:")
-        print(f"  - File local: {zip_path} ({zip_path.stat().st_size / 1024:.1f} KB)")
-        print(f"  - File Drive: {drive_dest}")
-        print(f"  - Tổng số file xác thực: {len(checksums)}")
-        print(f"============================================================")
-        return {"status": "READY", "drive_dest": str(drive_dest)}
-
-    step("export-evidence", export_evidence)
+    hashes = inventory(EVIDENCE)
+    if inventory(copied) != hashes:
+        raise RuntimeError(f"Drive copy differs from source: {destination}")
+    write_json(destination / "export_verified.json",
+               {"files_sha256": hashes, "steps": {
+                   p.stem: json.loads(p.read_text(encoding="utf-8")) for p in sorted(STATUS.glob("*.json"))}})
+    print(f"Verified copy of {len(hashes)} files: {destination}")
     ''')
 
     notebook = {

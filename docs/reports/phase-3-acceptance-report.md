@@ -1,6 +1,6 @@
 # Báo cáo nghiệm thu từng phần Phase 3
 
-Mốc đối chiếu 06/11 (Thứ 6), năm 2026. Bằng chứng Colab T4 gồm lượt development `run_20261106_022310Z`, lượt A4/CH-05 `run_20261106_043655Z_ch03_ch05_gbfq3y9z` và lượt CH-01E `run_20261106_081406Z_ch01e_9x1qcuvw`. Deadline chung và phạm vi toàn phase được ghi trong [kế hoạch Phase 3](../plan.md#phase-3-đại-thực-nghiệm-ablation-và-phân-tích-độc-lập).
+Mốc đối chiếu 06/11 (Thứ 6), năm 2026. Bằng chứng Colab T4 gồm lượt development `run_20261106_022310Z`, A4/CH-05 `run_20261106_043655Z_ch03_ch05_gbfq3y9z`, CH-01E `run_20261106_081406Z_ch01e_9x1qcuvw` và CH-04a `run_20261106_134702Z_ch04a_gbqf76f6`. Deadline chung và phạm vi toàn phase được ghi trong [kế hoạch Phase 3](../plan.md#phase-3-đại-thực-nghiệm-ablation-và-phân-tích-độc-lập).
 
 | Hạng mục | Phần đã nghiệm thu | Phần còn mở |
 | --- | --- | --- |
@@ -8,7 +8,7 @@ Mốc đối chiếu 06/11 (Thứ 6), năm 2026. Bằng chứng Colab T4 gồm l
 | CH-01 — Dữ liệu, protocol và reference | **Đóng trên development theo ngoại lệ đã duyệt.** Reference dùng được trên 238/250 cặp. Receipt riêng khóa Fixed-Best từ train-fit và giữ đủ mẫu số. | Campaign test vẫn phải ghi trạng thái reference thực tế của từng cặp. |
 | CH-01E — Hạ tầng adaptive | **Đóng nghiệm thu trên T4 cho revision đã đo.** Build `sm_75`, 4/4 CTest, memcheck fixture 0 lỗi và hai lượt adaptive smoke trên ảnh thật cùng seed. | Smoke bao phủ đường `ACCEPT` ngay attempt đầu với `legacy-v1`. Đánh giá policy đã hiệu chỉnh và QoR toàn test set thuộc các campaign riêng. |
 | CH-03/A4 — Same-H blending | **Đóng campaign T4 trên cohort development đã khóa.** 10/10 cặp đạt ở cả ba blender, có bảng và ảnh truy về artifact. | Phạm vi kết luận giới hạn ở 10 cặp overlap cao. |
-| CH-04a — Chuẩn bị A5 | **20/20 bộ self-check đã fit từ sweep thật.** 19 bộ tham số khác nhau và một cặp policy cho cùng tham số. | Chờ bundle PPM để fit scene rules, chạy adaptive validation trên T4 và xét khóa 20 controller. |
+| CH-04a — Chuẩn bị A5 | **Đã hoàn tất fit và đo validation trên T4, với kết quả `NO_GO` đã xác minh.** 40/40 ứng viên có đủ ledger. | 0/20 policy đạt sàn Fixed-Best, nên CH-04b chưa đủ điều kiện mở. |
 | CH-05 — Synthetic multi-resolution | **Đạt `s6_only` trên T4.** 54/54 case từ 720p đến 4K. `end_to_end` đã đo đủ và có kết quả âm đã xác minh. | Chưa thiết lập được đường scaling end-to-end của các lượt đăng ký ảnh hợp lệ. |
 
 Lần rà soát báo cáo chạy lại **79 test CPU** cho protocol UDIS-D, A4 và multi-resolution tại revision `33d4b21`. Tất cả đều pass. Các kết quả Colab bên dưới được đối chiếu từ output đã nhận.
@@ -166,11 +166,53 @@ S5 có median lớn nhất trong cả hai lượt. Ở lượt đầu, `000015` 
 
 **Nghiệm thu.** Đóng CH-01E cho hạ tầng adaptive của revision đã đo trên T4. Khi tích hợp revision có thay đổi harness hoặc controller, kết quả smoke cần được xác nhận lại trước campaign chính.
 
-## CH-04a — Chuẩn bị A5 trên development
+## CH-04a — Adaptive validation A5 trên development
 
-Đã fit self-check cho cả 20 policy từ sweep T4 lưu trữ. Tất cả chọn cùng Fixed-Best từ fit và có mốc **46/50 cặp `PASS`** trên validation. Có **19** bộ self-check khác nhau. Ở policy `δS=0,02, δP=0,5 dB`, gate fallback legacy chấp nhận **158/192** cặp fit có reference dùng được trong replay. Đây là chẩn đoán fit từ fixed sweep. Việc đánh giá toàn ladder và retry thực tế cần lượt adaptive validation riêng.
+### Nguồn và tính đầy đủ của campaign
 
-Plan có trạng thái `FIT_GATES_READY`, SHA-256 `142f8850cf62ad3febc2843d1dafc729ad0380d7fd7cd7bcbe8d392fd09a314a`. Bước kế tiếp cần bundle 500 PPM đã kiểm hash để fit scene rules, sau đó chạy các ứng viên thật trên validation T4. Chỉ công bố `a5-lock.json` khi cả 20 policy có ứng viên đạt điều kiện. [Runbook CH-04a](../runbooks/ch04a_a5_calibration.md)
+Lượt `run_20261106_134702Z_ch04a_gbqf76f6` dùng notebook tại `65ddbb0`, snapshot Colab `4c594daeb0d57a1fcf2ad33e32c55c9db6b5a67d`, Tesla T4 `sm_75`, `nvcc 13.0.88` và driver `580.82.07`. SHA-256 của source ZIP khớp receipt. Build Release và replay CH-01 hoàn tất. Fixed-Best vẫn là `S1.00_K2000_R1024_Bfeather`, đạt 192/200 fit và 46/50 validation. File phê duyệt ngoại lệ trong ZIP dùng CRLF, còn bản local dùng LF. Nội dung phê duyệt và kết quả giống nhau sau khi chuẩn hóa dòng. Khác biệt byte làm đổi `approval_sha256` và kéo theo SHA-256 của development lock và gate plan. [Notebook nguồn](../../notebooks/phase3_ch04a_calibration.ipynb)
+
+Đối chiếu lại đủ **251/251 file** trong gói export và sáu marker bước. `export_verified.json` có SHA-256 `7fd22fec2a3afcdd27cd96b0923ac46a9c256c3213df7e8219ebdaf2ab2632c2`. Cell fit ghi receipt cho 500 ảnh PPM và 40 ứng viên. Ảnh PPM ở lại workspace Colab theo cấu hình export. Đối chiếu local kiểm hash của receipt, gate và candidate, rồi tính lại mẫu số, attempt count và timing từ CSV. Điểm alignment lấy từ ledger đã chấm trên Colab. [Runbook CH-04a](../runbooks/ch04a_a5_calibration.md)
+
+Mỗi ứng viên chạy cùng 50 cặp `train-val`, seed `0`, 2 warmup và 10 lượt đo mỗi cặp. Toàn campaign có **24.000 terminal rows** gồm 4.000 warmup và 20.000 lượt đo, cùng **48.744 attempt rows**. Đối chiếu khóa cặp, warmup và repeat xác nhận số attempt khớp từng terminal. Validation trả exit `2` kèm `a5-no-go.json`, và `--verify-no-go` trả exit `0` trên Colab lẫn local. SHA-256 của kết quả là `7e15bb1d657a1a0e7580cc397964519aac336c0d5dc471974f95259fc095934c`.
+
+### QoR theo policy
+
+Sàn Fixed-Best là **46/50 cặp PASS** ở cả 20 policy. Bốn cặp `007175`, `009957`, `009964`, `010118` giữ `REFERENCE_FAILED` trong mỗi mẫu số 50. Hai ứng viên `r1` và `r4` có cùng tập cặp PASS trong từng policy. Median dưới đây tính trên median 10 lượt đo của mỗi cặp PASS, theo đúng tập cặp của policy đó.
+
+| δSSIM | δPSNR (dB) | Cặp PASS mỗi ứng viên / 50 | Median `r1` (ms) | Median `r4` (ms) |
+| ---: | ---: | ---: | ---: | ---: |
+| 0,01 | 0,2 | 35 | 15,477 | 8,311 |
+| 0,01 | 0,5 | 35 | 15,316 | 8,295 |
+| 0,01 | 0,8 | 35 | 8,323 | 8,372 |
+| 0,01 | 1,0 | 35 | 8,295 | 8,303 |
+| 0,02 | 0,2 | 35 | 15,312 | 8,322 |
+| 0,02 | 0,5 | 35 | 8,374 | 8,302 |
+| 0,02 | 0,8 | 35 | 8,297 | 8,417 |
+| 0,02 | 1,0 | 35 | 8,296 | 8,300 |
+| 0,03 | 0,2 | 35 | 16,867 | 8,822 |
+| 0,03 | 0,5 | 35 | 15,323 | 8,288 |
+| 0,03 | 0,8 | 35 | 15,980 | 8,292 |
+| 0,03 | 1,0 | 36 | 15,904 | 8,394 |
+| 0,04 | 0,2 | 35 | 16,988 | 8,293 |
+| 0,04 | 0,5 | 35 | 15,297 | 8,280 |
+| 0,04 | 0,8 | 35 | 16,883 | 8,859 |
+| 0,04 | 1,0 | 34 | 16,603 | 8,694 |
+| 0,05 | 0,2 | 35 | 15,294 | 8,287 |
+| 0,05 | 0,5 | 35 | 15,452 | 8,492 |
+| 0,05 | 0,8 | 35 | 16,020 | 8,862 |
+| 0,05 | 1,0 | 34 | 16,428 | 8,654 |
+
+Các ứng viên đạt **34–36/50 (68–72%)**, thấp hơn sàn **10–12 cặp**. Trong 2.000 bản ghi cặp–ứng viên, có 1.398 `PASS`, 442 `FAIL` và 160 `REFERENCE_FAILED`. Một policy đạt 36 cặp, 17 policy đạt 35 cặp và hai policy đạt 34 cặp. Mỗi policy fit lại controller theo nhãn riêng, nên thay đổi số cặp PASS phản ánh cả dung sai lẫn hành vi online đã học.
+
+### Reject, false accept và chi phí routing
+
+- Trong 4.420 lượt đo thuộc 442 bản ghi cặp–ứng viên `FAIL`, **4.300** lượt bị `REJECT` ở nấc cuối với `BUDGET_EXHAUSTED`, dù H cuối đạt alignment theo policy. Áp thứ tự self-check của C++ lên telemetry cho thấy ngưỡng vấp đầu tiên là **số inlier ở 3.900 lượt** và **inlier coverage ở 400 lượt**. Kết quả chẩn đoán dùng H trước render, nên chỉ xác nhận alignment của H cuối. [Self-check của controller](../../src/controller/validation.cpp)
+- **120 lượt** còn lại được `ACCEPT` và render `OK` nhưng fail QoR, tập trung ở `007753` (70), `007341` (40) và `008159` (10) qua nhiều ứng viên. Ở policy chuẩn `δS=0,02`, `δP=0,5 dB`, cả hai ứng viên có 35/50 PASS, 110 lượt reject có H đạt alignment và 0 false accept quan sát được. Kết quả này chỉ áp dụng cho hai ứng viên của policy chuẩn trong cohort validation.
+- `r4` là giới hạn số vùng. Trong 20 model `r4`, 5 model dùng 1 vùng, 9 dùng 2 vùng và 6 dùng 3 vùng. `r4` có median trên cặp PASS thấp hơn ở 16/20 policy. Với `a5-s04-p05`, median giảm từ 15,297 xuống 8,280 ms và số lượt có retry giảm từ 490 xuống 90 trên 500 lượt đo. Trace cho thấy `r4` bắt đầu 400 lượt ngay ở nấc cuối, còn `r1` bắt đầu cả 500 lượt tại `S=0,5, K=1000, R=256`. Đây là đường tiết kiệm retry quan sát được ở policy này.
+- Ở 5/20 policy, toàn bộ terminal và attempt của `r1`/`r4` khớp sau khi bỏ trường timing và ID lượt chạy, nhưng latency vẫn dao động. Không có đối chứng timing xen kẽ hoặc chuỗi xung nhịp trong gói evidence. Vì vậy các median mô tả các lượt đã chạy và chưa đủ để quy toàn bộ chênh lệch cho số vùng hoặc kết luận speedup dưới ràng buộc QoR.
+
+**Nghiệm thu.** Hoàn tất campaign CH-04a với kết quả âm đã xác minh. Tất cả 20 policy đều `selected=null`, nên chưa có `a5-lock.json` và CH-04b vẫn bị chặn. Kết quả chỉ áp dụng cho controller family, fallback self-check, cohort và sàn Fixed-Best đã khóa. CH-02 dùng quy trình nghiệm thu controller của benchmark chính. [Đặc tả A5](../experiments/ablation-studies.md#25-ablation-a5-độ-nhạy-của-ngưỡng-chất-lượng-overlap)
 
 ## Bằng chứng chung của lượt A4 và CH-05
 
@@ -241,8 +283,8 @@ Cặp duy nhất thực thi qua cả ba blender là `scene000_affine_overlap00_7
 
 | Task | Việc tiếp theo |
 | --- | --- |
-| CH-04a | Fit scene rules từ PPM development, chạy adaptive validation trên T4 và khóa đủ 20 controller variants nếu đạt gate. |
-| CH-02 và CH-04b | Chạy benchmark chính và A5 trên 1.105 cặp test khi controller tương ứng đã khóa. Đọc Fixed-Best từ receipt CH-01 và giữ reference failures trong ledger của từng campaign. |
+| CH-02 | Chạy benchmark chính trên 1.105 cặp test khi controller chính đã khóa. Đọc Fixed-Best từ receipt CH-01 và giữ reference failures trong ledger. |
+| CH-04b | Bị chặn bởi `NO_GO` của CH-04a. Chỉ mở campaign A5 trên test khi có bộ `a5-lock.json` đã xác minh. |
 | CH-05 end-to-end | Giữ nguyên kết quả âm hiện tại. Nếu cần đường scaling đăng ký ảnh hợp lệ, thiết kế và khóa một cohort synthetic bổ sung có tín hiệu đặc trưng phân biệt được, kèm chẩn đoán S2/S4/S5. |
 | CH-06 | Dùng `s6_only` T4 đã verify làm baseline. Chạy cùng manifest, seed, mode và timing boundary trên L4/A100 với build target tương ứng. |
 | CH-07 và CH-08 | Có thể làm ngay bảng và hình cho A4 và `s6_only` T4. Các bảng tổng hợp và bàn giao paper còn phụ thuộc kết quả A5, benchmark chính và cross-architecture. |

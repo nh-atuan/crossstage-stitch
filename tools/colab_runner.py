@@ -27,6 +27,7 @@ from tools.data_prep.prepare_dev_dataset import (
     write_source_receipt,
 )
 from tools.sweep.run_sweep import generate_grid_configs
+from tools.repro.io import sha256
 
 
 def query_gpu_meta() -> Dict[str, str]:
@@ -171,9 +172,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--controller-policy",
-        type=str,
         default="legacy-v1",
-        help="Controller policy for adaptive mode (default: legacy-v1)",
+        help="Versioned adaptive policy JSON or legacy-v1 / legacy-v1-blind-s05 (default: legacy-v1)",
     )
     parser.add_argument(
         "--ablation-a1",
@@ -186,6 +186,17 @@ def main() -> int:
     parser.add_argument("--prepare-only", action="store_true", help="Only download and prepare dataset without running GPU harness")
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing")
     args = parser.parse_args()
+    policy_path = (
+        Path(args.controller_policy)
+        if args.controller_policy not in ("legacy-v1", "legacy-v1-blind-s05")
+        else None
+    )
+    if policy_path is not None and ("adaptive" not in args.modes or not policy_path.is_file()):
+        parser.error("--controller-policy requires an existing JSON file and adaptive mode")
+    policy_hash = sha256(policy_path) if policy_path is not None else None
+    adaptive_trace = args.out_dir / "adaptive_attempts.csv" if "adaptive" in args.modes else None
+    if adaptive_trace is not None and not (args.dry_run or args.prepare_only) and adaptive_trace.exists():
+        parser.error("adaptive attempt trace already exists; use a fresh --out-dir")
 
     split_label = "dev" if args.subset == "dev25" else "test"
     max_pairs = 25 if args.subset == "dev25" else 0
@@ -362,6 +373,10 @@ def main() -> int:
         rc = run_harness_cmd(cmd, dry_run=args.dry_run)
         if rc != 0:
             return rc
+        if not args.dry_run and (not adaptive_trace.is_file() or
+                                 (policy_path is not None and sha256(policy_path) != policy_hash)):
+            print("Error: missing adaptive trace or controller policy changed.", file=sys.stderr)
+            return 2
         produced_csvs.append(adaptive_csv)
         produced_traces.append(adaptive_trace)
 
@@ -494,6 +509,10 @@ def main() -> int:
                 "repeats": args.repeats,
                 "seed": args.seed,
                 "telemetry_rows": total_rows,
+                "controller_policy": (policy_path.name if policy_path is not None else "legacy-v1")
+                if adaptive_trace is not None else None,
+                "controller_policy_sha256": policy_hash,
+                "adaptive_trace": adaptive_trace.name if adaptive_trace is not None else None,
             }
         )
         meta_path = args.out_dir / "meta.json"

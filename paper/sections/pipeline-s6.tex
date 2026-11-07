@@ -1,0 +1,31 @@
+S6 receives original RGB8 images and a double-precision homography
+$H_{B\rightarrow A}$. The caller owns pitched buffers, workspace and stream.
+Geometry preparation rejects singular or non-finite transforms, a projective
+horizon crossing B, and excessive canvas bounds. Integer pixel centres define
+an inclusive canvas enclosing A and projected B. At canvas coordinate $(x,y)$,
+the renderer samples $p_A=(x+x_0,y+y_0,1)^{\mathsf T}$ and
+$p_B\sim H^{-1}p_A$, using FP64 coordinates and FP32 bilinear colour arithmetic.
+Validity is independent of RGB intensity. Source-only pixels retain their
+warped colour, while pixels outside both images have zero RGB and union mask.
+
+For source $i$, the feather weight is its normalized distance to the closest
+image edge,
+\begin{equation}
+d_i=\min\!\left\{\frac{u_i+1/2}{W_i},\frac{W_i-1/2-u_i}{W_i},
+                 \frac{v_i+1/2}{H_i},\frac{H_i-1/2-v_i}{H_i}\right\}.
+\end{equation}
+Overlap colour is $(d_A C_A+d_B C_B)/(d_A+d_B)$. The CUDA feather path
+fuses inverse warping and blending without temporary workspace.
+
+Multi-band blending follows Gaussian/Laplacian pyramids~\cite{burt1983spline}.
+The source with larger $d_i$ owns an overlap pixel, with ties assigned to A.
+A pull--push extension fills invalid colour samples for filtering while
+preserving the original validity mask. Reduction filters with
+$[1,4,6,4,1]/16$ and subsamples at even coordinates. Expansion inserts zeros,
+filters with gain four and crops to the parent shape. Borders use reflect-101.
+Laplacian bands from both sources are combined using Gaussian ownership
+weights, then reconstructed from coarse to fine. Requested depths three and
+five count reductions, yielding four and six stored levels where dimensions
+permit. The final mask restores source-only and uncovered pixels. Signed bands
+retain their range until final RGB8 quantization. Kernels evaluate the filter
+directly. Allocation and synchronization are managed by the caller.

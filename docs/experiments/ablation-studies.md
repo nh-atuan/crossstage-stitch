@@ -4,6 +4,8 @@
 - **Mục tiêu:** Định lượng độc lập đóng góp của từng thành phần kiến trúc và thuật toán trong pipeline thích nghi (Adaptive Runtime Pipeline), cung cấp bằng chứng thực nghiệm vững chắc cho Section 5 của bài báo tại workshop PARMA-DITAM 2027.
 - **Nguyên tắc phân công:** Mỗi bài thí nghiệm bóc tách có **đúng 1 người chủ trì duy nhất (Single Owner)** chịu trách nhiệm thực thi, lấy số liệu và viết phân tích.
 
+**Thiết kế chốt ngày 02/11 (Thứ 2):** A4 giữ alignment metrics làm invariant và seam crops định tính; A5 dùng lưới 5×4 với controller riêng theo policy được hiệu chỉnh trên development. A1/A2/A3 và quantum vẫn giữ owner hiện tại.
+
 ---
 
 ## 1. Bảng tổng hợp 5 bài thí nghiệm bóc tách
@@ -13,8 +15,8 @@
 | **A1** | **Hiệu quả của Probe Signal (S1 Gradient)** | Đo lường xem chi phí probe (~0.07 ms) có thực sự giúp giảm số lần retry và tiết kiệm latency tổng thể hay không | 1. **Adaptive with Probe** (đề xuất)<br>2. **Blind Escalation** (luôn bắt đầu từ nấc 1 nhẹ nhất, thiếu inliers thì leo thang)<br>3. **Conservative High** (luôn chạy nấc tối đa) | - $t_{\text{probe}}$, $t_{\text{controller}}$, $t_{\text{e2e}}$<br>- Số attempt trung bình/pair<br>- Tỉ lệ retry (%) | **Tuấn** |
 | **A2** | **Đóng góp của State/Match Reuse trong S5** | Định lượng thời gian tiết kiệm được khi tăng $R$ nhờ việc tái sử dụng match S4 và inliers S5 cũ | 1. **With Reuse** (đề xuất: giữ nguyên match S4, chỉ mở rộng RANSAC evaluation từ $R_{\text{old}}$ đến $R_{\text{new}}$)<br>2. **No Reuse** (chạy lại toàn bộ S4 matching và S5 RANSAC từ đầu) | - Thời gian chạy lại $t_{\text{retry}}$<br>- Delta latency tiết kiệm được (ms)<br>- Tốc độ cải thiện của attempt 2/3 | **Đế** |
 | **A3** | **Tác động của Ngân sách $K$ động trong S2–S3** | Đo đạc độ co giãn thời gian của FAST/ORB theo núm vặn $K$ và kiểm chứng tính ổn định bộ nhớ (zero-allocation với view `capacity = K`) | 1. **Fixed pre-allocated buffer** (đề xuất: cấp phát một lần theo $K_{\max}=4000$, truyền view `capacity = K` động theo từng attempt)<br>2. **Dynamic re-allocation / Unbounded capacity** (cấp phát lại theo từng $K$ hoặc giữ `capacity = K_max` cố định)<br>3. Quét $K \in \{500, 1000, 2000, 4000\}$ | - Kernel time $t_{s2}$, $t_{s3}$<br>- Memory allocation / idle-block overhead<br>- Số lượng keypoints hợp lệ | **Thành** |
-| **A4** | **Same-Homography Blending Trade-off (S6)** | Định lượng sự đánh đổi giữa latency render và chất lượng cảm nhận vùng biên (seam quality) | Cố định cùng 1 homography $H$ đã chuẩn hóa:<br>1. **Feather Blending**<br>2. **Multiband 3-level**<br>3. **Multiband 5-level** | - Kernel time $t_{s6}$ (render + pyramid)<br>- VRAM footprint của workspace<br>- Overlap SSIM / PSNR<br>- Hiện tượng seam/ghosting | **Chương** |
-| **A5** | **Độ nhạy của Ngưỡng Chất lượng ($\delta_S, \delta_P$)** | Khảo sát phản ứng của Controller và Oracle khi người dùng siết chặt hoặc nới lỏng dung sai chất lượng | Quét lưới dung sai trên tập test UDIS-D:<br>- $\delta_S \in [0.01, 0.05]$ (bước 0.01)<br>- $\delta_P \in [0.2, 1.0\text{ dB}]$ (bước 0.2 dB) | - Tỉ lệ đạt QoR (pass rate %)<br>- Tỉ lệ các nấc ladder được chọn<br>- Speedup so với Fixed-Best | **Chương** |
+| **A4** | **Same-Homography Blending Trade-off (S6)** | Định lượng chi phí render/workspace; quan sát định tính seam/ghosting | Cố định RGB, H gốc B→A, canvas và origin:<br>1. **Feather**<br>2. **Multiband 3 REDUCE**<br>3. **Multiband 5 REDUCE** | - GPU render interval và host invocation tách rõ<br>- Workspace bytes theo API; không gọi là peak VRAM<br>- Alignment SSIM/PSNR bất biến theo H<br>- Crop seam cùng vị trí, định tính | **Chương** |
+| **A5** | **Độ nhạy của Ngưỡng Chất lượng ($\delta_S, \delta_P$)** | Đo Controller theo từng policy, Oracle và QoR khi đổi dung sai | Lưới **5×4**:<br>- $\delta_S \in \{0.01,0.02,0.03,0.04,0.05\}$<br>- $\delta_P \in \{0.2,0.5,0.8,1.0\}$ dB<br>Controller được hiệu chỉnh trên development/validation và khóa trước test | - QoR/feasible rate và failures<br>- Ladder/retry distribution<br>- Median/p95 latency và speedup dưới cùng policy | **Chương** |
 
 ---
 
@@ -97,15 +99,16 @@ flowchart TD
 - **Người chủ trì duy nhất:** Chương
 
 - **Bối cảnh:** Stage 6 hỗ trợ 3 chế độ blending: Feather (nhẹ), Multiband 3 mức, và Multiband 5 mức.
-- **Câu hỏi khoa học:** Chi phí tính toán và bộ nhớ của Multiband tăng lên gấp mấy lần so với Feather? Sự cải thiện về chất lượng ghép hình ở vùng biên (seamline) có tương xứng với độ trễ bỏ ra không?
+- **Câu hỏi khoa học:** Chi phí tính toán và workspace của multiband khác feather bao nhiêu? Các crop đã chọn theo protocol cho thấy khác biệt seam/ghosting nào, với giới hạn của đánh giá định tính?
 - **Phương pháp thực hiện:**
   - Sử dụng công cụ `tools/bench/same_h.py` trên các cặp ảnh UDIS-D có độ phức tạp thị giác cao (độ tương phản sáng tối mạnh, parallax nhẹ).
-  - Cố định cùng một homography $H$, chỉ tráo đổi chế độ blending của S6.
-  - Đo đạc: $t_{\text{s6}}$ (thời gian kernel render trên CUDA stream), bộ nhớ tạm (workspace memory), Overlap SSIM, Overlap PSNR.
-  - Xuất 2 cặp ảnh crop phóng to vùng đường nối (seam) để kiểm tra hiện tượng bóng mờ (ghosting).
+  - Đóng băng RGB, chín hệ số H gốc B→A, canvas/origin và masks; chỉ đổi B. 3/5 là số lần REDUCE, tương ứng tối đa 4/6 mức lưu trữ.
+  - Đo GPU render interval bằng events và host invocation riêng; setup/geometry/upload không trộn vào steady-state. Workspace lấy từ API query; chỉ báo peak VRAM nếu có phép đo riêng và scope rõ.
+  - Alignment SSIM/PSNR từ ảnh gốc/H không đánh giá composition và phải bất biến giữa B. Không dùng chúng để xếp hạng seam quality hoặc bảo đảm multiband tốt hơn.
+  - Xuất hai bộ crop đường nối cùng tọa độ/zoom cho cả ba mode; caption ghi observation định tính, không retouch hoặc sửa H cho riêng mode.
 - **Đầu ra bàn giao:**
-  - Bảng so sánh 3 chế độ: Latency S6 (ms), Peak VRAM (MB), Overlap SSIM/PSNR.
-  - Hình ảnh trực quan so sánh vết ghép ở vùng biên cho bài báo.
+  - Bảng ba chế độ: GPU/host latency, workspace bytes, canvas/mask và sai số correctness; alignment metrics ghi rõ invariant.
+  - Ảnh/crop, hashes, mode order/seeds và raw timings; không có claim composition định lượng mới.
 
 ---
 
@@ -114,12 +117,15 @@ flowchart TD
 - **Người chủ trì duy nhất:** Chương
 
 - **Bối cảnh:** Chính sách QoR xác định một cấu hình $c$ là hợp lệ nếu $\mathrm{SSIM}(c) \ge \mathrm{SSIM}_{\mathrm{ref}} - \delta_S$ và $\mathrm{PSNR}(c) \ge \mathrm{PSNR}_{\mathrm{ref}} - \delta_P$.
-- **Câu hỏi khoa học:** Khi người dùng siết chặt yêu cầu chất lượng ($\delta_S=0.01$) hoặc nới lỏng ($\delta_S=0.05$), hành vi chọn cấu hình của Controller và trần lý thuyết của Oracle thay đổi như thế nào?
+- **Câu hỏi khoa học:** Với controller được hiệu chỉnh và khóa theo từng quality policy, QoR, latency, retry và khoảng cách tới Oracle thay đổi thế nào khi dung sai thay đổi?
 - **Phương pháp thực hiện:**
-  - Chạy công cụ đánh giá QoR `tools/qor/evaluate.py` quét qua lưới tham số:
+  - Chốt lưới 20 policy; chấm dev sweep bằng `tools/qor/evaluate.py`/predicate chuẩn:
     - $\delta_S \in \{0.01, 0.02, 0.03, 0.04, 0.05\}$
     - $\delta_P \in \{0.2, 0.5, 0.8, 1.0\text{ dB}\}$
-  - Thống kê trên toàn bộ 1.105 cặp ảnh test UDIS-D: tỉ lệ cặp ảnh tìm được cấu hình đạt chuẩn (feasible rate), phân bố nấc ladder của Controller, và tốc độ trung bình của Oracle.
+  - Chương tự triển khai config loading và calibration của cùng controller family trên development-fit/validation, giữ cùng reference và budget tìm kiếm giữa policy; khóa variants, Fixed-Best và fallback trước test. Không tune theo test hoặc gán dung sai offline trực tiếp thành ngưỡng inlier/residual chưa kiểm chứng.
+  - Chạy controller thật theo từng variant trên 1.105 cặp test, cùng timing/seed/repeats; Oracle chọn từ audited grid theo policy. Grid/metric không phụ thuộc dung sai được tái dùng để tránh chạy CUDA dư thừa.
+  - Chỉ thay predicate offline trên output cũ thì output/latency controller không thay đổi; phép relabel đó phải được ghi là offline-only, không thay thí nghiệm controller theo policy.
+  - Báo feasible rate, QoR, reference failures/missing, ladder/retry, median/p95 pair latency và conditional/all-cohort comparison có denominator.
 - **Đầu ra bàn giao:**
-  - Đồ thị đường cong độ nhạy: Trục hoành là $\delta_S$, trục tung là Mean Latency của Controller và Oracle.
-  - Bảng tóm tắt kết luận: Ngưỡng $\delta_S=0.02, \delta_P=0.5\text{ dB}$ hiện tại là điểm cân bằng tối ưu giữa chất lượng hình ảnh và latency.
+  - Heatmap 5×4 và các đường sensitivity theo từng $\delta_P$: QoR/feasible rate, latency và retry của Controller/Oracle/baseline tương ứng.
+  - Báo cáo calibration/protocol lock, controller/quality-policy hashes, data ledger và nhận xét dựa trên kết quả. Operating point 0.02/0.5 không được mặc định là tối ưu trước thí nghiệm.

@@ -2,6 +2,8 @@
 
 Task P2-08 của Chương, cập nhật 27/10 (Thứ 3), năm 2026. Công cụ tái dùng CPU reference FP64 và golden/profiling runner CUDA hiện có; không chạy lại S1–S5. Ba mode là `feather`, `multiband_3`, `multiband_5`; 3/5 là số REDUCE, tương ứng tối đa 4/6 mức.
 
+Phase 3 bổ sung pre-registration, raw CSV A4, verifier sau chuyển thư mục, crop lossless và bảng LaTeX. Xem [runbook CH-03](../../docs/runbooks/ch03_same_h_colab.md) để chạy theo protocol mới; phải rebuild native runner và giữ `--save-images` khi bàn giao evidence A4. CPU/mock không thay kết quả T4.
+
 ## Đầu vào và chạy
 
 Tạo manifest JSON, đường dẫn tương đối tính từ thư mục chứa manifest. `H` là B → A trong hệ RGB gốc, có thể là ma trận 3×3, mảng 9 số, hoặc đường dẫn `.npy`/JSON chứa ma trận. Ảnh `.npy` phải là RGB uint8; ảnh thông thường được đọc và chuyển sang RGB.

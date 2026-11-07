@@ -1,0 +1,52 @@
+\subsection{Held-Out Quality and Latency}
+\label{sec:held-out}
+The nominal UDIS-D cohort retains \ChNominal{} pairs in each mode, including
+\ChLoaderFailed{} loader failure. The finite Oracle grid contains \ChGrid{}
+configurations. Fixed-Best was chosen on development and coincides with
+Fixed-High at $s=\ChFixedS$, $k=\ChFixedK$, $r=\ChFixedR$ with feather blending. A failed
+reference makes \ChReferenceFailed{} test pairs unverified under the relative
+policy. Their dispositions remain in the denominator.
+
+\input{tables/table_ch02_summary}
+Fixed-Best and Oracle each pass on \ChFixedPass{} pairs
+(\ChFixedPercent{}\%). Adaptive passes on \ChAdaptivePass{}
+(\ChAdaptivePercent{}\%). A successful invocation can therefore return a
+panorama that fails the offline alignment predicate. Agreement with the
+high-budget reference measures relative alignment and does not establish
+independent ground-truth accuracy.
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=\linewidth]{figures/fig_pareto.pdf}
+\caption{Measured T4 operating points. Panel (a) compares the static grid on
+its common timed cohort. Dominance considers latency, execution completions
+and QoR passes. The vertical axis projects the latter coordinate, so a point
+that appears dominated in two dimensions can remain non-dominated in three.
+Panel (b) shows each mode's own passing population. Every pass count retains
+the nominal denominator. The panels use different latency populations.}
+\label{fig:pareto}
+\end{figure}
+
+\input{tables/table_ch02_paired}
+On the \ChJoint{} pairs that pass in all three modes, the median per-pair
+Fixed-Best/Adaptive latency ratio is \ChSpeedup{}$\times$. The corresponding
+Adaptive/Oracle ratio is \ChOracleGap{}$\times$. These conditional comparisons
+exclude pairs for which Adaptive fails QoR. The full-cohort quality-constrained
+speedup is undefined for this campaign.
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=\linewidth]{figures/fig_latency_cdf.pdf}
+\caption{Host latency CDFs built from pair medians. Each mode uses its own
+QoR-passing pairs, with its pass count shown in the legend. Filled and hollow
+markers in the right panel denote the median and p95. These distributions
+describe different populations. Table~\ref{tab:ch02-paired} gives the
+common-pass comparison.}
+\label{fig:cdf}
+\end{figure}
+
+Stage timing on the common passing pairs places the largest observed
+differences in matching and robust fitting. The artifact breakdown reports
+individual stage medians and the host total as separate measurements. GPU
+intervals and host waits can overlap, and stage medians need not sum to the
+host median.

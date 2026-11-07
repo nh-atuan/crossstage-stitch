@@ -33,6 +33,15 @@ int main() {
     value = fixture(); value.obj_val["self_checks"].arr_val.pop_back(); invalid(value);
     value = fixture(); value.obj_val["ladder"].arr_val[0].obj_val["blend_mode"].str_val = "unknown"; invalid(value);
     value = fixture(); value.obj_val["ladder"].arr_val.resize(17); invalid(value);
+    value = fixture(); value.obj_val["unexpected"] = JsonValue{}; invalid(value);
+    value = fixture(); value.obj_val["residual_unit"] = JsonValue::parse(R"("original_pixels")"); invalid(value);
+    value = fixture(); value.obj_val["provenance"] = JsonValue::parse(R"({"seed":42})");
+    CHECK(parse_controller_policy(value).seed == 42);
+    for (const auto* malformed : {R"({"S":0.25,"S":0.75})", "{} {}"}) {
+        bool failed = false;
+        try { JsonValue::parse(malformed); } catch (const std::exception&) { failed = true; }
+        CHECK(failed);
+    }
     auto legacy = legacy_controller_policy();
     CHECK(legacy.configure(controller) == stitch::Status::OK && legacy.id == "legacy-v1");
     auto blind_s05 = legacy_blind_s05_policy();

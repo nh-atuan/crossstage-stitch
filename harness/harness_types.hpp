@@ -74,6 +74,12 @@ struct RunRecord {
     bool features_present{};
     double t_features{};
 
+    // Adaptive-only measurements. Probe and stream wait are nested intervals.
+    double t_probe_gpu{0.0};
+    double t_stream_wait{0.0};
+    std::string policy_id;
+    int attempt_count{0};
+
     // Signals S2-S5
     int num_kp_a{0};
     int num_kp_b{0};

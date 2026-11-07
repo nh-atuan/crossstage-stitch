@@ -21,6 +21,7 @@ import sys
 import time
 
 import numpy as np
+from tools.repro.io import read_json
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -106,17 +107,19 @@ def _fixture_contract(path):
     return header, rgb, mask
 
 
-def inspect_outputs(fixtures, artifacts, timings, require_t4=False, warmups=2, repeats=10):
+def inspect_outputs(fixtures, artifacts, timings, require_t4=False, warmups=2, repeats=10, fixture_aliases=None):
     """Check machine-readable correctness and profiling handoff contracts."""
     metadata = []
     contracts = {}
+    def resolved_fixture(value):
+        return Path((fixture_aliases or {}).get(str(value), value)).resolve()
     for fixture in fixtures:
         header, expected_rgb, expected_mask = _fixture_contract(fixture)
-        record = json.loads((artifacts / (fixture.stem + ".json")).read_text(encoding="utf-8"))
+        record = read_json(artifacts / (fixture.stem + ".json"))
         mode = ("feather", "multiband_3", "multiband_5")[header[8]]
         identity = {"width": header[4], "height": header[5], "origin_x": header[6],
                     "origin_y": header[7], "blend_mode": mode}
-        if Path(record["fixture"]).resolve() != fixture.resolve() or any(record[key] != value for key, value in identity.items()):
+        if resolved_fixture(record["fixture"]) != fixture.resolve() or any(record[key] != value for key, value in identity.items()):
             raise ValueError("artifact identity/geometry differs from fixture header")
         if type(record["workspace_bytes"]) is not int or record["workspace_bytes"] < 0:
             raise ValueError("invalid workspace telemetry")
@@ -136,10 +139,19 @@ def inspect_outputs(fixtures, artifacts, timings, require_t4=False, warmups=2, r
         metadata.append(record)
         contracts[str(fixture)] = record
     with timings.open(encoding="utf-8", newline="") as handle:
-        rows = list(csv.DictReader(handle))
+        reader = csv.DictReader(handle)
+        required = {"fixture", "blend_mode", "width", "height", "repeat_idx", "is_warmup",
+                    "gpu_ms", "host_ms", "workspace_bytes", "gpu_name"}
+        if not reader.fieldnames or len(reader.fieldnames) != len(set(reader.fieldnames)) or not required <= set(reader.fieldnames):
+            raise ValueError("timing CSV has missing or duplicate columns")
+        rows = list(reader)
     by_fixture = {}
     expected = {str(path) for path in fixtures}
     for row in rows:
+        if None in row or any(value is None for value in row.values()):
+            raise ValueError("malformed timing CSV row")
+        if fixture_aliases is not None:
+            row["fixture"] = str(resolved_fixture(row["fixture"]))
         if row["fixture"] not in expected:
             raise ValueError("timing row refers to an unexpected fixture")
         contract = contracts[row["fixture"]]

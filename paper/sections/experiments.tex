@@ -1,4 +1,4 @@
-\section{Evaluation Protocol and Evidence Status}
+\section{Experimental Evaluation}
 \label{sec:experiments}
 \subsection{Alignment Quality and Feasible Configurations}
 \label{sec:quality}
@@ -16,23 +16,10 @@ $\delta_S,\delta_P$ and coverage minimum $\gamma$, define
  &{}\land[\mathrm{SSIM}_i(c)\ge\mathrm{SSIM}_{\mathrm{ref},i}-\delta_S]\notag\\
  &{}\land[\mathrm{PSNR}_i(c)\ge\mathrm{PSNR}_{\mathrm{ref},i}-\delta_P].
 \end{align}
-The working policy is subject to owner review and development calibration;
-its tolerances are not dataset standards. Alignment metrics are computed from
-input images and homography, not the blended panorama. They cannot establish
-that one blend mode has better perceptual composition.
-
-\subsection{Timing and Same-Homography Rendering Comparison}
-% Role: controlled comparison and explicit timing populations.
-The S6 comparison freezes RGB inputs, homography, canvas, origin, and numeric
-conventions while changing only the blender. Geometry, allocation/workspace
-preparation, render execution, synchronization, and host wall time must be
-identified separately where observed. CUDA events around render measure its
-stream interval, not all CPU work. Geometry, allocation, and transfers are
-excluded from a steady-state render interval and must not disappear from a
-separately reported full-invocation cost. Mask equality, output shape,
-source-only preservation, and reference colour error are correctness diagnostics.
-Image inspection can expose seams or ghosting, but an unvalidated diagnostic
-is not a perceptual-quality constraint.
+The frozen T4 campaign uses $\delta_S=0.02$, $\delta_P=0.5$\,dB and
+$\gamma=0.95$. These thresholds define the campaign's relative alignment
+policy. Alignment metrics use original images and homography. Composition is
+examined separately through same-coordinate image crops.
 
 \subsection{Runtime Baselines and Failure Accounting}
 % Role: experimental design; distinguish planned platform from completed runs.
@@ -42,10 +29,9 @@ All GPU benchmarks in this study execute on a Google Colab NVIDIA Tesla T4
 \texttt{-O3 -DNDEBUG -arch=sm\_75}). Each campaign records GPU clocks
 ($1590$\,MHz graphics, $5000$\,MHz memory), power draw, code revision, policy
 hash, input manifest, and the fixed RANSAC seed (\texttt{20261101}). UDIS-D
-($512\times 512$ RGB pairs) is the primary real-image benchmark. Development and
-test splits are kept disjoint, and test pairs are never used for threshold or
-configuration selection. Synthetic fixtures test stage correctness and do not
-replace real-image workload evaluation.
+($512\times 512$ RGB pairs) is the primary real-image benchmark. Development selection
+is isolated from held-out test evaluation using connected components of shared
+source or decoded-image hashes. Synthetic stress inputs form a separate workload.
 
 Fixed-Best is selected on development data. For each pair, the offline oracle
 uses the measured finite grid to select
@@ -58,19 +44,14 @@ already on the device to the completed device panorama. Feature extraction,
 controller decisions, required internal transfers, synchronization, retry, and
 cache bookkeeping belong inside that interval. Decode and initial H2D/final D2H
 transfers are separate. Report failures and unverified cases alongside latency.
-Each pair and mode runs 2 untimed warmups followed by 10 measured repeats; we
-reduce each pair to its repeat median and report the mean, median, and 95th
-percentile (p95) across pairs.
+Each pair and configuration has \ChWarmups{} warmups and \ChRepeats{} measured
+repeats. We take the median within each pair, then aggregate over pairs using
+the median and linear-interpolated p95. Per-attempt traces preserve retries,
+terminal failures and homographies. The reported Adaptive configuration is
+the frozen \texttt{legacy-v1} heuristic. Later controller implementations require
+their own measurements.
 
+\input{sections/quality-evaluation}
 \input{sections/s1-probe-ablation}
 \input{sections/feature-budget}
-
-\subsection{Available Evidence and Pending Measurements}
-% Role: evidence status; no unaudited pilot number becomes a paper result.
-The repository contains renderer tests against an independent FP64 reference
-and local GPU correctness evidence. They check the renderer's arithmetic,
-not the adaptive-runtime hypothesis. A preliminary grid-sweep summary is
-insufficient to report a corrected quality-constrained oracle gap without raw
-measurements, manifest, and policy audit. This draft therefore contains no
-final latency--quality result table, controller speedup, or claimed improvement
-from adaptive blending.
+\input{sections/rendering-evaluation}

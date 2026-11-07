@@ -5,19 +5,18 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <iomanip>
-#include <iostream>
-#include <sstream>
 #include <stdexcept>
 
 #include "harness/pipeline_runner.hpp"
+#include "harness/cuda_error.hpp"
+#include "common/admission_control.hpp"
 
 #define CUDA_CHECK(call) do {                                                  \
     const cudaError_t err = (call);                                            \
     if (err != cudaSuccess) {                                                  \
         std::fprintf(stderr, "%s:%d CUDA error: %s\n", __FILE__, __LINE__,     \
                      cudaGetErrorString(err));                                 \
-        throw std::runtime_error(cudaGetErrorString(err));                     \
+        throw CudaError(err);                                                  \
     }                                                                          \
 } while (false)
 
@@ -25,7 +24,6 @@ namespace stitch::harness {
 
 namespace {
 
-constexpr int kMaxCanvasDim = 4096;
 constexpr int kPadding = 64;
 
 const char* status_to_str(Status s) {
@@ -37,14 +35,6 @@ const char* status_to_str(Status s) {
         case Status::NOT_ENOUGH_POINTS: return "NOT_ENOUGH_POINTS";
         case Status::DEGENERATE: return "DEGENERATE";
         default: return "UNKNOWN";
-    }
-}
-
-std::string blend_to_str(s6::BlendMode mode) {
-    switch (mode) {
-        case s6::BlendMode::Multiband3: return "multiband3";
-        case s6::BlendMode::Multiband5: return "multiband5";
-        default: return "feather";
     }
 }
 
@@ -117,10 +107,45 @@ PipelineRunner::~PipelineRunner() {
     if (pinned_features_) cudaFreeHost(pinned_features_);
 }
 
-void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r) {
+PipelineMemoryPlan PipelineRunner::query_memory(int w, int h, int k, int r, int cw, int ch, s6::BlendMode mode) {
+    using namespace admission;
+    dimensions_fit(w, h, w, h, cw, ch);
+    if (k <= 0 || r <= 0 || multiply(cw, ch) > s6::GeometryPolicy{}.max_canvas_pixels) throw Error("ERR_CAPACITY");
+    PipelineMemoryPlan result{};
+    result.device_bytes = add(multiply(2, image_bytes(w, h, 3)), multiply(2, image_bytes(w, h, 1)));
+    result.device_bytes = add(result.device_bytes, add(image_bytes(cw, ch, 3), image_bytes(cw, ch, 1)));
+    // Keypoint arrays/counts, descriptors, matches/count, inlier mask, stats/probe.
+    result.device_bytes = add(result.device_bytes, add(multiply(k, 6*sizeof(float)+64+3*sizeof(int)+1), 3*sizeof(int)+sizeof(s6::RenderStatistics)+32));
+    result.device_bytes = add(result.device_bytes, controller::feature_device_count * sizeof(double));
+    auto workspace = [&](std::size_t bytes, int count = 1) {
+        result.workspace_bytes = add(result.workspace_bytes, multiply(bytes, count));
+        if (bytes) result.device_bytes = add(result.device_bytes, multiply(add(bytes, 256), count));
+    };
+    auto require = [](Status status) { if (status != Status::OK) throw Error("ERR_CAPACITY"); };
+    std::size_t bytes = 0;
+    require(s2::s2_workspace_bytes(w, h, {20, k, .04f}, &bytes)); workspace(bytes, 2);
+    require(s3::s3_workspace_bytes(w, h, &bytes)); workspace(bytes);
+    require(s4::s4_workspace_bytes(k, k, {.8, false}, &bytes)); workspace(bytes);
+    require(s5::s5_workspace_bytes({r, 0, 64, 1, 3., 0, 1}, &bytes)); workspace(bytes);
+    s6::Geometry g{}; g.width = cw; g.height = ch;
+    g.width_a = g.width_b = w; g.height_a = g.height_b = h;
+    g.inverse[0] = g.inverse[4] = g.inverse[8] = 1;
+    require(s6::s6_workspace_bytes(g, mode, &result.s6_workspace_bytes));
+    workspace(result.s6_workspace_bytes);
+    return result;
+}
+
+void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r,
+                                int canvas_width, int canvas_height, s6::BlendMode workspace_mode,
+                                std::size_t device_reserve) {
     if (initialized_) return;
-    allocated_width_ = max_w;
-    allocated_height_ = max_h;
+    const auto plan = query_memory(max_w, max_h, max_k, max_r, canvas_width, canvas_height, workspace_mode);
+    std::size_t free_bytes = 0, total_bytes = 0;
+    CUDA_CHECK(cudaMemGetInfo(&free_bytes, &total_bytes));
+    admission::fit(plan.device_bytes, free_bytes, device_reserve, "ERR_DEVICE_OOM");
+    input_capacity_w_ = max_w; input_capacity_h_ = max_h;
+    canvas_capacity_w_ = canvas_width; canvas_capacity_h_ = canvas_height;
+    hypothesis_capacity_ = max_r;
 
     // Allocate input image buffers
     dev_img_a_.width = max_w;
@@ -191,19 +216,19 @@ void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r) {
     CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_h_res_), sizeof(HomographyResult)));
 
     // S6 Canvas and Mask
-    dev_canvas_.width = kMaxCanvasDim;
-    dev_canvas_.height = kMaxCanvasDim;
-    dev_canvas_.pitch_bytes = kMaxCanvasDim * 3 + kPadding;
+    dev_canvas_.width = canvas_width;
+    dev_canvas_.height = canvas_height;
+    dev_canvas_.pitch_bytes = canvas_width * 3 + kPadding;
     dev_canvas_.format = PixelFormat::RGB8;
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&dev_canvas_.data),
-                          static_cast<std::size_t>(dev_canvas_.pitch_bytes) * kMaxCanvasDim));
+                          static_cast<std::size_t>(dev_canvas_.pitch_bytes) * canvas_height));
 
-    dev_s6_mask_.width = kMaxCanvasDim;
-    dev_s6_mask_.height = kMaxCanvasDim;
-    dev_s6_mask_.pitch_bytes = kMaxCanvasDim + kPadding;
+    dev_s6_mask_.width = canvas_width;
+    dev_s6_mask_.height = canvas_height;
+    dev_s6_mask_.pitch_bytes = canvas_width + kPadding;
     dev_s6_mask_.format = PixelFormat::GRAY8;
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&dev_s6_mask_.data),
-                          static_cast<std::size_t>(dev_s6_mask_.pitch_bytes) * kMaxCanvasDim));
+                          static_cast<std::size_t>(dev_s6_mask_.pitch_bytes) * canvas_height));
 
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&dev_stats_), sizeof(s6::RenderStatistics)));
 
@@ -227,22 +252,8 @@ void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r) {
     CUDA_CHECK(s5::s5_workspace_bytes(max_s5_cfg, &ws_bytes_s5_) == Status::OK ? cudaSuccess : cudaErrorUnknown);
     if (ws_bytes_s5_) CUDA_CHECK(cudaMalloc(&ws_s5_, ws_bytes_s5_ + 256));
 
-    // S6 maximum workspace (for multiband5 on max canvas)
-    s6::Geometry max_geom{};
-    max_geom.width = kMaxCanvasDim;
-    max_geom.height = kMaxCanvasDim;
-    max_geom.width_a = max_w;
-    max_geom.height_a = max_h;
-    max_geom.width_b = max_w;
-    max_geom.height_b = max_h;
-    max_geom.origin_x = 0;
-    max_geom.origin_y = 0;
-    max_geom.denominator_tolerance = 1e-6;
-    max_geom.snap_tolerance = 0.01;
-    max_geom.inverse[0] = 1.0;
-    max_geom.inverse[4] = 1.0;
-    max_geom.inverse[8] = 1.0;
-    CUDA_CHECK(s6::s6_workspace_bytes(max_geom, s6::BlendMode::Multiband5, &ws_bytes_s6_) == Status::OK ? cudaSuccess : cudaErrorUnknown);
+    // Capacity/mode workspace was queried before any large device allocation.
+    ws_bytes_s6_ = plan.s6_workspace_bytes;
     if (ws_bytes_s6_) CUDA_CHECK(cudaMalloc(&ws_s6_, ws_bytes_s6_ + 256));
 
     // S1 probe gradient reduction workspace and pinned host outputs
@@ -256,10 +267,13 @@ void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r) {
     initialized_ = true;
 }
 
+void PipelineRunner::synchronize() { CUDA_CHECK(cudaStreamSynchronize(stream_)); }
+
 void PipelineRunner::upload_pair(const HostImageRGB& img_a, const HostImageRGB& img_b) {
-    if (!initialized_ || img_a.width > allocated_width_ || img_b.width > allocated_width_ ||
-        img_a.height > allocated_height_ || img_b.height > allocated_height_)
-        throw std::runtime_error("input exceeds allocated pipeline dimensions");
+    if (!initialized_) throw admission::Error("ERR_CAPACITY");
+    admission::dimensions_fit(img_a.width, img_a.height, img_b.width, img_b.height, input_capacity_w_, input_capacity_h_);
+    if (img_a.pixels.size() != admission::multiply(admission::multiply(img_a.width, img_a.height), 3) ||
+        img_b.pixels.size() != admission::multiply(admission::multiply(img_b.width, img_b.height), 3)) throw admission::Error("ERR_INPUT");
     cur_w_a_ = img_a.width;
     cur_h_a_ = img_a.height;
     cur_w_b_ = img_b.width;
@@ -300,6 +314,7 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
                                  int repeat_idx,
                                  int is_warmup,
                                  RunRecord* record) {
+    last_fixed_gpu_span_ms_ = -1;
     record->run_id = run_id;
     record->git_rev = git_rev;
     record->dataset = dataset;
@@ -355,7 +370,7 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
         kp_view_b.capacity = cfg.K;
     }
 
-    // Stage 2: FAST detection + Harris ranking (núm K)
+    // Stage 2: FAST detection + Harris ranking (nĂºm K)
     s2::Config s2_cfg{cfg.fast_threshold, cfg.K, cfg.harris_k};
     Status s2_stat_a = s2::s2_detect(dev_gray_a_, s2_cfg, kp_view_a, ws_s2_a_, ws_bytes_s2_a_, stream_);
     Status s2_stat_b = s2::s2_detect(dev_gray_b_, s2_cfg, kp_view_b, ws_s2_b_, ws_bytes_s2_b_, stream_);
@@ -386,7 +401,7 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
     }
     CUDA_CHECK(cudaEventRecord(ev_s4_, stream_));
 
-    // Stage 5: MSAC Homography (núm R)
+    // Stage 5: MSAC Homography (nĂºm R)
     s5::Config s5_cfg{cfg.R, 0, cfg.msac_batch_size, cfg.msac_refinements, cfg.msac_threshold, cfg.seed, 1};
     Status s5_stat = s5::estimate(kp_view_a, kp_view_b, matches_, scale_a, scale_b, s5_cfg,
                                   d_inlier_mask_, pinned_h_res_, ws_s5_, ws_bytes_s5_, stream_);
@@ -446,12 +461,12 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
     s6::Geometry geom{};
     s6::GeometryPolicy geom_policy{};
     Status g_stat = s6::prepare_geometry(cur_w_a_, cur_h_a_, cur_w_b_, cur_h_b_, pinned_h_res_->H, geom_policy, &geom);
-    if (g_stat == Status::OK && (geom.width > kMaxCanvasDim || geom.height > kMaxCanvasDim))
+    if (g_stat == Status::OK && (geom.width > canvas_capacity_w_ || geom.height > canvas_capacity_h_))
         g_stat = Status::INSUFFICIENT_WORKSPACE;
     if (g_stat != Status::OK) {
         const auto t_host_end = std::chrono::steady_clock::now();
         record->t_e2e = std::chrono::duration<double, std::milli>(t_host_end - t_host_start).count();
-        record->status = status_to_str(g_stat);
+        record->status = g_stat == Status::INSUFFICIENT_WORKSPACE ? "ERR_CANVAS_OVERFLOW" : status_to_str(g_stat);
         record->fail_stage = "s6";
 
         float ms = 0.0f;
@@ -464,6 +479,11 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
         return;
     }
 
+    if (geom.width > canvas_capacity_w_ || geom.height > canvas_capacity_h_) {
+        record->status = "ERR_CANVAS_OVERFLOW"; record->fail_stage = "s6";
+        record->t_e2e = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_host_start).count();
+        return;
+    }
     dev_canvas_.width = geom.width;
     dev_canvas_.height = geom.height;
     dev_s6_mask_.width = geom.width;
@@ -487,6 +507,7 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
 
     // Event elapsed times
     float ms = 0.0f;
+    CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start_, ev_s6_)); last_fixed_gpu_span_ms_ = ms;
     cudaEventElapsedTime(&ms, ev_start_, ev_s1_); record->t_s1 = ms;
     cudaEventElapsedTime(&ms, ev_s1_, ev_s2_); record->t_s2 = ms;
     cudaEventElapsedTime(&ms, ev_s2_, ev_s3_); record->t_s3 = ms;
@@ -518,7 +539,7 @@ void PipelineRunner::execute_adaptive_run(
     int is_warmup,
     std::uint64_t seed,
     RunRecord* record) {
-
+    *record = RunRecord{};
     record->run_id = run_id;
     record->git_rev = git_rev;
     record->dataset = dataset;
@@ -527,400 +548,340 @@ void PipelineRunner::execute_adaptive_run(
     record->repeat_idx = repeat_idx;
     record->is_warmup = is_warmup;
     record->seed = seed;
+    record->config_id = "adaptive_unstarted";
+    attempt_trace_.count = 0;
+    record->attempt_count = 0;
     record->cache_hit = 0;
-    trace_.count = 0;
     *pinned_h_res_ = HomographyResult{};
 
-    const auto t_host_start = std::chrono::steady_clock::now();
+    using Clock = std::chrono::steady_clock;
+    struct Span {
+        double& total;
+        Clock::time_point start = Clock::now();
+        bool finished = false;
+        void finish() {
+            if (finished) return;
+            total += std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+            finished = true;
+        }
+        ~Span() { finish(); }
+    };
+    record->probe_gradient_a = *pinned_grad_a_;
+    record->probe_gradient_b = *pinned_grad_b_;
 
-    // -----------------------------------------------------------------------
-    // Step 1: Probe Phase
-    // -----------------------------------------------------------------------
-    controller.reset_pair();
-    const double probe_s = controller.probe_scale();
-    if (!(probe_s > 0.0 && probe_s <= 1.0)) {
-        record->status = "INVALID_PROBE_SCALE";
-        record->fail_stage = "controller";
-        return;
-    }
-
-    ScaleInfo probe_scale_a{}, probe_scale_b{};
-    make_scale_info(cur_w_a_, cur_h_a_, probe_s, &probe_scale_a);
-    make_scale_info(cur_w_b_, cur_h_b_, probe_s, &probe_scale_b);
-
-    dev_gray_a_.width = probe_scale_a.work_w;
-    dev_gray_a_.height = probe_scale_a.work_h;
-    dev_gray_b_.width = probe_scale_b.work_w;
-    dev_gray_b_.height = probe_scale_b.work_h;
-
-    const auto t_ctrl_start = std::chrono::steady_clock::now();
-    const bool learned = controller.uses_learned_features();
-    float probe_s1_ms = 0.0f;
-
-    if (probe_enabled_) {
+    Span host{record->t_e2e};
+    auto timed_gpu = [&](double& elapsed, auto&& submit) {
         CUDA_CHECK(cudaEventRecord(ev_start_, stream_));
-
-        Status probe_s1 = s1::s1_preprocess(dev_img_a_, dev_img_b_, probe_s,
-                                            &dev_gray_a_, &dev_gray_b_,
-                                            &probe_scale_a, &probe_scale_b, stream_);
-        if (probe_s1 != Status::OK) {
-            record->status = status_to_str(probe_s1);
-            record->fail_stage = "s1";
-            return;
-        }
-        CUDA_CHECK(cudaEventRecord(ev_probe_prep_, stream_));
-
-        Status probe_grad = learned ? controller::extract_scene(dev_gray_a_,dev_gray_b_,d_features_,pinned_features_,stream_,controller.uses_pair_relations()) :
-            s1::s1_compute_gradient(dev_gray_a_, dev_gray_b_, d_ws_probe_,pinned_grad_a_, pinned_grad_b_, stream_);
-        if (probe_grad != Status::OK) {
-            record->status = status_to_str(probe_grad);
-            record->fail_stage = "s1";
-            return;
-        }
-
+        const Status status = submit();
         CUDA_CHECK(cudaEventRecord(ev_s1_, stream_));
-        CUDA_CHECK(cudaStreamSynchronize(stream_));
-
-        float probe_prep_ms = 0.0f, probe_grad_ms = 0.0f;
-        cudaEventElapsedTime(&probe_prep_ms, ev_start_, ev_probe_prep_);
-        cudaEventElapsedTime(&probe_grad_ms, ev_probe_prep_, ev_s1_);
-        cudaEventElapsedTime(&probe_s1_ms, ev_start_, ev_s1_);
-        record->t_probe_s1 = probe_prep_ms;
-        record->t_probe_grad = probe_grad_ms;
-        record->t_probe = probe_s1_ms;
-
-        if (learned) {
-            *pinned_grad_a_=pinned_features_[0];*pinned_grad_b_=pinned_features_[1];
-            std::copy_n(pinned_features_,controller::scene_feature_count,record->scene_features.begin());
+        {
+            Span wait{record->t_stream_wait};
+            CUDA_CHECK(cudaStreamSynchronize(stream_));
         }
-        record->probe_gradient_a = *pinned_grad_a_;
-        record->probe_gradient_b = *pinned_grad_b_;
-    } else {
-        if (learned) {
-            record->status = "INVALID_ARGUMENT";
+        float ms = 0.0f;
+        CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start_, ev_s1_));
+        elapsed += ms;
+        return status;
+    };
+    auto fail = [&](Status status) { record->status = status_to_str(status); };
+    AttemptRecord* active = nullptr;
+
+    try {
+        record->fail_stage = "s1";
+        controller.reset_pair();
+        const double probe_s = controller.probe_scale();
+        ScaleInfo probe_a{}, probe_b{};
+        if (make_scale_info(cur_w_a_, cur_h_a_, probe_s, &probe_a) != Status::OK ||
+            make_scale_info(cur_w_b_, cur_h_b_, probe_s, &probe_b) != Status::OK) {
+            record->status = "INVALID_PROBE_SCALE";
             record->fail_stage = "controller";
             return;
         }
-        *pinned_grad_a_ = 1.0;
-        *pinned_grad_b_ = 1.0;
-        record->t_probe_s1 = 0.0;
-        record->t_probe_grad = 0.0;
-        record->t_probe = 0.0;
-        record->probe_gradient_a = 0.0;
-        record->probe_gradient_b = 0.0;
-    }
+        auto set_gray_dimensions = [&](const ScaleInfo& a, const ScaleInfo& b) {
+            dev_gray_a_.width = a.work_w;
+            dev_gray_a_.height = a.work_h;
+            dev_gray_b_.width = b.work_w;
+            dev_gray_b_.height = b.work_h;
+        };
+        set_gray_dimensions(probe_a, probe_b);
+        const bool learned = controller.uses_learned_features();
 
-    controller::SceneSignals scene{
-        {probe_scale_a, *pinned_grad_a_},
-        {probe_scale_b, *pinned_grad_b_},record->scene_features,learned
-    };
+        if (probe_enabled_) {
+            float probe_prep_ms = 0.0f, probe_grad_ms = 0.0f;
+            const Status probe = timed_gpu(record->t_probe_gpu, [&] {
+                CUDA_CHECK(cudaEventRecord(ev_start_, stream_));
+                const auto status = s1::s1_preprocess(dev_img_a_, dev_img_b_, probe_s, &dev_gray_a_, &dev_gray_b_,
+                                                      &probe_a, &probe_b, stream_);
+                if (status != Status::OK) return status;
+                CUDA_CHECK(cudaEventRecord(ev_probe_prep_, stream_));
+                Status grad_status;
+                if (learned)
+                    grad_status = controller::extract_scene(dev_gray_a_, dev_gray_b_, d_features_, pinned_features_,
+                                                            stream_, controller.uses_pair_relations());
+                else
+                    grad_status = s1::s1_compute_gradient(dev_gray_a_, dev_gray_b_, d_ws_probe_,
+                                                          pinned_grad_a_, pinned_grad_b_, stream_);
+                if (grad_status != Status::OK) return grad_status;
+                CUDA_CHECK(cudaEventRecord(ev_s1_, stream_));
+                return Status::OK;
+            });
+            cudaEventElapsedTime(&probe_prep_ms, ev_start_, ev_probe_prep_);
+            cudaEventElapsedTime(&probe_grad_ms, ev_probe_prep_, ev_s1_);
+            record->t_probe_s1 = probe_prep_ms;
+            record->t_probe_grad = probe_grad_ms;
+            record->t_probe = record->t_probe_gpu;
+            record->t_s1 = record->t_probe_gpu;
+            if (probe != Status::OK) { fail(probe); return; }
 
-    controller::Knobs current_knobs{};
-    Status begin_stat = controller.begin_pair(scene, &current_knobs);
-    const auto t_ctrl_end = std::chrono::steady_clock::now();
-    double ctrl_time_ms = std::chrono::duration<double, std::milli>(t_ctrl_end - t_ctrl_start).count();
-
-    if (begin_stat != Status::OK) {
-        record->status = status_to_str(begin_stat);
-        record->fail_stage = "controller";
-        record->t_controller = ctrl_time_ms;
-        return;
-    }
-
-    // -----------------------------------------------------------------------
-    // Step 2: Escalation Loop (Attempts S1–S5)
-    // -----------------------------------------------------------------------
-    controller::Knobs executed_knobs = current_knobs;
-    controller::Decision decision{};
-    bool accepted = false;
-    std::uint64_t current_gen = 1;
-    int completed_r = 0;
-    double prev_s = probe_enabled_ ? probe_s : -1.0; // Gray buffer holds probe_s only when probe executed
-    int prev_k = -1;
-    int attempts = 0;
-    double total_s1_ms = probe_s1_ms;
-    double total_s2_ms = 0.0, total_s3_ms = 0.0, total_s4_ms = 0.0, total_s5_ms = 0.0;
-
-    while (true) {
-        if (trace_.count == static_cast<int>(trace_.records.size())) {
-            throw std::runtime_error("adaptive attempt trace capacity exceeded");
-        }
-        const auto attempt_start = std::chrono::steady_clock::now();
-        const double s4_before = total_s4_ms, s5_before = total_s5_ms;
-        int eligible_r_old = 0;
-        attempts++;
-        bool rerun_s1 = (current_knobs.S != prev_s);
-        bool rerun_s2 = rerun_s1 || (current_knobs.K != prev_k);
-        bool rerun_s4 = rerun_s2;
-        int prev_r = 0;
-
-        if (attempts > 1) {
-            controller::RetryPlan plan{};
-            Status plan_s = controller::plan_retry(executed_knobs, current_knobs, &plan);
-            if (plan_s != Status::OK) {
-                record->status = "INVALID_RETRY_PLAN";
+            record->fail_stage = "controller";
+            if (learned) {
+                *pinned_grad_a_ = pinned_features_[0];
+                *pinned_grad_b_ = pinned_features_[1];
+                std::copy_n(pinned_features_, controller::scene_feature_count, record->scene_features.begin());
+            }
+            record->probe_gradient_a = *pinned_grad_a_;
+            record->probe_gradient_b = *pinned_grad_b_;
+        } else {
+            if (learned) {
+                record->status = "INVALID_ARGUMENT";
                 record->fail_stage = "controller";
-                break;
+                return;
             }
-            if (plan.restart_from == controller::RestartFrom::S1) {
-                rerun_s1 = true; rerun_s2 = true; rerun_s4 = true;
-            } else if (plan.restart_from == controller::RestartFrom::S2) {
-                rerun_s2 = true; rerun_s4 = true;
+            *pinned_grad_a_ = 1.0;
+            *pinned_grad_b_ = 1.0;
+            record->t_probe_gpu = 0.0;
+            record->t_probe_s1 = 0.0;
+            record->t_probe_grad = 0.0;
+            record->t_probe = 0.0;
+            record->probe_gradient_a = 0.0;
+            record->probe_gradient_b = 0.0;
+        }
+
+        const controller::SceneSignals scene{{probe_a, *pinned_grad_a_}, {probe_b, *pinned_grad_b_},
+                                             record->scene_features, learned};
+        controller::Knobs knobs{};
+        Status begin;
+        {
+            Span cpu{record->t_controller};
+            begin = controller.begin_pair(scene, &knobs);
+        }
+        if (begin != Status::OK) { fail(begin); return; }
+
+        controller::Knobs previous{};
+        std::uint64_t generation = 1;
+        int completed_r = 0;
+        while (true) {
+            if (attempt_trace_.count >= static_cast<int>(AttemptTrace::capacity)) {
+                record->status = "ATTEMPT_CAPACITY_EXCEEDED";
+                record->fail_stage = "controller";
+                return;
             }
-            if (plan.extend_s5) {
-                eligible_r_old = completed_r;
-                if (reuse_enabled_) {
-                    prev_r = completed_r;
-                    record->cache_hit = 1;
-                } else {
-                    rerun_s4 = true;
+            const bool first = attempt_trace_.count == 0;
+            auto& a = attempt_trace_.records[attempt_trace_.count++];
+            a = AttemptRecord{};
+            active = &a;
+            a.knobs = knobs;
+            Span attempt{a.t_attempt};
+            record->attempt_count = attempt_trace_.count;
+            record->S = knobs.S;
+            record->K = knobs.K;
+            record->R = knobs.R;
+
+            bool rerun_s1 = (knobs.S != probe_s) || !probe_enabled_;
+            bool rerun_features = true;
+            bool rerun_s4 = true;
+            if (!first) {
+                controller::RetryPlan plan{};
+                if (controller::plan_retry(previous, knobs, &plan) != Status::OK) {
+                    record->status = "INVALID_RETRY_PLAN";
+                    a.fail_stage = "controller";
+                    a.execution_status = Status::INVALID_ARGUMENT;
+                    record->fail_stage = a.fail_stage;
+                    return;
+                }
+                rerun_s1 = plan.restart_from == controller::RestartFrom::S1;
+                rerun_features = rerun_s1 || plan.restart_from == controller::RestartFrom::S2;
+                if (plan.change_generation) { ++generation; completed_r = 0; }
+                rerun_s4 = rerun_features;
+                if (plan.extend_s5) {
+                    a.eligible_R_old = completed_r;
+                    if (reuse_enabled_) a.previous_R = completed_r;
+                    else rerun_s4 = true;
                 }
             }
-            if (plan.change_generation) {
-                current_gen++;
-                completed_r = 0;
+            a.generation = generation;
+            a.restart_from = rerun_s1 ? "s1" : rerun_features ? "s2" : rerun_s4 ? "s4" : "s5";
+            auto stage = [&](const char* name, double& ms, double& total, auto&& submit) {
+                record->fail_stage = name;
+                a.fail_stage = name;
+                const auto status = timed_gpu(ms, submit);
+                total += ms;
+                a.execution_status = status;
+                if (status != Status::OK) fail(status);
+                else a.fail_stage = "";
+                return status;
+            };
+
+            ScaleInfo scale_a{}, scale_b{};
+            if (make_scale_info(cur_w_a_, cur_h_a_, knobs.S, &scale_a) != Status::OK ||
+                make_scale_info(cur_w_b_, cur_h_b_, knobs.S, &scale_b) != Status::OK ||
+                knobs.K > kp_a_.capacity || knobs.K > kp_b_.capacity || knobs.R > hypothesis_capacity_) {
+                a.fail_stage = "controller";
+                a.execution_status = Status::INVALID_ARGUMENT;
+                record->fail_stage = a.fail_stage;
+                fail(a.execution_status);
+                return;
             }
-        }
-
-        ScaleInfo scale_a{}, scale_b{};
-        make_scale_info(cur_w_a_, cur_h_a_, current_knobs.S, &scale_a);
-        make_scale_info(cur_w_b_, cur_h_b_, current_knobs.S, &scale_b);
-
-        // Run S1 Preprocessing if scale changed from current buffer
-        if (rerun_s1) {
-            dev_gray_a_.width = scale_a.work_w;
-            dev_gray_a_.height = scale_a.work_h;
-            dev_gray_b_.width = scale_b.work_w;
-            dev_gray_b_.height = scale_b.work_h;
-
-            CUDA_CHECK(cudaEventRecord(ev_start_, stream_));
-            Status s1_stat = s1::s1_preprocess(dev_img_a_, dev_img_b_, current_knobs.S,
-                                               &dev_gray_a_, &dev_gray_b_,
-                                               &scale_a, &scale_b, stream_);
-            CUDA_CHECK(cudaEventRecord(ev_s1_, stream_));
-            CUDA_CHECK(cudaStreamSynchronize(stream_));
-            float ms1 = 0.0f; cudaEventElapsedTime(&ms1, ev_start_, ev_s1_); total_s1_ms += ms1;
-            if (s1_stat != Status::OK) {
-                record->status = status_to_str(s1_stat);
-                record->fail_stage = "s1";
-                break;
-            }
-        }
-
-        Keypoints kp_view_a = kp_a_;
-        Keypoints kp_view_b = kp_b_;
-        if (current_knobs.K >= 0 && current_knobs.K <= kp_a_.capacity) {
-            kp_view_a.capacity = current_knobs.K;
-            kp_view_b.capacity = current_knobs.K;
-        }
-
-        // Run S2 & S3 if needed
-        if (rerun_s2) {
-            CUDA_CHECK(cudaMemsetAsync(d_kp_count_a_, 0, sizeof(int), stream_));
-            CUDA_CHECK(cudaMemsetAsync(d_kp_count_b_, 0, sizeof(int), stream_));
-
-            CUDA_CHECK(cudaEventRecord(ev_s1_, stream_));
-            s2::Config s2_cfg{20, current_knobs.K, 0.04f};
-            Status s2_a = s2::s2_detect(dev_gray_a_, s2_cfg, kp_view_a, ws_s2_a_, ws_bytes_s2_a_, stream_);
-            Status s2_b = s2::s2_detect(dev_gray_b_, s2_cfg, kp_view_b, ws_s2_b_, ws_bytes_s2_b_, stream_);
-            CUDA_CHECK(cudaEventRecord(ev_s2_, stream_));
-            CUDA_CHECK(cudaStreamSynchronize(stream_));
-            float ms2 = 0.0f; cudaEventElapsedTime(&ms2, ev_s1_, ev_s2_); total_s2_ms += ms2;
-            if (s2_a != Status::OK || s2_b != Status::OK) {
-                record->status = status_to_str(s2_a != Status::OK ? s2_a : s2_b);
-                record->fail_stage = "s2";
-                break;
+            if (rerun_s1) {
+                set_gray_dimensions(scale_a, scale_b);
+                if (stage("s1", a.t_s1, record->t_s1, [&] {
+                    return s1::s1_preprocess(dev_img_a_, dev_img_b_, knobs.S, &dev_gray_a_, &dev_gray_b_,
+                                             &scale_a, &scale_b, stream_);
+                }) != Status::OK) return;
             }
 
-            CUDA_CHECK(cudaEventRecord(ev_s2_, stream_));
-            Status s3_a = s3::s3_describe(dev_gray_a_, kp_view_a, desc_a_, ws_s3_, ws_bytes_s3_, stream_);
-            Status s3_b = s3::s3_describe(dev_gray_b_, kp_view_b, desc_b_, ws_s3_, ws_bytes_s3_, stream_);
-            CUDA_CHECK(cudaEventRecord(ev_s3_, stream_));
-            CUDA_CHECK(cudaStreamSynchronize(stream_));
-            float ms3 = 0.0f; cudaEventElapsedTime(&ms3, ev_s2_, ev_s3_); total_s3_ms += ms3;
-            if (s3_a != Status::OK || s3_b != Status::OK) {
-                record->status = status_to_str(s3_a != Status::OK ? s3_a : s3_b);
-                record->fail_stage = "s3";
-                break;
+            Keypoints kp_view_a = kp_a_;
+            Keypoints kp_view_b = kp_b_;
+            kp_view_a.capacity = kp_view_b.capacity = knobs.K;
+            if (rerun_features) {
+                if (stage("s2", a.t_s2, record->t_s2, [&] {
+                    CUDA_CHECK(cudaMemsetAsync(d_kp_count_a_, 0, sizeof(int), stream_));
+                    CUDA_CHECK(cudaMemsetAsync(d_kp_count_b_, 0, sizeof(int), stream_));
+                    const s2::Config cfg{20, knobs.K, 0.04f};
+                    const auto sa = s2::s2_detect(dev_gray_a_, cfg, kp_view_a, ws_s2_a_, ws_bytes_s2_a_, stream_);
+                    return sa == Status::OK
+                        ? s2::s2_detect(dev_gray_b_, cfg, kp_view_b, ws_s2_b_, ws_bytes_s2_b_, stream_) : sa;
+                }) != Status::OK) return;
+                if (stage("s3", a.t_s3, record->t_s3, [&] {
+                    const auto sa = s3::s3_describe(dev_gray_a_, kp_view_a, desc_a_, ws_s3_, ws_bytes_s3_, stream_);
+                    return sa == Status::OK
+                        ? s3::s3_describe(dev_gray_b_, kp_view_b, desc_b_, ws_s3_, ws_bytes_s3_, stream_) : sa;
+                }) != Status::OK) return;
             }
-        }
-
-        // Run S4 if needed
-        if (rerun_s4) {
-            CUDA_CHECK(cudaMemsetAsync(d_matches_count_, 0, sizeof(int), stream_));
-            CUDA_CHECK(cudaEventRecord(ev_s3_, stream_));
-            s4::Config s4_cfg{0.8, false};
-            Status s4_stat = s4::s4_match(kp_view_a, desc_a_, kp_view_b, desc_b_, s4_cfg, matches_, ws_s4_, ws_bytes_s4_, stream_);
-            CUDA_CHECK(cudaEventRecord(ev_s4_, stream_));
-            CUDA_CHECK(cudaStreamSynchronize(stream_));
-            float ms4 = 0.0f; cudaEventElapsedTime(&ms4, ev_s3_, ev_s4_); total_s4_ms += ms4;
-            if (s4_stat != Status::OK) {
-                record->status = status_to_str(s4_stat);
-                record->fail_stage = "s4";
-                break;
+            if (rerun_s4) {
+                if (stage("s4", a.t_s4, record->t_s4, [&] {
+                    CUDA_CHECK(cudaMemsetAsync(d_matches_count_, 0, sizeof(int), stream_));
+                    const s4::Config cfg{0.8, false};
+                    return s4::s4_match(kp_view_a, desc_a_, kp_view_b, desc_b_, cfg, matches_, ws_s4_, ws_bytes_s4_, stream_);
+                }) != Status::OK) return;
             }
-        }
 
-        // Run S5 MSAC Homography
-        CUDA_CHECK(cudaEventRecord(ev_s4_, stream_));
-        s5::Config s5_cfg{current_knobs.R, prev_r, 64, 1, 3.0, seed, current_gen};
-        Status s5_stat = s5::estimate(kp_view_a, kp_view_b, matches_, scale_a, scale_b, s5_cfg,
-                                      d_inlier_mask_, pinned_h_res_, ws_s5_, ws_bytes_s5_, stream_);
-        CUDA_CHECK(cudaEventRecord(ev_s5_, stream_));
-        CUDA_CHECK(cudaStreamSynchronize(stream_));
-        float ms5 = 0.0f; cudaEventElapsedTime(&ms5, ev_s4_, ev_s5_); total_s5_ms += ms5;
-
-        completed_r = current_knobs.R;
-        prev_s = current_knobs.S;
-        prev_k = current_knobs.K;
-
-        // Feedback observation
-        const auto t_obs_s = std::chrono::steady_clock::now();
-        controller::Feedback feedback{current_knobs, s5_stat, *pinned_h_res_};
-        double feature_ms=0.;
-        if (controller.needs_gate_features() && s5_stat==Status::OK && pinned_h_res_->status==Status::OK) {
-            const auto begin=std::chrono::steady_clock::now();
-            const s4::Top2* forward=nullptr;
-            if((controller.relation_mask()&1) && s4::s4_forward_neighbors(kp_view_a.capacity,kp_view_b.capacity,
-                    s4::Config{.8,false},ws_s4_,ws_bytes_s4_,&forward)!=Status::OK)
-                throw std::runtime_error("Missing adaptive matching observations");
-            const auto status=controller::extract_gate(dev_img_a_,dev_img_b_,kp_view_a,kp_view_b,matches_,d_inlier_mask_,
-                *pinned_h_res_,scale_a,scale_b,d_features_,pinned_features_,stream_,forward,controller.relation_mask());
-            if (status==Status::CUDA_ERROR) throw std::runtime_error("Gate feature CUDA error");
-            CUDA_CHECK(cudaStreamSynchronize(stream_));
-            if (status==Status::OK) {
-                std::copy_n(pinned_features_,controller::gate_feature_count,feedback.features.begin());
-                feedback.features_present=true;
-            }
-            feature_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
-            record->t_features+=feature_ms;
-        }
-        // A reference fallback intentionally skips the gate. Its final feature
-        // row must not retain observations from the rejected cheap candidate.
-        record->gate_features=feedback.features;record->features_present=feedback.features_present;
-        Status obs_stat = controller.observe(feedback, &decision);
-        const auto t_obs_e = std::chrono::steady_clock::now();
-        ctrl_time_ms += std::chrono::duration<double, std::milli>(t_obs_e - t_obs_s).count();
-
-        if (obs_stat != Status::OK) {
-            record->status = status_to_str(obs_stat);
+            *pinned_h_res_ = HomographyResult{};
+            pinned_h_res_->status = Status::INVALID_ARGUMENT;
+            const auto s5_status = stage("s5", a.t_s5, record->t_s5, [&] {
+                if (a.previous_R > 0) record->cache_hit = 1;
+                const s5::Config cfg{knobs.R, a.previous_R, 64, 1, 3.0, seed, generation};
+                return s5::estimate(kp_view_a, kp_view_b, matches_, scale_a, scale_b, cfg,
+                                    d_inlier_mask_, pinned_h_res_, ws_s5_, ws_bytes_s5_, stream_);
+            });
+            a.has_feedback = s5_status == Status::OK;
+            if (a.has_feedback) a.homography = *pinned_h_res_;
+            a.has_homography = a.has_feedback && a.homography.status == Status::OK;
+            if (s5_status == Status::OK) completed_r = knobs.R;
             record->fail_stage = "controller";
+            controller::Feedback feedback{knobs, s5_status, *pinned_h_res_};
+            if (controller.needs_gate_features() && a.has_homography) {
+                Span feature{a.t_features};
+                const s4::Top2* forward = nullptr;
+                if ((controller.relation_mask() & 1) &&
+                    s4::s4_forward_neighbors(kp_view_a.capacity, kp_view_b.capacity, {.8, false},
+                                             ws_s4_, ws_bytes_s4_, &forward) != Status::OK)
+                    throw std::runtime_error("Missing adaptive matching observations");
+                const auto status = controller::extract_gate(dev_img_a_, dev_img_b_, kp_view_a, kp_view_b,
+                    matches_, d_inlier_mask_, *pinned_h_res_, scale_a, scale_b, d_features_, pinned_features_,
+                    stream_, forward, controller.relation_mask());
+                if (status == Status::CUDA_ERROR) throw CudaError(cudaErrorUnknown);
+                {
+                    Span wait{record->t_stream_wait};
+                    CUDA_CHECK(cudaStreamSynchronize(stream_));
+                }
+                if (status == Status::OK) {
+                    std::copy_n(pinned_features_, controller::gate_feature_count, feedback.features.begin());
+                    feedback.features_present = true;
+                }
+            }
+            a.features = record->gate_features = feedback.features;
+            record->features_present = feedback.features_present;
+            record->t_features += a.t_features;
+            Status observed;
+            {
+                Span cpu{record->t_controller};
+                observed = controller.observe(feedback, &a.decision);
+            }
+            if (observed != Status::OK) {
+                if (s5_status == Status::OK) {
+                    a.fail_stage = "controller";
+                    a.execution_status = observed;
+                    fail(observed);
+                } else {
+                    record->fail_stage = "s5";
+                }
+                return;
+            }
+            a.has_decision = true;
+            if (a.decision.action == controller::Action::RETRY) {
+                previous = knobs;
+                knobs = a.decision.next;
+                continue;
+            }
+            if (a.decision.action == controller::Action::REJECT) {
+                if (s5_status != Status::OK) {
+                    record->fail_stage = "s5";
+                    return;
+                }
+                record->status = a.decision.reason == controller::Reason::BUDGET_EXHAUSTED
+                    ? "BUDGET_EXHAUSTED" : a.decision.reason == controller::Reason::EXECUTION_ERROR
+                    ? "EXECUTION_ERROR" : "REJECTED";
+                return;
+            }
+            attempt.finish();
             break;
         }
 
-        auto& trace = trace_.records[trace_.count++];
-        trace.knobs = current_knobs;
-        trace.decision = decision;
-        trace.homography = *pinned_h_res_;
-        trace.previous_R = prev_r;
-        trace.eligible_R_old = eligible_r_old;
-        trace.generation = current_gen;
-        trace.features=feedback.features;trace.t_features=feature_ms;
-        trace.t_s4 = total_s4_ms - s4_before;
-        trace.t_s5 = total_s5_ms - s5_before;
-        trace.t_attempt = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - attempt_start).count();
-
-        if (decision.action == controller::Action::ACCEPT) {
-            accepted = true;
-            break;
-        } else if (decision.action == controller::Action::RETRY) {
-            executed_knobs = current_knobs;
-            current_knobs = decision.next;
-            continue;
-        } else { // REJECT
-            accepted = false;
-            break;
-        }
-    }
-
-    // Download telemetry from device
-    CUDA_CHECK(cudaMemcpy(&record->num_kp_a, kp_a_.d_count, sizeof(int), cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(&record->num_kp_b, kp_b_.d_count, sizeof(int), cudaMemcpyDeviceToHost));
-    record->num_matches = pinned_h_res_->num_matches;
-    record->num_inliers = pinned_h_res_->num_inliers;
-    record->inlier_ratio = pinned_h_res_->inlier_ratio;
-    record->inlier_coverage = pinned_h_res_->inlier_coverage;
-    record->reproj_residual = pinned_h_res_->reproj_residual;
-    std::memcpy(record->H, pinned_h_res_->H, 9 * sizeof(double));
-
-    record->S = current_knobs.S;
-    record->K = current_knobs.K;
-    record->R = current_knobs.R;
-    record->blend_mode = blend_to_str(current_knobs.B);
-    record->blend_mode_effective = record->blend_mode;
-
-    std::stringstream cfg_ss;
-    cfg_ss << "S" << std::fixed << std::setprecision(2) << current_knobs.S
-           << "_K" << current_knobs.K << "_R" << current_knobs.R << "_B" << record->blend_mode;
-    record->config_id = cfg_ss.str();
-
-    record->t_s1 = total_s1_ms;
-    record->t_s2 = total_s2_ms;
-    record->t_s3 = total_s3_ms;
-    record->t_s4 = total_s4_ms;
-    record->t_s5 = total_s5_ms;
-    record->t_controller = ctrl_time_ms;
-
-    // -----------------------------------------------------------------------
-    // Step 3: S6 Rendering on ACCEPT
-    // -----------------------------------------------------------------------
-    if (accepted) {
+        const auto& h = active->homography;
+        active = nullptr;
+        record->fail_stage = "s6";
         s6::Geometry geom{};
-        s6::GeometryPolicy geom_policy{};
-        Status g_stat = s6::prepare_geometry(cur_w_a_, cur_h_a_, cur_w_b_, cur_h_b_, pinned_h_res_->H, geom_policy, &geom);
-        if (g_stat == Status::OK && (geom.width > kMaxCanvasDim || geom.height > kMaxCanvasDim))
-            g_stat = Status::INSUFFICIENT_WORKSPACE;
-        if (g_stat != Status::OK) {
-            const auto t_host_end = std::chrono::steady_clock::now();
-            record->t_e2e = std::chrono::duration<double, std::milli>(t_host_end - t_host_start).count();
-            record->status = status_to_str(g_stat);
-            record->fail_stage = "s6";
-            record->t_s6 = 0.0;
+        const auto geometry = s6::prepare_geometry(cur_w_a_, cur_h_a_, cur_w_b_, cur_h_b_, h.H, {}, &geom);
+        if (geometry != Status::OK) {
+            record->status = geometry == Status::INSUFFICIENT_WORKSPACE ? "ERR_CANVAS_OVERFLOW" : status_to_str(geometry);
             return;
         }
-
-        dev_canvas_.width = geom.width;
-        dev_canvas_.height = geom.height;
-        dev_s6_mask_.width = geom.width;
-        dev_s6_mask_.height = geom.height;
-
-        CUDA_CHECK(cudaEventRecord(ev_s5_, stream_));
-        Status s6_stat = s6::render(dev_img_a_, dev_img_b_, geom, current_knobs.B,
-                                    dev_canvas_, dev_s6_mask_, ws_s6_, ws_bytes_s6_, stream_, dev_stats_);
-        if (s6_stat != Status::OK) {
-            const auto t_host_end = std::chrono::steady_clock::now();
-            record->t_e2e = std::chrono::duration<double, std::milli>(t_host_end - t_host_start).count();
-            record->status = status_to_str(s6_stat);
-            record->fail_stage = "s6";
-            record->t_s6 = 0.0;
+        if (geom.width > canvas_capacity_w_ || geom.height > canvas_capacity_h_) {
+            record->status = "ERR_CANVAS_OVERFLOW";
             return;
         }
-        CUDA_CHECK(cudaEventRecord(ev_s6_, stream_));
-        CUDA_CHECK(cudaStreamSynchronize(stream_));
+        dev_canvas_.width = dev_s6_mask_.width = geom.width;
+        dev_canvas_.height = dev_s6_mask_.height = geom.height;
+        const auto rendered = timed_gpu(record->t_s6, [&] {
+            return s6::render(dev_img_a_, dev_img_b_, geom, knobs.B, dev_canvas_, dev_s6_mask_,
+                              ws_s6_, ws_bytes_s6_, stream_, dev_stats_);
+        });
+        host.finish();
+        if (rendered != Status::OK) { fail(rendered); return; }
 
-        float ms6 = 0.0f;
-        cudaEventElapsedTime(&ms6, ev_s5_, ev_s6_);
-        record->t_s6 = ms6;
-
-        s6::RenderStatistics host_stats{};
-        CUDA_CHECK(cudaMemcpy(&host_stats, dev_stats_, sizeof(host_stats), cudaMemcpyDeviceToHost));
+        record->fail_stage = "telemetry";
+        CUDA_CHECK(cudaMemcpy(&record->num_kp_a, kp_a_.d_count, sizeof(int), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(&record->num_kp_b, kp_b_.d_count, sizeof(int), cudaMemcpyDeviceToHost));
+        record->num_matches = h.num_matches;
+        record->num_inliers = h.num_inliers;
+        record->inlier_ratio = h.inlier_ratio;
+        record->inlier_coverage = h.inlier_coverage;
+        record->reproj_residual = h.reproj_residual;
+        std::memcpy(record->H, h.H, sizeof(record->H));
+        s6::RenderStatistics stats{};
+        CUDA_CHECK(cudaMemcpy(&stats, dev_stats_, sizeof(stats), cudaMemcpyDeviceToHost));
         record->canvas_pixels = static_cast<std::uint64_t>(geom.width) * geom.height;
-        record->overlap_pixels = host_stats.overlap_pixels;
-        record->num_levels = s6::effective_reductions(geom, current_knobs.B);
+        record->overlap_pixels = stats.overlap_pixels;
+        record->num_levels = s6::effective_reductions(geom, knobs.B);
         record->peak_workspace_bytes = ws_bytes_s6_;
-
         record->status = "OK";
-        record->fail_stage = "";
-    } else {
-        record->status = (decision.reason == controller::Reason::BUDGET_EXHAUSTED) ? "BUDGET_EXHAUSTED" :
-                         (decision.reason == controller::Reason::EXECUTION_ERROR) ? "EXECUTION_ERROR" : "REJECTED";
-        record->fail_stage = "controller";
-        record->t_s6 = 0.0;
+        record->fail_stage.clear();
+    } catch (const CudaError& error) {
+        record->status = error.code == cudaErrorMemoryAllocation ? "ERR_DEVICE_OOM" : "ERR_CUDA";
+        if (active) active->execution_status = Status::CUDA_ERROR;
+        throw;
     }
-
-    const auto t_host_end = std::chrono::steady_clock::now();
-    record->t_e2e = std::chrono::duration<double, std::milli>(t_host_end - t_host_start).count();
 }
 
 }  // namespace stitch::harness

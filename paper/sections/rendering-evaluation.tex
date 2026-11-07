@@ -1,0 +1,51 @@
+\subsection{Same-Homography Blending}
+\label{sec:a4}
+The development comparison holds original RGB inputs, B-to-A homography,
+canvas and sampling conventions fixed for all three blenders.
+CUDA events bracket the render interval. Geometry, device setup and transfers
+are recorded separately from per-repeat render and host invocation timing.
+Correctness checks compare masks, dimensions and RGB against an FP64 oracle.
+Table~\ref{tab:a4-blending} reports the render interval and queried workspace.
+Feather has the lowest measured render cost. The multi-band modes allocate
+image pyramids, and the extra reductions change execution cost more than the
+maximum workspace on this cohort.
+\input{tables/table_a4_blending}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=.78\linewidth]{figures/fig_qualitative_crops.pdf}
+\caption{Same-coordinate RGB crops. The first two rows follow the locked
+visual plan. The last row is a post-hoc limitation crop from an already
+selected full panorama, showing duplicated vehicle contours in feather.
+Coordinates and display scale are identical across blenders within each row.
+Different rows have different native crop sizes. Inspection remains qualitative.}
+\label{fig:crops}
+\end{figure}
+
+The visible contours in Figure~\ref{fig:crops} show composition differences
+under identical registration. No quantitative ranking between the two
+multi-band depths is established. Alignment PSNR and SSIM remain unchanged
+because the evaluator consumes the shared input images and homography.
+
+\subsection{Resolution Scaling and Registration Limits}
+\label{sec:scaling}
+Synthetic inputs use controlled affine and projective transformations at
+720p, 1080p and 4K. Half-pixel coordinate scaling transforms the ground-truth
+homography between resolutions. The S6-only track supplies that homography
+directly. The end-to-end track estimates its own homography and evaluates
+geometric error against the known transform.
+
+\input{tables/table_multires_scaling}
+S6-only completes \ChRenderSuccess{}/\ChRenderTotal{} pair--blender cases.
+Its 4K canvases span \ChCanvasMin{}--\ChCanvasMax{} pixels in width, exceeding
+the input width. The largest queried S6 workspace is \ChMaxWorkspace{}\,MiB.
+Workspace query, declared allocation and peak VRAM are separate quantities.
+At large resolutions, ROI arithmetic checks cover selected image regions.
+They do not provide a full-frame visual-quality measurement.
+
+Registration is the limiting factor in the separate end-to-end track. Only
+\ChEndSuccess{}/\ChEndTotal{} pair--blender cases complete. The largest
+repeat median of mean corner error is \ChGeometryError{} pixels. All failures
+remain in the ledger. These observations establish S6 render scaling with
+known geometry and a failure of the tested registration configuration on
+most synthetic stress cases. Transfer to L4 and A100 remains pending.

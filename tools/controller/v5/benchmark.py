@@ -103,9 +103,10 @@ def evaluate(context,images,output,protocol):
                 cheap_pass+=final_label=='PASS';cheap_fail+=final_label=='FAIL';cheap_unknown+=final_label not in ('PASS','FAIL')
             route.append(dict(variant=name,pair_id=pair,group_id=groups[pair],attempt=int(r['attempt_idx']),S=float(r['S']),K=int(r['K']),R=int(r['R']),
                 alignment_QoR=label,final_QoR=statuses[name][pair],gate_false_accept=cheap and r['action']=='ACCEPT' and label=='FAIL',
-                gate_false_reject=cheap and r['action']!='ACCEPT' and label=='PASS',action=r['action'],reason=r['reason'],predicted_reject=float(r.get('v5_p_reject',0)) if name not in ('V4','GATE') else None,
-                realized_reject=r['action']!='ACCEPT',estimated_score_ms=float(r.get('v5_score_ms',0)) if name not in ('V4','GATE') else None,
+                gate_false_reject=cheap and r['action']!='ACCEPT' and label=='PASS',action=r['action'],reason=r['reason'],predicted_reject=float(r.get('v5_p_reject',0)) if name not in ('V4','GATE') and not name.startswith('DCS_') else None,
+                realized_reject=r['action']!='ACCEPT',estimated_score_ms=float(r.get('v5_score_ms',0)) if name not in ('V4','GATE') and not name.startswith('DCS_') else None,
                 measured_attempt_ms=float(r['t_attempt']),measured_feature_ms=float(r['t_features']),previous_R=int(r['previous_R']),
+                dcs_rank_score=float(r['dcs_rank_score']) if r.get('dcs_reason','-1')!='-1' else None,dcs_fallback_reason=r.get('dcs_reason'),
                 risk_joint=float(r.get('v5_risk_joint',0)) if r.get('v5_gate_evaluated')=='1' else None,measurement=measurement,score_status='MODEL_ESTIMATE'))
         reference=[median['REF'][p] for p in reference_valid];value=[median[name][p] for p in reference_valid]
         paired_ratio=speedup_ci(reference,value,[groups[p] for p in reference_valid],protocol)

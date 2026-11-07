@@ -41,7 +41,7 @@ Status Controller::begin_pair(const SceneSignals& scene, Knobs* first) noexcept 
     if (phase_ != Phase::Idle || !first || !detail::valid_scene(scene, policy_.probe_scale))
         return Status::INVALID_ARGUMENT;
     if (policy_.pooled) {
-        if (!scene.features_present) return Status::INVALID_ARGUMENT;
+        if (!scene.features_present && !policy_.dcs) return Status::INVALID_ARGUMENT;
         const auto values=selector_features(scene.features);
         std::copy(values.begin(),values.end(),pooled_context_.begin());
         for(int j=0;j<6;++j)pooled_context_[33+j]=scene.features[26+j];
@@ -51,10 +51,10 @@ Status Controller::begin_pair(const SceneSignals& scene, Knobs* first) noexcept 
             pooled_context_[32]=ladder_[index].R/1024.;
         };
         set_config(model.reference_index);
-        const double reference_ms=predict_ensemble(model.latency,pooled_context_.data());
-        if (!std::isfinite(reference_ms)) return Status::INVALID_ARGUMENT;
+        const double reference_ms=policy_.dcs?0.:predict_ensemble(model.latency,pooled_context_.data());
+        if (!std::isfinite(reference_ms) && !policy_.dcs) return Status::INVALID_ARGUMENT;
         double best=reference_ms;ladder_position_=model.reference_index;
-        for(std::size_t i=0;i<count_ && model.pre_threshold<1. && (!policy_.v5 || !policy_.v5->new_selector);++i) if(i!=model.reference_index) {
+        for(std::size_t i=0;i<count_ && model.pre_threshold<1. && !policy_.dcs && (!policy_.v5 || !policy_.v5->new_selector);++i) if(i!=model.reference_index) {
             set_config(i);
             const double p=predict_ensemble(model.pre_quality,pooled_context_.data());
             const double latency=predict_ensemble(model.latency,pooled_context_.data());
@@ -63,7 +63,13 @@ Status Controller::begin_pair(const SceneSignals& scene, Knobs* first) noexcept 
             const double cost=latency+(1-p)*fallback_ms+model.extra_ms;
             if(p>=model.pre_threshold && cost<best) {best=cost;ladder_position_=i;}
         }
-        if(policy_.v5 && policy_.v5->new_selector) ladder_position_=v5_select();
+        if(policy_.v5 && policy_.v5->new_selector && !policy_.dcs) ladder_position_=v5_select();
+        if(policy_.dcs) {
+            double configs[48*3]{};
+            if(count_==48)for(std::size_t j=0;j<count_;++j){configs[j*3]=ladder_[j].S;configs[j*3+1]=ladder_[j].K/2000.;configs[j*3+2]=ladder_[j].R/1024.;}
+            direct_=select_direct(*policy_.dcs,scene.features_present?pooled_context_.data():nullptr,configs,count_,model.reference_index);
+            ladder_position_=direct_.initial;
+        }
         attempts_=1;
         set_config(ladder_position_);*first=ladder_[ladder_position_];
         phase_=Phase::AwaitingFeedback;return Status::OK;

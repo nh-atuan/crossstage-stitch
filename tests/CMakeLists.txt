@@ -61,3 +61,7 @@ target_link_libraries(spatial_probe PRIVATE stitch_common)
 add_executable(v5_probe controller/v5_probe.cpp)
 target_include_directories(v5_probe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(v5_probe PRIVATE stitch_controller)
+
+add_executable(dcs_probe controller/dcs_probe.cpp)
+target_include_directories(dcs_probe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(dcs_probe PRIVATE stitch_controller)

@@ -58,3 +58,8 @@ add_executable(test_v5 "${STITCH_REPO_ROOT}/tests/controller/test_v5.cpp")
 target_include_directories(test_v5 PRIVATE "${STITCH_REPO_ROOT}/tests")
 target_link_libraries(test_v5 PRIVATE stitch_controller)
 add_test(NAME test_v5 COMMAND test_v5)
+
+add_executable(test_dcs "${STITCH_REPO_ROOT}/tests/controller/test_dcs.cpp")
+target_include_directories(test_dcs PRIVATE "${STITCH_REPO_ROOT}/tests")
+target_link_libraries(test_dcs PRIVATE stitch_controller)
+add_test(NAME test_dcs COMMAND test_dcs)

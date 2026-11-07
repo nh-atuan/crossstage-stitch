@@ -28,7 +28,7 @@ def source(repo):
     return dict(revision=revision,files={str(p.relative_to(repo)):sha(p) for p in sorted(set(paths))})
 
 
-def start(config,repo=None,protocol=None,found=None,*,test_fixture=False,spatial_fixture=None):
+def start(config,repo=None,protocol=None,found=None,*,test_fixture=False,spatial_fixture=None,defer_native=False,output_prefix='controller-v5-',extra_identity=None):
     repo=Path(repo or Path.cwd()).resolve();protocol=protocol or Protocol();cache=Path(tempfile.mkdtemp(prefix='controller-v5-inputs-'))
     if found is None:
         cache,materialization,grid,model,inventory=data.discover_audited(config,repo)
@@ -64,8 +64,9 @@ def start(config,repo=None,protocol=None,found=None,*,test_fixture=False,spatial
         images_available=images is not None,compatible_AE_files=ae_hashes,
         spatial_fixture_hash=identity(spatial_fixture) if test_fixture and spatial_fixture is not None else None,
         cuda_compiler=cuda_compiler,execution_kind='TEST_FIXTURE' if test_fixture else 'REAL_PIPELINE')
+    if extra_identity is not None:frozen['external_inputs']=extra_identity
     frozen['cpu_identity']=identity({k:v for k,v in frozen.items() if k not in ['gpu','cuda_compiler']})
-    output=Path(config['OUTPUT_ROOT']).resolve()/('controller-v5-'+identity(frozen)[:16]);output.mkdir(parents=True,exist_ok=True)
+    output=Path(config['OUTPUT_ROOT']).resolve()/(output_prefix+identity(frozen)[:16]);output.mkdir(parents=True,exist_ok=True)
     if (output/'provenance.json').is_file() and read_json(output/'provenance.json')!=frozen:raise ValueError('v5 run fingerprint collision')
     context.output=output;context.cpu_identity=frozen['cpu_identity'];context.v5_protocol=protocol;context.images=images;context.gpu=gpu;context.gpu_error=gpu_error;context.repo=repo
     context.harness=context.spatial_probe=context.v5_probe=None;context.spatial=spatial_fixture
@@ -83,13 +84,19 @@ def start(config,repo=None,protocol=None,found=None,*,test_fixture=False,spatial
         try:
             if not test_fixture:
                 logs=output/'build-test';logs.mkdir(exist_ok=True)
-                with (logs/'pytest.log').open('w') as handle:
-                    tested=subprocess.run([sys.executable,'-m','pytest','tests/python','-q','-p','no:cacheprovider'],cwd=repo,stdout=handle,stderr=subprocess.STDOUT)
-                if tested.returncode:raise RuntimeError('CPU tests failed; see build-test/pytest.log')
-            if gpu is not None:
+                stamp=logs/'cpu-tests-passed.json'
+                test_identity=identity(dict(code=code,python=sys.version,packages=package_versions,
+                    tests={str(p.relative_to(repo)):sha(p) for p in (repo/'tests/python').glob('*.py')}))
+                cached=defer_native and stamp.is_file() and read_json(stamp).get('identity')==test_identity and (logs/'pytest.log').is_file() and read_json(stamp).get('log')==sha(logs/'pytest.log')
+                if not cached:
+                    with (logs/'pytest.log').open('w') as handle:
+                        tested=subprocess.run([sys.executable,'-m','pytest','tests/python','-q','-p','no:cacheprovider'],cwd=repo,stdout=handle,stderr=subprocess.STDOUT)
+                    if tested.returncode:raise RuntimeError('CPU tests failed; see build-test/pytest.log')
+                    write_json(stamp,dict(identity=test_identity,log=sha(logs/'pytest.log')))
+            if gpu is not None and not defer_native:
                 context.harness,context.spatial_probe,context.v5_probe=build.build(repo,output/'build-test',code['revision'],gpu)
             else:context.spatial_probe,context.v5_probe=build.cpu_probes(repo,output/'cpu-probes')
-            if images is not None and context.spatial is None:context.spatial=data.spatial(context,images,context.spatial_probe,output)
+            if not defer_native and images is not None and context.spatial is None:context.spatial=data.spatial(context,images,context.spatial_probe,output)
         except Exception as exc:
             context.build_error=str(exc);(output/'setup-failure.log').write_text(traceback.format_exc());context.harness=None
     write_json(output/'setup-status.json',dict(gpu=gpu,build_error=context.build_error,gpu_error=gpu_error,images_error=input_error,kind=frozen['execution_kind']))

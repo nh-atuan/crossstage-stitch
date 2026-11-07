@@ -822,6 +822,7 @@ void PipelineRunner::execute_adaptive_run(
         trace.generation = current_gen;
         trace.features=feedback.features;trace.t_features=feature_ms;trace.spatial=feedback.spatial;
         trace.v5=selected_telemetry;
+        if(controller.uses_direct()){const auto& d=controller.direct_selection();trace.dcs_reason=d.reason;trace.dcs_rank_score=d.scores[d.initial];}
         const auto gate_telemetry=controller.v5_gate_telemetry();
         {
             trace.v5.fail_ssim=gate_telemetry.fail_ssim;trace.v5.fail_psnr=gate_telemetry.fail_psnr;

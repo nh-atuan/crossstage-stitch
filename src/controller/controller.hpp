@@ -6,6 +6,7 @@
 #include "controller/policy.hpp"
 #include "controller/features.hpp"
 #include "controller/v5.hpp"
+#include "controller/dcs.hpp"
 #include "s6/s6.hpp"
 
 namespace stitch::controller {
@@ -72,9 +73,11 @@ public:
     Status configure(const Policy& policy) noexcept;
     double probe_scale() const noexcept;
     bool uses_learned_features() const noexcept { return configured_ && (policy_.selector.count != 0 || policy_.pooled); }
-    bool uses_pair_relations() const noexcept { return configured_ && (policy_.v5 ? policy_.v5->pair_ncc : policy_.pooled && policy_.pooled->pair_relations); }
+    bool uses_pair_relations() const noexcept { return configured_ && (policy_.dcs ? (policy_.dcs->pair_ncc || (policy_.v5 && policy_.v5->pair_ncc)) : policy_.v5 ? policy_.v5->pair_ncc : policy_.pooled && policy_.pooled->pair_relations); }
     bool uses_spatial() const noexcept { return configured_ && policy_.v5 && policy_.v5->spatial; }
     unsigned spatial_groups() const noexcept { return policy_.v5 ? policy_.v5->spatial_groups : 3; }
+    bool uses_direct() const noexcept { return configured_ && policy_.dcs; }
+    const DirectSelection& direct_selection() const noexcept { return direct_; }
     const V5Telemetry& v5_telemetry() const noexcept { return telemetry_; }
     const V5Telemetry& v5_gate_telemetry() const noexcept { return gate_telemetry_; }
     unsigned relation_mask() const noexcept { return configured_ && policy_.v5 ? policy_.v5->relation_mask : configured_ && policy_.pooled ? policy_.pooled->relation_mask : 0; }
@@ -99,6 +102,7 @@ private:
     std::array<double,39> pooled_context_{};
     unsigned attempts_{};
     V5Telemetry telemetry_{},gate_telemetry_{};
+    DirectSelection direct_{};
     void v5_config(std::size_t) noexcept;
     std::size_t v5_select(const Feedback* feedback=nullptr) noexcept;
     bool v5_gate(const Feedback&) noexcept;

@@ -2,6 +2,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstdio>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -41,6 +42,12 @@ struct ControllerPolicy {
     std::array<BoostedModel,9> v5_models;
     std::vector<double> incremental_ms;
     mutable controller::V5Models v5_view{};
+    bool dcs_mode{};
+    std::vector<BoostedModel> dcs_models;
+    mutable std::vector<controller::EnsembleView> dcs_views;
+    std::array<int,48> dcs_ties{};
+    mutable controller::DcsModels dcs_view{};
+    std::array<double,48> dcs_weights{};
 
     Status configure(controller::Controller& target) const {
         gates.clear();
@@ -57,9 +64,11 @@ struct ControllerPolicy {
             for(int i=0;i<4;++i) v5_view.failures[i]=v5_models[5+i].view();
             v5_view.incremental_ms=incremental_ms.data();v5_view.costs_count=incremental_ms.size();
         }
+        if(dcs_mode){dcs_views.clear();for(const auto& m:dcs_models)dcs_views.push_back(m.view());
+            dcs_view.models=dcs_views.data();dcs_view.count=dcs_views.size();dcs_view.tie_order=dcs_ties.data();dcs_view.weights=dcs_weights.data();}
         const controller::Policy policy{probe_scale, rules.data(), rules.size(), checks.data(), checks.size(),
             {selector.data(), selector.size()}, gates.empty() ? nullptr : gates.data(), gates.size(),
-            retry_targets.empty() ? nullptr : retry_targets.data(), retry_targets.size(),pooled_mode?&pooled_view:nullptr,v5_mode?&v5_view:nullptr};
+            retry_targets.empty() ? nullptr : retry_targets.data(), retry_targets.size(),pooled_mode?&pooled_view:nullptr,v5_mode?&v5_view:nullptr,dcs_mode?&dcs_view:nullptr};
         const auto status = target.configure(policy);
         return status == Status::OK ? target.initialize(ladder.data(), ladder.size()) : status;
     }
@@ -125,13 +134,13 @@ inline std::vector<controller::TreeNode> tree(const JsonValue& array) {
 inline ControllerPolicy parse_controller_policy(const JsonValue& root) {
     using namespace policy_detail;
     const auto schema = field(root, "schema_version", JsonValue::String).str_val;
-    if (schema != "controller-policy-v2" && schema != "controller-policy-v3" && schema!="controller-policy-v4" && schema!="controller-policy-v5")
+    if (schema != "controller-policy-v2" && schema != "controller-policy-v3" && schema!="controller-policy-v4" && schema!="controller-policy-v5" && schema!="controller-policy-dcs-r1")
         throw std::runtime_error("Unsupported controller policy schema");
     ControllerPolicy policy;
     policy.id = field(root, "policy_id", JsonValue::String).str_val;
     policy.probe_scale = number(root, "probe_scale");
     const auto& entries = field(root, "ladder", JsonValue::Array).arr_val;
-    if (entries.empty() || entries.size() > ((schema=="controller-policy-v4" || schema=="controller-policy-v5")?64:16) || policy.id.empty())
+    if (entries.empty() || entries.size() > ((schema=="controller-policy-v4" || schema=="controller-policy-v5" || schema=="controller-policy-dcs-r1")?64:16) || policy.id.empty())
         throw std::runtime_error("Policy exceeds attempt-trace capacity or has no identity");
     for (const auto& entry : entries) {
         const auto blend = field(entry, "blend_mode", JsonValue::String).str_val;
@@ -145,7 +154,7 @@ inline ControllerPolicy parse_controller_policy(const JsonValue& root) {
     }
     for (const auto& entry : field(root, "scene_rules", JsonValue::Array).arr_val) {
         policy.rules.push_back({number(entry, "min_pair_gradient"),
-            static_cast<std::size_t>(integer(entry, "first_index", (schema=="controller-policy-v4" || schema=="controller-policy-v5")?63:15))});
+            static_cast<std::size_t>(integer(entry, "first_index", (schema=="controller-policy-v4" || schema=="controller-policy-v5" || schema=="controller-policy-dcs-r1")?63:15))});
     }
     if (schema == "controller-policy-v3") {
         if (field(root,"feature_schema",JsonValue::String).str_val != "controller-features-v1")
@@ -163,7 +172,7 @@ inline ControllerPolicy parse_controller_policy(const JsonValue& root) {
             }
         }
     }
-    if(schema=="controller-policy-v4" || schema=="controller-policy-v5") {
+    if(schema=="controller-policy-v4" || schema=="controller-policy-v5" || schema=="controller-policy-dcs-r1") {
         if(field(root,"feature_schema",JsonValue::String).str_val!="controller-features-v2")
             throw std::runtime_error("Unknown pooled feature layout");
         const auto& models=field(root,"models",JsonValue::Object);
@@ -196,7 +205,7 @@ inline ControllerPolicy parse_controller_policy(const JsonValue& root) {
             } else if(root.obj_val.count("fallback_fractions"))throw std::runtime_error("Old score cannot use fallback profile");
         } else if(root.obj_val.count("fallback_fractions"))throw std::runtime_error("Fallback profile requires score mode");
     }
-    if(schema=="controller-policy-v5") {
+    if(schema=="controller-policy-v5" || schema=="controller-policy-dcs-r1") {
         if(field(root,"v5_feature_schema",JsonValue::String).str_val!="controller-v5-features-1")
             throw std::runtime_error("Unknown v5 feature schema");
         const auto& v=field(root,"v5",JsonValue::Object);auto& view=policy.v5_view;
@@ -221,6 +230,29 @@ inline ControllerPolicy parse_controller_policy(const JsonValue& root) {
         view.staged=field(v,"staged",JsonValue::Bool).bool_val;view.pair_ncc=field(v,"pair_ncc",JsonValue::Bool).bool_val;
         if(field(v,"gate_version",JsonValue::String).str_val.empty() || field(v,"cost_profile_hash",JsonValue::String).str_val.empty())
             throw std::runtime_error("v5 requires frozen gate and measured cost provenance");
+    }
+    if(schema=="controller-policy-dcs-r1") {
+        policy.dcs_mode=true;policy.dcs_view.available=false;
+        try {
+            const auto& d=field(root,"dcs",JsonValue::Object);
+            if(field(d,"feature_schema",JsonValue::String).str_val!="dcs-pre-48-v1")throw std::runtime_error("DCS schema mismatch");
+            policy.dcs_view.pair_ncc=field(d,"pair_ncc",JsonValue::Bool).bool_val;
+            policy.dcs_view.interactions=field(d,"interactions",JsonValue::Bool).bool_val;
+            policy.dcs_view.multiclass=field(d,"multiclass",JsonValue::Bool).bool_val;
+            policy.dcs_view.linear=field(d,"linear",JsonValue::Bool).bool_val;
+            if(policy.dcs_view.linear){const auto& weights=field(d,"weights",JsonValue::Array).arr_val;if(weights.size()!=48)throw std::runtime_error("DCS weights mismatch");
+                for(int i=0;i<48;++i){if(weights[i].type!=JsonValue::Number || !std::isfinite(weights[i].num_val))throw std::runtime_error("DCS nonfinite weight");policy.dcs_weights[i]=weights[i].num_val;}policy.dcs_view.bias=number(d,"bias");}
+            const auto& catalog=field(d,"catalog",JsonValue::Array).arr_val;
+            if(catalog.size()!=48 || entries.size()!=48)throw std::runtime_error("DCS catalog mismatch");
+            std::vector<std::pair<std::string,int>> names;
+            for(int i=0;i<48;++i){if(catalog[i].type!=JsonValue::String || catalog[i].str_val!=field(entries[i],"config_id",JsonValue::String).str_val)throw std::runtime_error("DCS config ID mismatch");char canonical[96];const auto& c=policy.ladder[i];
+                if((c.S!=.25 && c.S!=.5 && c.S!=.75 && c.S!=1.) || (c.K!=500 && c.K!=1000 && c.K!=2000) || (c.R!=128 && c.R!=256 && c.R!=512 && c.R!=1024))throw std::runtime_error("DCS config outside frozen 48-grid");
+                std::snprintf(canonical,sizeof(canonical),"S%.2f_K%d_R%d_Bfeather",c.S,c.K,c.R);
+                if(catalog[i].str_val!=canonical)throw std::runtime_error("DCS descriptors differ from catalog ID");names.push_back({catalog[i].str_val,i});}
+            std::sort(names.begin(),names.end());for(int i=0;i<48;++i){if(i && names[i].first==names[i-1].first)throw std::runtime_error("DCS duplicate config");policy.dcs_ties[names[i].second]=i;}
+            for(const auto& model:field(d,"models",JsonValue::Array).arr_val)policy.dcs_models.push_back(ensemble(model));
+            policy.dcs_view.available=true;
+        } catch(const std::exception&) {policy.dcs_models.clear();policy.dcs_view.available=false;}
     }
     controller::Controller validation;
     if (policy.configure(validation) != Status::OK)

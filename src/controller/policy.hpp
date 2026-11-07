@@ -20,6 +20,7 @@ struct SceneRule {
 };
 
 struct V5Models;
+struct DcsModels;
 
 struct Policy {
     double probe_scale;
@@ -34,6 +35,7 @@ struct Policy {
     std::size_t retry_target_count{};
     const PooledModels* pooled{};
     const V5Models* v5{};
+    const DcsModels* dcs{};
 };
 
 namespace detail {

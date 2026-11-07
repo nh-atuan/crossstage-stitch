@@ -32,7 +32,7 @@ void write_csv_header(std::ostream& out) {
         << "num_kp_a,num_kp_b,num_matches,num_inliers,inlier_ratio,inlier_coverage,reproj_residual,"
         << "h0,h1,h2,h3,h4,h5,h6,h7,h8,"
         << "canvas_pixels,overlap_pixels,blend_mode_effective,num_levels,peak_workspace_bytes,cache_hit,"
-        << "status,fail_stage,probe_gradient_a,probe_gradient_b\n";
+        << "status,fail_stage,probe_gradient_a,probe_gradient_b,t_probe_features,t_selector,t_spatial\n";
 }
 
 void write_csv_row(std::ostream& out, const RunRecord& r) {
@@ -51,14 +51,14 @@ void write_csv_row(std::ostream& out, const RunRecord& r) {
         << r.inlier_ratio << "," << r.inlier_coverage << "," << r.reproj_residual << ",";
 
     for (int i = 0; i < 9; ++i) {
-        out << std::setprecision(10) << r.H[i] << ",";
+        out << std::setprecision(17) << r.H[i] << ",";
     }
 
     out << r.canvas_pixels << "," << r.overlap_pixels << ","
         << r.blend_mode_effective << "," << r.num_levels << ","
         << r.peak_workspace_bytes << "," << r.cache_hit << ","
         << r.status << "," << r.fail_stage << "," << std::setprecision(17)
-        << r.probe_gradient_a << "," << r.probe_gradient_b << "\n";
+        << r.probe_gradient_a << "," << r.probe_gradient_b << "," << r.t_probe_features << "," << r.t_selector << "," << r.t_spatial << "\n";
 }
 
 std::string generate_run_id() {
@@ -102,6 +102,8 @@ int main(int argc, char** argv) {
     std::string trace_path;
     std::string features_path;
     std::string controller_policy_path;
+    unsigned feature_profile_mask=7,spatial_groups=3;
+    bool spatial_features=false,profile_pair_ncc=true;
     bool reuse_enabled = true;
 
     // Single run options
@@ -121,6 +123,10 @@ int main(int argc, char** argv) {
         if (arg == "--manifest" && i + 1 < argc) manifest_path = argv[++i];
         else if (arg == "--controller-policy" && i + 1 < argc) controller_policy_path = argv[++i];
         else if (arg == "--trace-out" && i + 1 < argc) trace_path = argv[++i];
+        else if(arg=="--feature-relation-mask" && i+1<argc) {feature_profile_mask=std::stoul(argv[++i]);if(feature_profile_mask>7)return 2;}
+        else if(arg=="--spatial-groups" && i+1<argc){spatial_groups=std::stoul(argv[++i]);if(spatial_groups>3)return 2;}
+        else if(arg=="--spatial-features")spatial_features=true;
+        else if(arg=="--no-pair-ncc")profile_pair_ncc=false;
         else if (arg == "--features-out" && i + 1 < argc) features_path = argv[++i];
         else if (arg == "--no-reuse") reuse_enabled = false;
         else if (arg == "--configs" && i + 1 < argc) configs_path = argv[++i];
@@ -236,6 +242,7 @@ int main(int argc, char** argv) {
     PipelineRunner runner;
     runner.set_reuse_enabled(reuse_enabled);
     runner.set_collect_features(!features_path.empty() && mode!="adaptive");
+    runner.set_feature_profile(feature_profile_mask,spatial_features,profile_pair_ncc,spatial_groups);
     try {
         int max_width = 2048, max_height = 2048;
         const auto directory = manifest_path.empty() ? std::string{} : get_parent_dir(manifest_path);
@@ -265,6 +272,8 @@ int main(int argc, char** argv) {
         features_out << "pair_id,config_id,seed,repeat_idx,is_warmup,features_present,t_features";
         for (int i=0;i<stitch::controller::scene_feature_count;++i) features_out << ",scene_" << i;
         for (int i=0;i<stitch::controller::gate_feature_count;++i) features_out << ",gate_" << i;
+        features_out << ",spatial_present,t_probe_features,t_spatial";
+        for(int i=0;i<16;++i)features_out << ",spatial_" << i;
         features_out << '\n';
     }
     const auto write_features=[&](const RunRecord& r) {
@@ -273,6 +282,8 @@ int main(int argc, char** argv) {
             << r.repeat_idx << ',' << r.is_warmup << ',' << r.features_present << ',' << r.t_features;
         for (double v:r.scene_features) features_out << ',' << v;
         for (double v:r.gate_features) features_out << ',' << v;
+        features_out << ',' << r.spatial_present << ',' << r.t_probe_features << ',' << r.t_spatial;
+        for(double v:r.spatial)features_out << ',' << v;
         features_out << '\n';
     };
     std::ofstream trace_out;

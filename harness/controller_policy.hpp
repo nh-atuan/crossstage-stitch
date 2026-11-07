@@ -37,6 +37,10 @@ struct ControllerPolicy {
     BoostedModel pre_quality,post_quality,latency;
     mutable controller::PooledModels pooled_view{};
     std::vector<double> fallback_fractions;
+    bool v5_mode{};
+    std::array<BoostedModel,9> v5_models;
+    std::vector<double> incremental_ms;
+    mutable controller::V5Models v5_view{};
 
     Status configure(controller::Controller& target) const {
         gates.clear();
@@ -47,9 +51,15 @@ struct ControllerPolicy {
             pooled_view.fallback_fractions=fallback_fractions.empty()?nullptr:fallback_fractions.data();
             pooled_view.fallback_count=fallback_fractions.size();
         }
+        if(v5_mode) {
+            v5_view.pre=v5_models[0].view();v5_view.attempt=v5_models[1].view();v5_view.s6=v5_models[2].view();
+            v5_view.reject=v5_models[3].view();v5_view.future=v5_models[4].view();
+            for(int i=0;i<4;++i) v5_view.failures[i]=v5_models[5+i].view();
+            v5_view.incremental_ms=incremental_ms.data();v5_view.costs_count=incremental_ms.size();
+        }
         const controller::Policy policy{probe_scale, rules.data(), rules.size(), checks.data(), checks.size(),
             {selector.data(), selector.size()}, gates.empty() ? nullptr : gates.data(), gates.size(),
-            retry_targets.empty() ? nullptr : retry_targets.data(), retry_targets.size(),pooled_mode?&pooled_view:nullptr};
+            retry_targets.empty() ? nullptr : retry_targets.data(), retry_targets.size(),pooled_mode?&pooled_view:nullptr,v5_mode?&v5_view:nullptr};
         const auto status = target.configure(policy);
         return status == Status::OK ? target.initialize(ladder.data(), ladder.size()) : status;
     }
@@ -75,7 +85,7 @@ inline int integer(const JsonValue& parent, const char* name, int maximum) {
 }
 inline BoostedModel ensemble(const JsonValue& value) {
     BoostedModel result;
-    result.features=integer(value,"features",77);result.bias=static_cast<float>(number(value,"bias"));
+    result.features=integer(value,"features",93);result.bias=static_cast<float>(number(value,"bias"));
     const auto transform=field(value,"transform",JsonValue::String).str_val;
     if(transform!="exp" && transform!="sigmoid")throw std::runtime_error("Unknown ensemble transform");
     result.exponential=transform=="exp";
@@ -89,7 +99,7 @@ inline BoostedModel ensemble(const JsonValue& value) {
         const auto start=result.nodes.size();result.roots.push_back(start);
         for(const auto& node:tree.arr_val) {
             if(node.obj_val.count("leaf"))result.nodes.push_back({-1,-1,-1,0.f,static_cast<float>(number(node,"leaf"))});
-            else result.nodes.push_back({integer(node,"feature",76),
+            else result.nodes.push_back({integer(node,"feature",92),
                 static_cast<int>(start)+integer(node,"left",126),static_cast<int>(start)+integer(node,"right",126),
                 static_cast<float>(number(node,"threshold")),0.f});
         }
@@ -115,13 +125,13 @@ inline std::vector<controller::TreeNode> tree(const JsonValue& array) {
 inline ControllerPolicy parse_controller_policy(const JsonValue& root) {
     using namespace policy_detail;
     const auto schema = field(root, "schema_version", JsonValue::String).str_val;
-    if (schema != "controller-policy-v2" && schema != "controller-policy-v3" && schema!="controller-policy-v4")
+    if (schema != "controller-policy-v2" && schema != "controller-policy-v3" && schema!="controller-policy-v4" && schema!="controller-policy-v5")
         throw std::runtime_error("Unsupported controller policy schema");
     ControllerPolicy policy;
     policy.id = field(root, "policy_id", JsonValue::String).str_val;
     policy.probe_scale = number(root, "probe_scale");
     const auto& entries = field(root, "ladder", JsonValue::Array).arr_val;
-    if (entries.empty() || entries.size() > (schema=="controller-policy-v4"?64:16) || policy.id.empty())
+    if (entries.empty() || entries.size() > ((schema=="controller-policy-v4" || schema=="controller-policy-v5")?64:16) || policy.id.empty())
         throw std::runtime_error("Policy exceeds attempt-trace capacity or has no identity");
     for (const auto& entry : entries) {
         const auto blend = field(entry, "blend_mode", JsonValue::String).str_val;
@@ -135,7 +145,7 @@ inline ControllerPolicy parse_controller_policy(const JsonValue& root) {
     }
     for (const auto& entry : field(root, "scene_rules", JsonValue::Array).arr_val) {
         policy.rules.push_back({number(entry, "min_pair_gradient"),
-            static_cast<std::size_t>(integer(entry, "first_index", schema=="controller-policy-v4"?63:15))});
+            static_cast<std::size_t>(integer(entry, "first_index", (schema=="controller-policy-v4" || schema=="controller-policy-v5")?63:15))});
     }
     if (schema == "controller-policy-v3") {
         if (field(root,"feature_schema",JsonValue::String).str_val != "controller-features-v1")
@@ -153,7 +163,7 @@ inline ControllerPolicy parse_controller_policy(const JsonValue& root) {
             }
         }
     }
-    if(schema=="controller-policy-v4") {
+    if(schema=="controller-policy-v4" || schema=="controller-policy-v5") {
         if(field(root,"feature_schema",JsonValue::String).str_val!="controller-features-v2")
             throw std::runtime_error("Unknown pooled feature layout");
         const auto& models=field(root,"models",JsonValue::Object);
@@ -185,6 +195,32 @@ inline ControllerPolicy parse_controller_policy(const JsonValue& root) {
                         throw std::runtime_error("Scale fallback must retain full reference cost");
             } else if(root.obj_val.count("fallback_fractions"))throw std::runtime_error("Old score cannot use fallback profile");
         } else if(root.obj_val.count("fallback_fractions"))throw std::runtime_error("Fallback profile requires score mode");
+    }
+    if(schema=="controller-policy-v5") {
+        if(field(root,"v5_feature_schema",JsonValue::String).str_val!="controller-v5-features-1")
+            throw std::runtime_error("Unknown v5 feature schema");
+        const auto& v=field(root,"v5",JsonValue::Object);auto& view=policy.v5_view;
+        policy.v5_mode=true;
+        const char* names[]={"pre","attempt","s6","reject","future","fail_ssim","fail_psnr","fail_coverage","fail_joint"};
+        const auto& models=field(v,"models",JsonValue::Object);
+        for(int i=0;i<9;++i) policy.v5_models[i]=ensemble(field(models,names[i],JsonValue::Object));
+        for(const auto& row:field(v,"incremental_ms",JsonValue::Array).arr_val) {
+            if(row.type!=JsonValue::Array || row.arr_val.size()!=policy.ladder.size()) throw std::runtime_error("Invalid v5 cost row");
+            for(const auto& cost:row.arr_val) {
+                if(cost.type!=JsonValue::Number || !std::isfinite(cost.num_val) || cost.num_val<0) throw std::runtime_error("Invalid v5 transition cost");
+                policy.incremental_ms.push_back(cost.num_val);
+            }
+        }
+        view.risk_threshold=number(v,"risk_threshold");view.gate_ms=number(v,"gate_ms");
+        view.common_ms=number(v,"common_ms");view.pre_threshold=number(v,"pre_threshold");
+        view.spatial_groups=integer(v,"spatial_groups",3);
+        view.max_attempts=integer(v,"max_attempts",16);view.relation_mask=integer(v,"relation_mask",7);
+        view.margin_heads=field(v,"margin_heads",JsonValue::Bool).bool_val;
+        view.new_selector=field(v,"new_selector",JsonValue::Bool).bool_val;
+        view.new_gate=field(v,"new_gate",JsonValue::Bool).bool_val;view.spatial=field(v,"spatial",JsonValue::Bool).bool_val;
+        view.staged=field(v,"staged",JsonValue::Bool).bool_val;view.pair_ncc=field(v,"pair_ncc",JsonValue::Bool).bool_val;
+        if(field(v,"gate_version",JsonValue::String).str_val.empty() || field(v,"cost_profile_hash",JsonValue::String).str_val.empty())
+            throw std::runtime_error("v5 requires frozen gate and measured cost provenance");
     }
     controller::Controller validation;
     if (policy.configure(validation) != Status::OK)

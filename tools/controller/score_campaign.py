@@ -12,7 +12,7 @@ from tools.controller.p3_run_batch import combine
 from tools.controller.score_profile import SEED, digest, read_csv, write_json
 
 
-def validate_runs(path, pairs, revision, fixed_config=None):
+def validate_runs(path, pairs, revision, fixed_config=None, *, split="validation"):
     rows = read_csv(path)
     observed = set()
     stable = defaultdict(set)
@@ -22,7 +22,7 @@ def validate_runs(path, pairs, revision, fixed_config=None):
                 or key[2] not in range(2 if key[1] else 10)):
             raise ValueError('duplicate or unexpected campaign measurement')
         if (row['seed'] != str(SEED) or row['git_rev'] != revision
-                or row['dataset'] != 'udis_d' or row['split'] != 'validation'):
+                or row['dataset'] != 'udis_d' or row['split'] != split):
             raise ValueError('measurement seed/source/dataset/split mismatch')
         if fixed_config and row['config_id'] != fixed_config:
             raise ValueError('reference configuration changed')

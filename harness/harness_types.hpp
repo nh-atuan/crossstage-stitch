@@ -8,6 +8,7 @@
 #include "common/types.hpp"
 #include "s6/s6.hpp"
 #include "controller/features.hpp"
+#include "controller/v5.hpp"
 
 namespace stitch::harness {
 
@@ -69,7 +70,9 @@ struct RunRecord {
     controller::SceneFeatures scene_features{};
     controller::GateFeatures gate_features{};
     bool features_present{};
-    double t_features{};
+    double t_features{},t_probe_features{},t_selector{},t_spatial{};
+    controller::SpatialFeatures spatial{};
+    bool spatial_present{};
 
     // Signals S2-S5
     int num_kp_a{0};

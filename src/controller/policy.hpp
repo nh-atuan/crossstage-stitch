@@ -19,6 +19,8 @@ struct SceneRule {
     std::size_t first_index;
 };
 
+struct V5Models;
+
 struct Policy {
     double probe_scale;
     const SceneRule* scene_rules;  // Strictly decreasing bounds, ending at zero.
@@ -31,6 +33,7 @@ struct Policy {
     const std::size_t* retry_targets{};
     std::size_t retry_target_count{};
     const PooledModels* pooled{};
+    const V5Models* v5{};
 };
 
 namespace detail {

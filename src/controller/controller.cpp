@@ -54,7 +54,7 @@ Status Controller::begin_pair(const SceneSignals& scene, Knobs* first) noexcept 
         const double reference_ms=predict_ensemble(model.latency,pooled_context_.data());
         if (!std::isfinite(reference_ms)) return Status::INVALID_ARGUMENT;
         double best=reference_ms;ladder_position_=model.reference_index;
-        for(std::size_t i=0;i<count_ && model.pre_threshold<1.;++i) if(i!=model.reference_index) {
+        for(std::size_t i=0;i<count_ && model.pre_threshold<1. && (!policy_.v5 || !policy_.v5->new_selector);++i) if(i!=model.reference_index) {
             set_config(i);
             const double p=predict_ensemble(model.pre_quality,pooled_context_.data());
             const double latency=predict_ensemble(model.latency,pooled_context_.data());
@@ -63,6 +63,8 @@ Status Controller::begin_pair(const SceneSignals& scene, Knobs* first) noexcept 
             const double cost=latency+(1-p)*fallback_ms+model.extra_ms;
             if(p>=model.pre_threshold && cost<best) {best=cost;ladder_position_=i;}
         }
+        if(policy_.v5 && policy_.v5->new_selector) ladder_position_=v5_select();
+        attempts_=1;
         set_config(ladder_position_);*first=ladder_[ladder_position_];
         phase_=Phase::AwaitingFeedback;return Status::OK;
     }
@@ -95,6 +97,7 @@ Status Controller::observe(const Feedback& feedback, Decision* decision) noexcep
         !detail::valid_feedback(feedback))
         return Status::INVALID_ARGUMENT;
 
+    gate_telemetry_={};
     Decision result{Action::REJECT, Reason::EXECUTION_ERROR, feedback.executed};
     if (feedback.execution_status != Status::OK ||
         feedback.homography.status == Status::INVALID_ARGUMENT) {
@@ -102,15 +105,21 @@ Status Controller::observe(const Feedback& feedback, Decision* decision) noexcep
     } else {
         result.reason = detail::self_check_reason(feedback.homography,
                                                  policy_.self_checks[ladder_position_]);
+        if(policy_.v5 && policy_.v5->new_gate && result.reason==Reason::SELF_CHECK_PASSED && !valid_v5_homography(feedback.homography))
+            result.reason=Reason::DEGENERATE_MODEL;
         if(policy_.pooled && ladder_position_!=policy_.pooled->reference_index &&
                 result.reason==Reason::SELF_CHECK_PASSED) {
-            std::array<double,77> values{};
-            std::copy_n(pooled_context_.begin(),33,values.begin());
-            std::copy_n(feedback.features.begin(),24,values.begin()+33);
-            std::copy_n(pooled_context_.begin()+33,6,values.begin()+57);
-            std::copy_n(feedback.features.begin()+24,14,values.begin()+63);
-            const double p=feedback.features_present?predict_ensemble(policy_.pooled->post_quality,values.data()):-1.;
-            if(!std::isfinite(p) || p<policy_.pooled->gate_threshold) result.reason=Reason::QUALITY_PREDICTOR_REJECTED;
+            if(policy_.v5 && policy_.v5->new_gate) {
+                if(!v5_gate(feedback)) result.reason=Reason::QUALITY_PREDICTOR_REJECTED;
+            } else {
+                std::array<double,77> values{};
+                std::copy_n(pooled_context_.begin(),33,values.begin());
+                std::copy_n(feedback.features.begin(),24,values.begin()+33);
+                std::copy_n(pooled_context_.begin()+33,6,values.begin()+57);
+                std::copy_n(feedback.features.begin()+24,14,values.begin()+63);
+                const double p=feedback.features_present?predict_ensemble(policy_.pooled->post_quality,values.data()):-1.;
+                if(!std::isfinite(p) || p<policy_.pooled->gate_threshold) result.reason=Reason::QUALITY_PREDICTOR_REJECTED;
+            }
         }
         if (policy_.selector.count && result.reason == Reason::SELF_CHECK_PASSED) {
             if (!feedback.features_present || predict_tree(policy_.gates[ladder_position_],
@@ -124,6 +133,8 @@ Status Controller::observe(const Feedback& feedback, Decision* decision) noexcep
             std::size_t next = policy_.pooled ?
                 (ladder_position_==policy_.pooled->reference_index?count_:policy_.pooled->reference_index) :
                 policy_.retry_target_count ? policy_.retry_targets[ladder_position_] : ladder_position_+1;
+            if(policy_.v5 && policy_.v5->staged && ladder_position_!=policy_.pooled->reference_index)
+                next=v5_select(&feedback);
             // Changing R cannot add matches. Skip candidates whose inlier
             // requirement already exceeds the available correspondence count.
             while (next < count_ && ladder_[next].S == feedback.executed.S &&
@@ -134,6 +145,7 @@ Status Controller::observe(const Feedback& feedback, Decision* decision) noexcep
                 result.action = Action::RETRY;
                 result.next = ladder_[next];
                 ladder_position_ = next;
+                ++attempts_;
                 if(policy_.pooled) {
                     pooled_context_[30]=ladder_[next].S;pooled_context_[31]=ladder_[next].K/2000.;
                     pooled_context_[32]=ladder_[next].R/1024.;
@@ -150,6 +162,7 @@ Status Controller::observe(const Feedback& feedback, Decision* decision) noexcep
 
 void Controller::reset_pair() noexcept {
     ladder_position_ = 0;
+    attempts_=0;telemetry_={};gate_telemetry_={};
     phase_ = ladder_ ? Phase::Idle : Phase::Uninitialized;
 }
 

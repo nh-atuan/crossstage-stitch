@@ -11,6 +11,7 @@
 #include <stdexcept>
 
 #include "harness/pipeline_runner.hpp"
+#include "controller/spatial.hpp"
 
 #define CUDA_CHECK(call) do {                                                  \
     const cudaError_t err = (call);                                            \
@@ -277,15 +278,17 @@ void PipelineRunner::upload_pair(const HostImageRGB& img_a, const HostImageRGB& 
     // Device-ready is the start boundary of every timed run, including warmups.
     CUDA_CHECK(cudaStreamSynchronize(stream_));
     if (collect_features_) {
+        const auto probe_start=std::chrono::steady_clock::now();
         ScaleInfo a{},b{};
         make_scale_info(cur_w_a_,cur_h_a_,.25,&a);make_scale_info(cur_w_b_,cur_h_b_,.25,&b);
         dev_gray_a_.width=a.work_w;dev_gray_a_.height=a.work_h;
         dev_gray_b_.width=b.work_w;dev_gray_b_.height=b.work_h;
         if (s1::s1_preprocess(dev_img_a_,dev_img_b_,.25,&dev_gray_a_,&dev_gray_b_,&a,&b,stream_)!=Status::OK ||
-            controller::extract_scene(dev_gray_a_,dev_gray_b_,d_features_,pinned_features_,stream_,true)!=Status::OK)
+            controller::extract_scene(dev_gray_a_,dev_gray_b_,d_features_,pinned_features_,stream_,collect_pair_ncc_)!=Status::OK)
             throw std::runtime_error("Scene feature collection failed");
         CUDA_CHECK(cudaStreamSynchronize(stream_));
         std::copy_n(pinned_features_,controller::scene_feature_count,collected_scene_.begin());
+        collected_probe_ms_=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-probe_start).count();
     }
 }
 
@@ -312,7 +315,7 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
     record->R = cfg.R;
     record->blend_mode = cfg.blend_mode_str;
     record->blend_mode_effective = cfg.blend_mode_str;
-    if (collect_features_) record->scene_features=collected_scene_;
+    if (collect_features_) {record->scene_features=collected_scene_;record->t_probe_features=collected_probe_ms_;}
 
     // Reset counts on stream
     CUDA_CHECK(cudaMemsetAsync(d_kp_count_a_, 0, sizeof(int), stream_));
@@ -431,12 +434,23 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
         if(s4::s4_forward_neighbors(kp_view_a.capacity,kp_view_b.capacity,s4_cfg,ws_s4_,ws_bytes_s4_,&forward)!=Status::OK)
             throw std::runtime_error("Missing matching feature observations");
         const auto status=controller::extract_gate(dev_img_a_,dev_img_b_,kp_view_a,kp_view_b,matches_,d_inlier_mask_,
-            *pinned_h_res_,scale_a,scale_b,d_features_,pinned_features_,stream_,forward,7);
+            *pinned_h_res_,scale_a,scale_b,d_features_,pinned_features_,stream_,forward,collect_mask_);
         if (status==Status::CUDA_ERROR) throw std::runtime_error("Gate feature CUDA error");
         CUDA_CHECK(cudaStreamSynchronize(stream_));
         if (status==Status::OK) {
             std::copy_n(pinned_features_,controller::gate_feature_count,record->gate_features.begin());
             record->features_present=true;
+            if(collect_spatial_) {
+                const auto spatial_start=std::chrono::steady_clock::now();
+                const auto status=controller::extract_spatial(dev_img_a_,dev_img_b_,*pinned_h_res_,d_features_,pinned_features_,stream_,collect_spatial_groups_);
+                if(status==Status::CUDA_ERROR)throw std::runtime_error("Spatial profile CUDA error");
+                CUDA_CHECK(cudaStreamSynchronize(stream_));
+                if(status==Status::OK) {
+                    std::copy_n(pinned_features_,16,record->spatial.begin());
+                    record->spatial_present=std::all_of(record->spatial.begin(),record->spatial.end(),[](double x){return std::isfinite(x);});
+                }
+                record->t_spatial=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-spatial_start).count();
+            }
         }
         record->t_features=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
     }
@@ -590,7 +604,10 @@ void PipelineRunner::execute_adaptive_run(
     record->probe_gradient_b = *pinned_grad_b_;
 
     controller::Knobs current_knobs{};
+    record->t_probe_features=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-t_ctrl_start).count();
+    const auto selector_start=std::chrono::steady_clock::now();
     Status begin_stat = controller.begin_pair(scene, &current_knobs);
+    record->t_selector=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-selector_start).count();
     const auto t_ctrl_end = std::chrono::steady_clock::now();
     double ctrl_time_ms = std::chrono::duration<double, std::milli>(t_ctrl_end - t_ctrl_start).count();
 
@@ -771,7 +788,21 @@ void PipelineRunner::execute_adaptive_run(
         }
         // A reference fallback intentionally skips the gate. Its final feature
         // row must not retain observations from the rejected cheap candidate.
+        if(controller.uses_spatial() && feedback.features_present) {
+            const auto spatial_start=std::chrono::steady_clock::now();
+            const auto status=controller::extract_spatial(dev_img_a_,dev_img_b_,*pinned_h_res_,d_features_,pinned_features_,stream_,controller.spatial_groups());
+            if(status==Status::CUDA_ERROR)throw std::runtime_error("Spatial CUDA error");
+            CUDA_CHECK(cudaStreamSynchronize(stream_));
+            if(status==Status::OK) {
+                std::copy_n(pinned_features_,16,feedback.spatial.begin());
+                feedback.spatial_present=std::all_of(feedback.spatial.begin(),feedback.spatial.end(),[](double x){return std::isfinite(x);});
+            }
+            const double elapsed=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-spatial_start).count();
+            feature_ms+=elapsed;record->t_features+=elapsed;record->t_spatial+=elapsed;
+        }
+        record->spatial=feedback.spatial;record->spatial_present=feedback.spatial_present;
         record->gate_features=feedback.features;record->features_present=feedback.features_present;
+        const auto selected_telemetry=controller.v5_telemetry();
         Status obs_stat = controller.observe(feedback, &decision);
         const auto t_obs_e = std::chrono::steady_clock::now();
         ctrl_time_ms += std::chrono::duration<double, std::milli>(t_obs_e - t_obs_s).count();
@@ -789,7 +820,13 @@ void PipelineRunner::execute_adaptive_run(
         trace.previous_R = prev_r;
         trace.eligible_R_old = eligible_r_old;
         trace.generation = current_gen;
-        trace.features=feedback.features;trace.t_features=feature_ms;
+        trace.features=feedback.features;trace.t_features=feature_ms;trace.spatial=feedback.spatial;
+        trace.v5=selected_telemetry;
+        const auto gate_telemetry=controller.v5_gate_telemetry();
+        {
+            trace.v5.fail_ssim=gate_telemetry.fail_ssim;trace.v5.fail_psnr=gate_telemetry.fail_psnr;
+            trace.v5.fail_coverage=gate_telemetry.fail_coverage;trace.v5.risk_joint=gate_telemetry.risk_joint;trace.v5.gate_evaluated=gate_telemetry.gate_evaluated;trace.v5.failure_code=gate_telemetry.failure_code;
+        }
         trace.t_s4 = total_s4_ms - s4_before;
         trace.t_s5 = total_s5_ms - s5_before;
         trace.t_attempt = std::chrono::duration<double, std::milli>(

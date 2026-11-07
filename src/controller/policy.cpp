@@ -1,4 +1,5 @@
 #include "controller/policy.hpp"
+#include "controller/v5.hpp"
 
 #include <cmath>
 #include "controller/features.hpp"
@@ -11,6 +12,7 @@ bool unit_interval(double x) noexcept {
 }  // namespace
 
 bool valid_policy(const Policy& p) noexcept {
+    if (p.v5 && (!p.pooled || !valid_v5(*p.v5,p.self_check_count))) return false;
     if (!std::isfinite(p.probe_scale) || p.probe_scale <= 0.0 || p.probe_scale > 1.0 ||
         !p.scene_rules || p.scene_rule_count == 0 || !p.self_checks || p.self_check_count == 0)
         return false;

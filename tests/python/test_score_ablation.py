@@ -87,7 +87,7 @@ def probe(tmp_path_factory):
     destination=tmp_path_factory.mktemp('score-probe')/'probe'
     command=[compiler,'-std=c++17','-O2','-I'+str(root),'-I'+str(root/'src'),
         str(root/'tests/controller/pooled_probe.cpp'),
-        *[str(root/'src/controller'/name) for name in ['controller.cpp','policy.cpp','validation.cpp','reuse.cpp']],
+        *[str(root/'src/controller'/name) for name in ['controller.cpp','v5.cpp','policy.cpp','validation.cpp','reuse.cpp']],
         '-o',str(destination)]
     subprocess.run(command,check=True,capture_output=True)
     return destination

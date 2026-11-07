@@ -16,6 +16,8 @@ struct AttemptRecord {
     double t_s4{}, t_s5{}, t_attempt{};
     controller::GateFeatures features{};
     double t_features{};
+    controller::SpatialFeatures spatial{};
+    controller::V5Telemetry v5{};
 };
 struct AttemptTrace {
     std::array<AttemptRecord, 16> records{};
@@ -49,6 +51,8 @@ inline void write_attempt_header(std::ostream& out) {
            "inlier_coverage,reproj_residual,homography_status,action,reason,t_s4,t_s5,t_attempt,"
            "h0,h1,h2,h3,h4,h5,h6,h7,h8,t_features";
     for (int i=0;i<controller::gate_feature_count;++i) out << ",gate_" << i;
+    out << ",v5_p_pre,v5_p_reject,v5_attempt_ms,v5_gate_ms,v5_accept_s6_ms,v5_fallback_ms,v5_common_ms,v5_score_ms,v5_fail_ssim,v5_fail_psnr,v5_fail_coverage,v5_risk_joint,v5_uncertainty,v5_gate_evaluated,v5_failure_code";
+    for(int i=0;i<16;++i)out << ",spatial_" << i;
     out << '\n';
 }
 inline void write_attempt_rows(std::ostream& out, const RunRecord& run, const AttemptTrace& trace) {
@@ -67,6 +71,11 @@ inline void write_attempt_rows(std::ostream& out, const RunRecord& run, const At
         for (double value : h.H) out << ',' << value;
         out << ',' << a.t_features;
         for (double value:a.features) out << ',' << value;
+        const auto& v=a.v5;
+        out << ',' << v.pre << ',' << v.reject << ',' << v.attempt_ms << ',' << v.gate_ms << ',' << v.accept_s6_ms
+            << ',' << v.fallback_ms << ',' << v.common_ms << ',' << v.score_ms << ',' << v.fail_ssim << ',' << v.fail_psnr
+            << ',' << v.fail_coverage << ',' << v.risk_joint << ',' << v.uncertainty << ',' << v.gate_evaluated << ',' << v.failure_code;
+        for(double x:a.spatial)out << ',' << x;
         out << '\n';
     }
 }

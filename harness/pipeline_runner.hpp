@@ -39,6 +39,7 @@ public:
     void upload_pair(const HostImageRGB& img_a, const HostImageRGB& img_b);
     void set_reuse_enabled(bool enabled) { reuse_enabled_ = enabled; }
     void set_collect_features(bool enabled) { collect_features_ = enabled; }
+    void set_feature_profile(unsigned mask,bool spatial,bool pair_ncc,unsigned groups=3) { collect_mask_=mask;collect_spatial_=spatial;collect_pair_ncc_=pair_ncc;collect_spatial_groups_=groups; }
     const AttemptTrace& attempt_trace() const { return trace_; }
 
     // Execute one fixed/oracle run without any cudaMalloc in the measurement window
@@ -68,6 +69,9 @@ public:
 private:
     bool reuse_enabled_{true};
     bool collect_features_{};
+    unsigned collect_mask_{7},collect_spatial_groups_{3};
+    bool collect_spatial_{},collect_pair_ncc_{true};
+    double collected_probe_ms_{};
     controller::SceneFeatures collected_scene_{};
     double* d_features_{};
     double* pinned_features_{};

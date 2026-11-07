@@ -11,7 +11,7 @@ if(NOT TARGET stitch_common)
   target_include_directories(stitch_common INTERFACE "${STITCH_REPO_ROOT}/src")
 endif()
 
-add_library(stitch_controller STATIC controller.cpp policy.cpp validation.cpp reuse.cpp)
+add_library(stitch_controller STATIC controller.cpp v5.cpp policy.cpp validation.cpp reuse.cpp)
 target_link_libraries(stitch_controller PUBLIC stitch_common)
 target_compile_features(stitch_controller PUBLIC cxx_std_17)
 
@@ -53,3 +53,8 @@ if(STITCH_CONTROLLER_GPU_TESTS)
   add_test(NAME test_controller_s5 COMMAND test_controller_s5)
   set_tests_properties(test_controller_s5 PROPERTIES SKIP_RETURN_CODE 77)
 endif()
+
+add_executable(test_v5 "${STITCH_REPO_ROOT}/tests/controller/test_v5.cpp")
+target_include_directories(test_v5 PRIVATE "${STITCH_REPO_ROOT}/tests")
+target_link_libraries(test_v5 PRIVATE stitch_controller)
+add_test(NAME test_v5 COMMAND test_v5)

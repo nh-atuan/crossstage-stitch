@@ -23,6 +23,10 @@ target_include_directories(pooled_probe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CM
 
 # Compile the shared headers with nvcc (sm_75) when CUDA is available.
 if(CMAKE_CUDA_COMPILER)
+  add_executable(test_v5_spatial controller/test_spatial.cu ../src/controller/spatial.cu)
+  target_link_libraries(test_v5_spatial PRIVATE stitch_common)
+  add_test(NAME test_v5_spatial COMMAND test_v5_spatial)
+  set_tests_properties(test_v5_spatial PROPERTIES SKIP_RETURN_CODE 77)
   add_executable(test_relational_features controller/test_relational_features.cu ../src/controller/relational_features.cu)
   target_link_libraries(test_relational_features PRIVATE stitch_common)
   target_include_directories(test_relational_features PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../src)
@@ -38,7 +42,7 @@ if(CMAKE_CUDA_COMPILER)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
   add_test(NAME test_harness_seed COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/test_harness_seed.py $<TARGET_FILE:stitch_harness>)
-  add_executable(test_harness_upload test_harness_upload.cu ../harness/pipeline_runner.cu ../src/controller/features.cu ../src/controller/relational_features.cu)
+  add_executable(test_harness_upload test_harness_upload.cu ../harness/pipeline_runner.cu ../src/controller/features.cu ../src/controller/relational_features.cu ../src/controller/spatial.cu)
   target_include_directories(test_harness_upload PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
   target_link_libraries(test_harness_upload PRIVATE stitch_common stitch_controller
     stitch_s1 stitch_s2_s3 stitch_s4 stitch_s5 stitch_s6)
@@ -50,3 +54,10 @@ if(CMAKE_CUDA_COMPILER)
   target_link_libraries(test_common_cuda PRIVATE stitch_common)
   add_test(NAME test_common_cuda COMMAND test_common_cuda)
 endif()
+
+add_executable(spatial_probe controller/spatial_probe.cpp)
+target_include_directories(spatial_probe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(spatial_probe PRIVATE stitch_common)
+add_executable(v5_probe controller/v5_probe.cpp)
+target_include_directories(v5_probe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(v5_probe PRIVATE stitch_controller)

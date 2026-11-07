@@ -2,6 +2,8 @@
 #pragma once
 
 #include <cstddef>
+#include "controller/tree.hpp"
+#include "controller/ensemble.hpp"
 
 namespace stitch::controller {
 
@@ -23,6 +25,12 @@ struct Policy {
     std::size_t scene_rule_count;
     const SelfCheck* self_checks;  // One entry per configuration in the ladder.
     std::size_t self_check_count;
+    TreeView selector{};
+    const TreeView* gates{};
+    std::size_t gate_count{};
+    const std::size_t* retry_targets{};
+    std::size_t retry_target_count{};
+    const PooledModels* pooled{};
 };
 
 namespace detail {

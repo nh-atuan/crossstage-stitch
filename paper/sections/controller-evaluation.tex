@@ -1,0 +1,23 @@
+% Phase 3 draft for Section 5.2; quantitative content is generated from raw CSVs.
+\providecommand{\ControllerEvidenceDir}{../results/p3-de-t4-20261102/final-checkpoint/report}
+\input{\ControllerEvidenceDir/controller-summary-macros.tex}
+\input{\ControllerEvidenceDir/controller-results.tex}
+
+\paragraph{Completion and rejection.}
+The Adaptive controller completed \ControllerCompleted{} of
+\ControllerPairs{} input pairs, compared with \FixedCompleted{} for Fixed.
+It rejected \ControllerBudgetRejected{} pairs after exhausting the ladder.
+These counts describe execution under the frozen self-check rules.
+A rejection does not establish that no configuration can meet the offline
+quality constraint; a completed panorama does not establish that the
+constraint was met. The all-pair latency distribution retains both outcomes.
+
+\paragraph{Reading the geometry comparison.}
+The two methods retain different homography populations. Their separate
+median MCE values therefore combine estimation error with selection.
+The paired comparison uses \GeometryJointPairs{} inputs retained by both,
+while reporting completion and rejection over the entire cohort.
+The error curve also retains the full cohort in its denominator, so rejected
+pairs cannot make the displayed fraction of accurately registered pairs larger.
+Neither a subset mean nor a paired mean establishes geometric noninferiority
+for inputs the controller rejected.

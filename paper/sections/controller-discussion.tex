@@ -1,0 +1,28 @@
+% Phase 3 draft for Section 6; include after controller-evaluation.tex.
+\paragraph{What reuse establishes.}
+The controlled A2 comparison keeps allocated workspaces in both variants.
+It isolates the cost of rerunning matching and the previous RANSAC budget.
+It does not estimate allocator overhead or a reduction in peak memory.
+Retaining search state requires consistent inputs, scale, generation, seed,
+solver settings, and completed device work. When these conditions fail,
+the affected stages must restart. Pairs accepted on the first attempt do
+not benefit from avoiding a retry that never occurred.
+
+\paragraph{Limits of online checks.}
+Inlier count, ratio, coverage, and residual constrain the fitted consensus;
+they do not test every pixel in the overlap. A repeated texture can support
+an incorrect correspondence pattern, and a global homography cannot fit
+arbitrary parallax or independently moving objects. A
+\texttt{BUDGET\_EXHAUSTED} trace records a terminal decision, not a visual
+cause. The accompanying image overlays are diagnostic evidence; they do
+not provide independent parallax annotations.
+
+\paragraph{Scope of the measured comparison.}
+The reported controller uses a frozen heuristic with feather blending on
+one Tesla T4 runtime. The main latency distribution includes rejected
+pairs, which can terminate before rendering. Different completion rates
+must therefore be considered alongside latency. Without the corresponding
+offline overlap-quality assessment, these results do not establish a
+quality-constrained end-to-end speedup. No final-test result was used to
+adjust the policy. Sensitivity to alternative quality policies and transfer
+to other GPU architectures remain separate experiments.

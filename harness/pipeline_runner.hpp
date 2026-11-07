@@ -48,8 +48,10 @@ public:
     double last_fixed_gpu_span_ms() const { return last_fixed_gpu_span_ms_; }
     void synchronize();
 
-    // Upload image pair A and B to device outside the measurement window
+    // Upload outside the measurement window; return only when device RGB is ready.
     void upload_pair(const HostImageRGB& img_a, const HostImageRGB& img_b);
+    void set_reuse_enabled(bool enabled) { reuse_enabled_ = enabled; }
+    void set_collect_features(bool enabled) { collect_features_ = enabled; }
 
     // Execute one fixed/oracle run without any cudaMalloc in the measurement window
     void execute_run(const HarnessConfig& config,
@@ -77,6 +79,11 @@ public:
     const AttemptTrace& attempt_trace() const noexcept { return attempt_trace_; }
 
 private:
+    bool reuse_enabled_{true};
+    bool collect_features_{};
+    controller::SceneFeatures collected_scene_{};
+    double* d_features_{};
+    double* pinned_features_{};
     cudaStream_t stream_{nullptr};
 
     // CUDA timing events

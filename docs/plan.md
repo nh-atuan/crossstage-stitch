@@ -167,7 +167,7 @@ Ngày review: 01/11 (Chủ nhật). Ghép Controller vào harness, chạy thử 
 
 ### Phase 3: Đại thực nghiệm, Ablation và Phân tích độc lập
 
-Deadline chung cho các task: 05/11 (Thứ 5).
+Deadline chung cho các task: 07/11 (Thứ 7).
 
 Tài liệu đi kèm: [Đặc tả 5 bài thí nghiệm bóc tách (Ablation Studies)](experiments/ablation-studies.md), [phương pháp quantum offline](research/quantum-integration-proposal.md) và [task quantum của Thành](research/quantum-integration-tasks.md).
 

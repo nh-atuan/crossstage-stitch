@@ -54,4 +54,9 @@ Status s4_match(const Keypoints& a, const Descriptors& da,
                 Matches output, void* workspace, std::size_t workspace_bytes,
                 cudaStream_t stream);
 
+// Read-only observations already computed by s4_match, valid until workspace
+// reuse. The capacities/configuration must match that completed call.
+Status s4_forward_neighbors(int capacity_a,int capacity_b,const Config& config,
+    const void* workspace,std::size_t workspace_bytes,const Top2** output);
+
 }  // namespace stitch::s4

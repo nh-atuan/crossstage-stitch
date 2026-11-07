@@ -3,19 +3,19 @@
 % Role: opening; define the workload and the systems question.
 Panorama stitching combines overlapping images into a wider field of view by
 estimating their alignment and composing the warped image
-content~\cite{brown2007stitching}. A GPU implementation parallelizes operations,
-but does not determine how much computation an input pair needs. This work
+content~\cite{brown2007stitching}. A GPU implementation parallelizes the
+operations but does not determine how much computation an input pair needs. This work
 studies budget allocation within a feature-based pipeline that produces a
 panorama from two original RGB images.
 
 % Role: challenge; state a testable hypothesis rather than an empirical result.
-The computational budgets of this pipeline interact across stages. Reducing
-alignment resolution changes detected keypoints and descriptors; limiting
-keypoints changes the matching workload; and changing the robust-fitting budget
-changes the hypotheses considered for the homography. A cheaper choice can also
-produce an unusable alignment. The relevant objective is therefore latency
-subject to an explicit quality policy, including the cost of unsuccessful
-attempts, rather than the execution time of an isolated fast kernel.
+The computational budgets of this pipeline interact across stages. Reducing the
+alignment resolution changes the detected keypoints and descriptors, limiting
+the keypoints changes the matching workload, and the robust-fitting budget
+determines which homography hypotheses are considered. A cheaper choice can also
+produce an unusable alignment. The relevant objective is therefore latency under
+an explicit quality policy rather than the execution time of an isolated fast
+kernel, and this latency includes the cost of unsuccessful attempts.
 
 % Role: method scope; distinguish implemented components from pending runtime work.
 We expose a configuration $c=(s,k,r,b)$ comprising alignment-image scale,

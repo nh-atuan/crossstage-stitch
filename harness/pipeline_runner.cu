@@ -101,6 +101,8 @@ PipelineRunner::~PipelineRunner() {
     if (d_ws_probe_) cudaFree(d_ws_probe_);
     if (pinned_grad_a_) cudaFreeHost(pinned_grad_a_);
     if (pinned_grad_b_) cudaFreeHost(pinned_grad_b_);
+    if (d_features_) cudaFree(d_features_);
+    if (pinned_features_) cudaFreeHost(pinned_features_);
 }
 
 PipelineMemoryPlan PipelineRunner::query_memory(int w, int h, int k, int r, int cw, int ch, s6::BlendMode mode) {
@@ -112,6 +114,7 @@ PipelineMemoryPlan PipelineRunner::query_memory(int w, int h, int k, int r, int 
     result.device_bytes = add(result.device_bytes, add(image_bytes(cw, ch, 3), image_bytes(cw, ch, 1)));
     // Keypoint arrays/counts, descriptors, matches/count, inlier mask, stats/probe.
     result.device_bytes = add(result.device_bytes, add(multiply(k, 6*sizeof(float)+64+3*sizeof(int)+1), 3*sizeof(int)+sizeof(s6::RenderStatistics)+32));
+    result.device_bytes = add(result.device_bytes, controller::feature_device_count * sizeof(double));
     auto workspace = [&](std::size_t bytes, int count = 1) {
         result.workspace_bytes = add(result.workspace_bytes, multiply(bytes, count));
         if (bytes) result.device_bytes = add(result.device_bytes, multiply(add(bytes, 256), count));
@@ -255,6 +258,9 @@ void PipelineRunner::initialize(int max_w, int max_h, int max_k, int max_r,
     CUDA_CHECK(cudaMalloc(&d_ws_probe_, 32));
     CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_grad_a_), sizeof(double)));
     CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_grad_b_), sizeof(double)));
+    constexpr auto feature_count=std::max(controller::scene_feature_count,controller::gate_feature_count);
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_features_), controller::feature_device_count*sizeof(double)));
+    CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pinned_features_), feature_count*sizeof(double)));
 
     initialized_ = true;
 }
@@ -282,8 +288,19 @@ void PipelineRunner::upload_pair(const HostImageRGB& img_a, const HostImageRGB& 
     CUDA_CHECK(cudaMemcpy2DAsync(dev_img_b_.data, dev_img_b_.pitch_bytes,
                             img_b.pixels.data(), cur_w_b_ * 3,
                             cur_w_b_ * 3, cur_h_b_, cudaMemcpyHostToDevice, stream_));
-    // Both input images must be device-ready before the measured interval.
+    // Device-ready is the start boundary of every timed run, including warmups.
     CUDA_CHECK(cudaStreamSynchronize(stream_));
+    if (collect_features_) {
+        ScaleInfo a{},b{};
+        make_scale_info(cur_w_a_,cur_h_a_,.25,&a);make_scale_info(cur_w_b_,cur_h_b_,.25,&b);
+        dev_gray_a_.width=a.work_w;dev_gray_a_.height=a.work_h;
+        dev_gray_b_.width=b.work_w;dev_gray_b_.height=b.work_h;
+        if (s1::s1_preprocess(dev_img_a_,dev_img_b_,.25,&dev_gray_a_,&dev_gray_b_,&a,&b,stream_)!=Status::OK ||
+            controller::extract_scene(dev_gray_a_,dev_gray_b_,d_features_,pinned_features_,stream_,true)!=Status::OK)
+            throw std::runtime_error("Scene feature collection failed");
+        CUDA_CHECK(cudaStreamSynchronize(stream_));
+        std::copy_n(pinned_features_,controller::scene_feature_count,collected_scene_.begin());
+    }
 }
 
 void PipelineRunner::execute_run(const HarnessConfig& cfg,
@@ -310,6 +327,7 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
     record->R = cfg.R;
     record->blend_mode = cfg.blend_mode_str;
     record->blend_mode_effective = cfg.blend_mode_str;
+    if (collect_features_) record->scene_features=collected_scene_;
 
     // Reset counts on stream
     CUDA_CHECK(cudaMemsetAsync(d_kp_count_a_, 0, sizeof(int), stream_));
@@ -350,7 +368,7 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
         kp_view_b.capacity = cfg.K;
     }
 
-    // Stage 2: FAST detection + Harris ranking (núm K)
+    // Stage 2: FAST detection + Harris ranking (nĂºm K)
     s2::Config s2_cfg{cfg.fast_threshold, cfg.K, cfg.harris_k};
     Status s2_stat_a = s2::s2_detect(dev_gray_a_, s2_cfg, kp_view_a, ws_s2_a_, ws_bytes_s2_a_, stream_);
     Status s2_stat_b = s2::s2_detect(dev_gray_b_, s2_cfg, kp_view_b, ws_s2_b_, ws_bytes_s2_b_, stream_);
@@ -381,7 +399,7 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
     }
     CUDA_CHECK(cudaEventRecord(ev_s4_, stream_));
 
-    // Stage 5: MSAC Homography (núm R)
+    // Stage 5: MSAC Homography (nĂºm R)
     s5::Config s5_cfg{cfg.R, 0, cfg.msac_batch_size, cfg.msac_refinements, cfg.msac_threshold, cfg.seed, 1};
     Status s5_stat = s5::estimate(kp_view_a, kp_view_b, matches_, scale_a, scale_b, s5_cfg,
                                   d_inlier_mask_, pinned_h_res_, ws_s5_, ws_bytes_s5_, stream_);
@@ -422,10 +440,27 @@ void PipelineRunner::execute_run(const HarnessConfig& cfg,
         return;
     }
 
+    if (collect_features_) {
+        const auto begin=std::chrono::steady_clock::now();
+        const s4::Top2* forward=nullptr;
+        if(s4::s4_forward_neighbors(kp_view_a.capacity,kp_view_b.capacity,s4_cfg,ws_s4_,ws_bytes_s4_,&forward)!=Status::OK)
+            throw std::runtime_error("Missing matching feature observations");
+        const auto status=controller::extract_gate(dev_img_a_,dev_img_b_,kp_view_a,kp_view_b,matches_,d_inlier_mask_,
+            *pinned_h_res_,scale_a,scale_b,d_features_,pinned_features_,stream_,forward,7);
+        if (status==Status::CUDA_ERROR) throw std::runtime_error("Gate feature CUDA error");
+        CUDA_CHECK(cudaStreamSynchronize(stream_));
+        if (status==Status::OK) {
+            std::copy_n(pinned_features_,controller::gate_feature_count,record->gate_features.begin());
+            record->features_present=true;
+        }
+        record->t_features=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
+    }
     // Stage 6: Prepare geometry and render canvas
     s6::Geometry geom{};
     s6::GeometryPolicy geom_policy{};
     Status g_stat = s6::prepare_geometry(cur_w_a_, cur_h_a_, cur_w_b_, cur_h_b_, pinned_h_res_->H, geom_policy, &geom);
+    if (g_stat == Status::OK && (geom.width > canvas_capacity_w_ || geom.height > canvas_capacity_h_))
+        g_stat = Status::INSUFFICIENT_WORKSPACE;
     if (g_stat != Status::OK) {
         const auto t_host_end = std::chrono::steady_clock::now();
         record->t_e2e = std::chrono::duration<double, std::milli>(t_host_end - t_host_start).count();
@@ -515,6 +550,7 @@ void PipelineRunner::execute_adaptive_run(
     attempt_trace_.count = 0;
     record->attempt_count = 0;
     record->cache_hit = 0;
+    *pinned_h_res_ = HomographyResult{};
 
     using Clock = std::chrono::steady_clock;
     struct Span {
@@ -528,6 +564,8 @@ void PipelineRunner::execute_adaptive_run(
         }
         ~Span() { finish(); }
     };
+    record->probe_gradient_a = *pinned_grad_a_;
+    record->probe_gradient_b = *pinned_grad_b_;
 
     Span host{record->t_e2e};
     auto timed_gpu = [&](double& elapsed, auto&& submit) {
@@ -564,10 +602,14 @@ void PipelineRunner::execute_adaptive_run(
             dev_gray_b_.height = b.work_h;
         };
         set_gray_dimensions(probe_a, probe_b);
+        const bool learned = controller.uses_learned_features();
         const Status probe = timed_gpu(record->t_probe_gpu, [&] {
             const auto status = s1::s1_preprocess(dev_img_a_, dev_img_b_, probe_s, &dev_gray_a_, &dev_gray_b_,
                                                   &probe_a, &probe_b, stream_);
             if (status != Status::OK) return status;
+            if (learned)
+                return controller::extract_scene(dev_gray_a_, dev_gray_b_, d_features_, pinned_features_,
+                                                 stream_, controller.uses_pair_relations());
             return s1::s1_compute_gradient(dev_gray_a_, dev_gray_b_, d_ws_probe_,
                                            pinned_grad_a_, pinned_grad_b_, stream_);
         });
@@ -575,7 +617,15 @@ void PipelineRunner::execute_adaptive_run(
         if (probe != Status::OK) { fail(probe); return; }
 
         record->fail_stage = "controller";
-        const controller::SceneSignals scene{{probe_a, *pinned_grad_a_}, {probe_b, *pinned_grad_b_}};
+        if (learned) {
+            *pinned_grad_a_ = pinned_features_[0];
+            *pinned_grad_b_ = pinned_features_[1];
+            std::copy_n(pinned_features_, controller::scene_feature_count, record->scene_features.begin());
+        }
+        record->probe_gradient_a = *pinned_grad_a_;
+        record->probe_gradient_b = *pinned_grad_b_;
+        const controller::SceneSignals scene{{probe_a, *pinned_grad_a_}, {probe_b, *pinned_grad_b_},
+                                             record->scene_features, learned};
         controller::Knobs knobs{};
         Status begin;
         {
@@ -606,6 +656,7 @@ void PipelineRunner::execute_adaptive_run(
 
             bool rerun_s1 = knobs.S != probe_s;
             bool rerun_features = true;
+            bool rerun_s4 = true;
             if (!first) {
                 controller::RetryPlan plan{};
                 if (controller::plan_retry(previous, knobs, &plan) != Status::OK) {
@@ -618,10 +669,15 @@ void PipelineRunner::execute_adaptive_run(
                 rerun_s1 = plan.restart_from == controller::RestartFrom::S1;
                 rerun_features = rerun_s1 || plan.restart_from == controller::RestartFrom::S2;
                 if (plan.change_generation) { ++generation; completed_r = 0; }
-                if (plan.extend_s5) a.eligible_R_old = a.previous_R = completed_r;
+                rerun_s4 = rerun_features;
+                if (plan.extend_s5) {
+                    a.eligible_R_old = completed_r;
+                    if (reuse_enabled_) a.previous_R = completed_r;
+                    else rerun_s4 = true;
+                }
             }
             a.generation = generation;
-            a.restart_from = rerun_s1 ? "s1" : rerun_features ? "s2" : "s5";
+            a.restart_from = rerun_s1 ? "s1" : rerun_features ? "s2" : rerun_s4 ? "s4" : "s5";
             auto stage = [&](const char* name, double& ms, double& total, auto&& submit) {
                 record->fail_stage = name;
                 a.fail_stage = name;
@@ -668,6 +724,8 @@ void PipelineRunner::execute_adaptive_run(
                     return sa == Status::OK
                         ? s3::s3_describe(dev_gray_b_, kp_view_b, desc_b_, ws_s3_, ws_bytes_s3_, stream_) : sa;
                 }) != Status::OK) return;
+            }
+            if (rerun_s4) {
                 if (stage("s4", a.t_s4, record->t_s4, [&] {
                     CUDA_CHECK(cudaMemsetAsync(d_matches_count_, 0, sizeof(int), stream_));
                     const s4::Config cfg{0.8, false};
@@ -688,10 +746,34 @@ void PipelineRunner::execute_adaptive_run(
             a.has_homography = a.has_feedback && a.homography.status == Status::OK;
             if (s5_status == Status::OK) completed_r = knobs.R;
             record->fail_stage = "controller";
+            controller::Feedback feedback{knobs, s5_status, *pinned_h_res_};
+            if (controller.needs_gate_features() && a.has_homography) {
+                Span feature{a.t_features};
+                const s4::Top2* forward = nullptr;
+                if ((controller.relation_mask() & 1) &&
+                    s4::s4_forward_neighbors(kp_view_a.capacity, kp_view_b.capacity, {.8, false},
+                                             ws_s4_, ws_bytes_s4_, &forward) != Status::OK)
+                    throw std::runtime_error("Missing adaptive matching observations");
+                const auto status = controller::extract_gate(dev_img_a_, dev_img_b_, kp_view_a, kp_view_b,
+                    matches_, d_inlier_mask_, *pinned_h_res_, scale_a, scale_b, d_features_, pinned_features_,
+                    stream_, forward, controller.relation_mask());
+                if (status == Status::CUDA_ERROR) throw CudaError(cudaErrorUnknown);
+                {
+                    Span wait{record->t_stream_wait};
+                    CUDA_CHECK(cudaStreamSynchronize(stream_));
+                }
+                if (status == Status::OK) {
+                    std::copy_n(pinned_features_, controller::gate_feature_count, feedback.features.begin());
+                    feedback.features_present = true;
+                }
+            }
+            a.features = record->gate_features = feedback.features;
+            record->features_present = feedback.features_present;
+            record->t_features += a.t_features;
             Status observed;
             {
                 Span cpu{record->t_controller};
-                observed = controller.observe({knobs, s5_status, *pinned_h_res_}, &a.decision);
+                observed = controller.observe(feedback, &a.decision);
             }
             if (observed != Status::OK) {
                 if (s5_status == Status::OK) {

@@ -2,6 +2,7 @@
 // Supports fixed baseline, oracle, and adaptive controller modes.
 #include <chrono>
 #include <cmath>
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -36,7 +37,7 @@ void write_csv_header(std::ostream& out) {
         << "num_kp_a,num_kp_b,num_matches,num_inliers,inlier_ratio,inlier_coverage,reproj_residual,"
         << "h0,h1,h2,h3,h4,h5,h6,h7,h8,"
         << "canvas_pixels,overlap_pixels,blend_mode_effective,num_levels,peak_workspace_bytes,cache_hit,"
-        << "status,fail_stage,policy_id,attempt_count,t_probe_gpu,t_stream_wait\n";
+        << "status,fail_stage,policy_id,attempt_count,t_probe_gpu,t_stream_wait,probe_gradient_a,probe_gradient_b\n";
 }
 
 void write_csv_row(std::ostream& out, const RunRecord& r) {
@@ -68,7 +69,8 @@ void write_csv_row(std::ostream& out, const RunRecord& r) {
     if (r.policy_id.empty()) out << ",,,";
     else out << r.policy_id << ',' << r.attempt_count << ',' << std::fixed << std::setprecision(6)
              << r.t_probe_gpu << ',' << r.t_stream_wait;
-    out << '\n';
+    out << ',' << std::defaultfloat << std::setprecision(17)
+        << r.probe_gradient_a << ',' << r.probe_gradient_b << '\n';
 }
 
 void set_adaptive_config(RunRecord& run, const AttemptTrace& trace) {
@@ -121,8 +123,10 @@ int main(int argc, char** argv) {
     std::string split = "dev";
     std::string run_id = generate_run_id();
     std::string mode = "fixed";  // "fixed", "oracle", "adaptive"
-    std::string controller_policy_path;
     std::string trace_path;
+    std::string features_path;
+    std::string controller_policy_path;
+    bool reuse_enabled = true;
 
     // Single run options
     std::string img_a_path, img_b_path;
@@ -140,6 +144,10 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--manifest" && i + 1 < argc) manifest_path = argv[++i];
+        else if (arg == "--controller-policy" && i + 1 < argc) controller_policy_path = argv[++i];
+        else if (arg == "--trace-out" && i + 1 < argc) trace_path = argv[++i];
+        else if (arg == "--features-out" && i + 1 < argc) features_path = argv[++i];
+        else if (arg == "--no-reuse") reuse_enabled = false;
         else if (arg == "--configs" && i + 1 < argc) configs_path = argv[++i];
         else if (arg == "--out" && i + 1 < argc) out_path = argv[++i];
         else if (arg == "--dataset" && i + 1 < argc) dataset = argv[++i];
@@ -176,8 +184,10 @@ int main(int argc, char** argv) {
                       << "Modes:\n"
                       << "  --mode <fixed|oracle|adaptive>  Execution mode (default: fixed)\n"
                       << "  --adaptive                      Shortcut for --mode adaptive\n"
-                      << "  --controller-policy <path|legacy-v1>   Adaptive policy (default: legacy-v1)\n"
-                      << "  --trace-out <path>              Adaptive attempt CSV\n"
+                      << "  --controller-policy <path>      Required adaptive policy JSON, or legacy-v1\n"
+                      << "  --trace-out <path>              Per-attempt Controller trace CSV\n"
+                      << "  --features-out <path>           Collect Controller observations (fixed timings diagnostic)\n"
+                      << "  --no-reuse                      A2 control: rerun S4/S5 for R-only retries\n"
                       << "  --oracle                        Shortcut for --mode oracle\n"
                       << "Batch options:\n"
                       << "  --manifest <path>               Pairs JSON manifest\n"
@@ -276,7 +286,9 @@ int main(int argc, char** argv) {
     ControllerPolicy controller_policy;
     if (mode == "adaptive") {
         try {
-            controller_policy = controller_policy_path.empty() || controller_policy_path == "legacy-v1"
+            if (controller_policy_path.empty())
+                throw std::runtime_error("Adaptive mode requires --controller-policy <path> or explicit legacy-v1");
+            controller_policy = controller_policy_path == "legacy-v1"
                 ? legacy_controller_policy() : parse_controller_policy(JsonValue::parse_file(controller_policy_path));
             if (controller_policy.seed) {
                 if (seed_given && seed != *controller_policy.seed)
@@ -293,8 +305,23 @@ int main(int argc, char** argv) {
 
     // Initialize pipeline runner with maximum bounds
     PipelineRunner runner;
+    runner.set_reuse_enabled(reuse_enabled);
+    runner.set_collect_features(!features_path.empty() && mode!="adaptive");
     try {
-        runner.initialize(2048, 2048, 4000, 2048);
+        int max_width = 2048, max_height = 2048;
+        const auto directory = manifest_path.empty() ? std::string{} : get_parent_dir(manifest_path);
+        for (const auto& pair : pairs) {
+            for (const auto& path : {pair.img_a_path, pair.img_b_path}) {
+                try {
+                    const auto image = load_image(join_paths(directory, path));
+                    max_width = std::max(max_width, image.width);
+                    max_height = std::max(max_height, image.height);
+                } catch (const std::exception&) {
+                    // The execution loop records each input failure in its repeat ledger.
+                }
+            }
+        }
+        runner.initialize(max_width, max_height, 4000, 2048);
     } catch (const std::exception& e) {
         std::cerr << "Failed to initialize pipeline runner: " << e.what() << "\n";
         return 1;
@@ -306,8 +333,29 @@ int main(int argc, char** argv) {
         return 1;
     }
     write_csv_header(csv_out);
+    std::ofstream features_out;
+    if (!features_path.empty()) {
+        features_out.open(features_path);
+        if (!features_out) return 1;
+        features_out << "pair_id,config_id,seed,repeat_idx,is_warmup,features_present,t_features";
+        for (int i=0;i<stitch::controller::scene_feature_count;++i) features_out << ",scene_" << i;
+        for (int i=0;i<stitch::controller::gate_feature_count;++i) features_out << ",gate_" << i;
+        features_out << '\n';
+    }
+    const auto write_features=[&](const RunRecord& r) {
+        if (!features_out.is_open()) return;
+        features_out << std::setprecision(17) << r.pair_id << ',' << r.config_id << ',' << r.seed << ','
+            << r.repeat_idx << ',' << r.is_warmup << ',' << r.features_present << ',' << r.t_features;
+        for (double v:r.scene_features) features_out << ',' << v;
+        for (double v:r.gate_features) features_out << ',' << v;
+        features_out << '\n';
+    };
     std::ofstream trace_out;
     if (!trace_path.empty()) {
+        if (mode != "adaptive") {
+            std::cerr << "Attempt trace requires adaptive mode.\n";
+            return 1;
+        }
         trace_out.open(trace_path);
         if (!trace_out) {
             std::cerr << "Error opening attempt trace: " << trace_path << '\n';
@@ -321,6 +369,7 @@ int main(int argc, char** argv) {
               << "  Pairs: " << pairs.size() << "\n"
               << "  Configs: " << (mode == "adaptive" ? controller_policy.ladder.size() : configs.size()) << "\n"
               << "  Policy: " << (mode == "adaptive" ? controller_policy.id : "none") << "\n"
+              << "  Seed: " << seed << "\n"
               << "  Warmup: " << num_warmup << ", Repeats: " << num_repeats << "\n"
               << "  Output: " << out_path << "\n";
 
@@ -377,7 +426,7 @@ int main(int argc, char** argv) {
                     try {
                         runner.execute_adaptive_run(controller, run_id, STITCH_GIT_REV, dataset, split,
                                                     pair.pair_id, repeat, warmup, seed, &record);
-                        cuda_failed = record.status == "CUDA_ERROR";
+                        cuda_failed = record.status == "CUDA_ERROR" || record.status == "ERR_CUDA";
                     } catch (const CudaError&) {
                         cuda_failed = true;
                     }
@@ -389,6 +438,7 @@ int main(int argc, char** argv) {
                 }
                 if (adaptive) record.policy_id = controller_policy.id;
                 write_csv_row(csv_out, record);
+                write_features(record);
                 if (trace && trace_out.is_open()) write_attempt_rows(trace_out, record, *trace);
                 if (!warmup) ++total_runs;
                 if (cuda_failed) {
@@ -400,7 +450,8 @@ int main(int argc, char** argv) {
             }
             csv_out.flush();
             if (trace_out.is_open()) trace_out.flush();
-            if (!csv_out || (trace_out.is_open() && !trace_out)) {
+            if (features_out.is_open()) features_out.flush();
+            if (!csv_out || (trace_out.is_open() && !trace_out) || (features_out.is_open() && !features_out)) {
                 std::cerr << "Failed to write benchmark output\n";
                 return false;
             }

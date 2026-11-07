@@ -8,12 +8,14 @@
 
 #include "s2_s3/orb_pattern.hpp"
 #include "s2_s3/s2_s3_internal.hpp"
+#include "s2_s3/s2_s3_marks.hpp"
 
 namespace stitch::s3 {
 namespace {
 
 using s2_s3::detail::kAlignment;
 using s2_s3::detail::S3Layout;
+using s2_s3::detail::S3Marks;
 
 constexpr int kTile = 16;
 constexpr int kWarpsPerBlock = 4;
@@ -158,10 +160,14 @@ template <class T> T* at(void* base, std::size_t offset) {
     return reinterpret_cast<T*>(static_cast<char*>(base) + offset);
 }
 
-}  // namespace
+// Records the blur mark when marks were requested; false on a CUDA error.
+bool mark(const S3Marks* marks, cudaStream_t stream) {
+    return !marks || cudaEventRecord(marks->after_blur, stream) == cudaSuccess;
+}
 
-Status s3_describe(const ImageView& image, const Keypoints& keypoints, Descriptors output,
-                   void* workspace, std::size_t workspace_bytes, cudaStream_t stream) {
+Status describe(const ImageView& image, const Keypoints& keypoints, Descriptors output,
+                void* workspace, std::size_t workspace_bytes, cudaStream_t stream,
+                const S3Marks* marks) {
     if (!s2_s3::detail::valid_image(image) || keypoints.capacity < 0 || !keypoints.d_count ||
         reinterpret_cast<std::uintptr_t>(keypoints.d_count) % alignof(int) ||
         (keypoints.capacity > 0 && (!keypoints.x || !keypoints.y || !output.data)) ||
@@ -175,7 +181,7 @@ Status s3_describe(const ImageView& image, const Keypoints& keypoints, Descripto
         return Status::INVALID_ARGUMENT;
     }
     if (workspace_bytes < layout.total) return Status::INSUFFICIENT_WORKSPACE;
-    if (keypoints.capacity == 0) return Status::OK;
+    if (keypoints.capacity == 0) return mark(marks, stream) ? Status::OK : Status::CUDA_ERROR;
 
     auto* blurred = at<std::uint8_t>(workspace, layout.blurred);
     auto* rows = at<float>(workspace, layout.rows);
@@ -183,9 +189,27 @@ Status s3_describe(const ImageView& image, const Keypoints& keypoints, Descripto
     const dim3 grid((image.width + kTile - 1) / kTile, (image.height + kTile - 1) / kTile);
     blur_rows_kernel<<<grid, tile, 0, stream>>>(image, rows);
     blur_cols_kernel<<<grid, tile, 0, stream>>>(rows, image.width, image.height, blurred);
+    if (!mark(marks, stream)) return Status::CUDA_ERROR;
     const int blocks = (keypoints.capacity + kWarpsPerBlock - 1) / kWarpsPerBlock;
     describe_kernel<<<blocks, kWarpsPerBlock * 32, 0, stream>>>(image, blurred, keypoints, output);
     return cudaGetLastError() == cudaSuccess ? Status::OK : Status::CUDA_ERROR;
 }
 
+}  // namespace
+
+Status s3_describe(const ImageView& image, const Keypoints& keypoints, Descriptors output,
+                   void* workspace, std::size_t workspace_bytes, cudaStream_t stream) {
+    return describe(image, keypoints, output, workspace, workspace_bytes, stream, nullptr);
+}
+
 }  // namespace stitch::s3
+
+namespace stitch::s2_s3::detail {
+
+Status s3_describe_marked(const ImageView& image, const Keypoints& keypoints,
+                          Descriptors output, void* workspace, std::size_t workspace_bytes,
+                          cudaStream_t stream, const S3Marks& marks) {
+    return s3::describe(image, keypoints, output, workspace, workspace_bytes, stream, &marks);
+}
+
+}  // namespace stitch::s2_s3::detail

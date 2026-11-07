@@ -17,6 +17,8 @@ struct AttemptRecord {
     const char* restart_from{"none"};
     const char* fail_stage{""};
     Status execution_status{Status::OK};
+    controller::GateFeatures features{};
+    double t_features{};
     bool has_feedback{};
     bool has_decision{};
     bool has_homography{};
@@ -44,6 +46,7 @@ inline const char* reason_name(controller::Reason reason) {
     case Reason::HIGH_RESIDUAL: return "HIGH_RESIDUAL";
     case Reason::DEGENERATE_MODEL: return "DEGENERATE_MODEL";
     case Reason::EXECUTION_ERROR: return "EXECUTION_ERROR";
+    case Reason::QUALITY_PREDICTOR_REJECTED: return "QUALITY_PREDICTOR_REJECTED";
     default: return "BUDGET_EXHAUSTED";
     }
 }
@@ -59,7 +62,9 @@ inline void write_attempt_header(std::ostream& out) {
            "S,K,R,previous_R,eligible_R_old,generation,num_matches,num_inliers,inlier_ratio,"
            "inlier_coverage,reproj_residual,homography_status,action,reason,t_s4,t_s5,t_attempt,"
            "h0,h1,h2,h3,h4,h5,h6,h7,h8,policy_id,B,restart_from,t_s1,t_s2,t_s3,"
-           "execution_status,attempt_fail_stage,terminal_status,terminal_fail_stage\n";
+           "execution_status,attempt_fail_stage,terminal_status,terminal_fail_stage,t_features";
+    for (int i = 0; i < controller::gate_feature_count; ++i) out << ",gate_" << i;
+    out << '\n';
 }
 inline void write_attempt_rows(std::ostream& out, const RunRecord& run, const AttemptTrace& trace) {
     out << std::setprecision(17);
@@ -86,7 +91,9 @@ inline void write_attempt_rows(std::ostream& out, const RunRecord& run, const At
         }
         out << ',' << run.policy_id << ',' << attempt_blend_name(a.knobs.B) << ',' << a.restart_from << ','
             << a.t_s1 << ',' << a.t_s2 << ',' << a.t_s3 << ',' << static_cast<int>(a.execution_status)
-            << ',' << a.fail_stage << ',' << run.status << ',' << run.fail_stage << '\n';
+            << ',' << a.fail_stage << ',' << run.status << ',' << run.fail_stage << ',' << a.t_features;
+        for (double value : a.features) out << ',' << value;
+        out << '\n';
     }
 }
 }  // namespace stitch::harness

@@ -1,4 +1,12 @@
-# Bản thảo workshop trong Phase 2
+# Bản thảo workshop
+
+## Build bản thảo Phase 3
+
+`main.tex` đọc macro, bảng và hình sinh từ export T4 đã khóa. Tạo bundle trước và đưa đường dẫn bundle vào `TEXINPUTS` theo [runbook CH-07/08](../docs/runbooks/ch07_ch08_paper_artifacts.md). Nếu thiếu input sinh tự động, LaTeX dừng ở file chưa có. Hai export thô và PDF được giữ ngoài Git.
+
+Bản hiện tại trình bày CH-02 `legacy-v1`, A4 và CH-05. Section về phương pháp và các kết quả do owner khác bàn giao được quản lý riêng. [Claim–evidence map](../docs/claim_evidence_map.md)
+
+## Lịch sử Phase 2
 
 Cập nhật: 27/10 (Thứ 3). Phạm vi của Chương theo [plan](../docs/plan.md): khung OASIcs ẩn danh, Introduction, Related Work và phương pháp S6. Deadline chung Phase 2: 31/10 (Thứ 7). Đây là **working manuscript**, chưa phải bản nộp hoàn chỉnh.
 

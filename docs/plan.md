@@ -184,6 +184,8 @@ Thiết kế A4/A5 được chốt ngày 02/11 (Thứ 2): A4 dùng alignment inv
 
 **CH-02 của Chương đã hoàn thành, đối chiếu ngày 07/11 (Thứ 7).** Campaign Colab T4 đã chấm Fixed-Best, Adaptive `legacy-v1` và Oracle. Ledger giữ đủ 1.106 cặp danh nghĩa mỗi mode, gồm 1.105 cặp đủ ảnh và một cặp thiếu ảnh có mã lỗi. Số liệu speedup giới hạn ở giao QoR PASS. [Nghiệm thu CH-02](reports/phase-3-acceptance-report.md#ch-02--benchmark-udis-d-và-nghiệm-thu-qor)
 
+**CH-07 đã hoàn thành và CH-08 đã bàn giao phần T4 của Chương.** Hình và bảng tái lập từ export CH-02/A4/CH-05, kèm freeze manifest, claim–evidence map và bản thảo OASIcs ẩn danh. Freeze bản nộp chung chờ review nhóm và kết quả CH-06 do Tuấn phụ trách. [Nghiệm thu CH-07/08](reports/phase-3-acceptance-report.md#ch-0708--tái-lập-và-bàn-giao-phần-t4)
+
 #### Workstream quantum offline chạy song song
 
 **Chủ trì duy nhất: Thành.** Phạm vi được chốt ngày 02/11 (Thứ 2): chọn catalogue cấu hình `(S,K,R,B_fixed)` bằng QUBO/QAOA offline; không thay kernel, estimator hoặc ABI S1–S6, không gọi quantum backend khi xử lý từng cặp ảnh. QPU không bắt buộc; simulator phải được ghi đúng nhãn. A3 và các task A1–A5 vẫn giữ owner hiện tại.

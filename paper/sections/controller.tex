@@ -1,12 +1,9 @@
 \section{Adaptive Runtime Controller}
 \label{sec:controller}
-% Role: describe checked host logic; GPU integration and calibration remain open.
-The implemented host controller selects an initial budget and consumes S5
-feedback through a finite configuration ladder. Its C++17 decision logic is
-tested independently of CUDA. Scene-feature extraction, adaptive-harness
-integration, and a calibrated policy are still required for an end-to-end
-evaluation. The tests described here establish control-flow behaviour; they
-provide no adaptive latency or quality result.
+The measured legacy controller selects an initial budget from an S1 gradient
+probe and consumes S5 feedback through a finite configuration ladder. Its
+C++17 decision logic is tested independently of CUDA. Section~\ref{sec:held-out}
+evaluates the integrated harness and the frozen heuristic on held-out pairs.
 
 \subsection{Explicit Policy and Initial Selection}
 % Role: define inputs, units and the classifier without inventing tuned values.
@@ -62,6 +59,5 @@ boundaries, feedback validity, terminal states, escalation, and retry plans;
 an allocation counter checks 1,000 synthetic runs. A synthetic feedback trace
 also exercises continuation followed by keypoint-budget invalidation. A CUDA
 correspondence fixture checks controller--S5 continuation against a full search
-and checks rejection of invalid reuse. Testing the complete scene-aware path
-and measuring its probe, synchronization, decision, and retry costs remain
-necessary before reporting a speedup.
+and checks rejection of invalid reuse. The held-out host timing includes the
+probe, synchronization, controller decisions and retries.

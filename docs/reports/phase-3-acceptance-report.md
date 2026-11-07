@@ -11,6 +11,8 @@ Mốc đối chiếu 07/11 (Thứ 7), năm 2026. Bằng chứng Colab T4 gồm l
 | CH-03/A4 — Same-H blending | **Đóng campaign T4 trên cohort development đã khóa.** 10/10 cặp đạt ở cả ba blender, có bảng và ảnh truy về artifact. | Phạm vi kết luận giới hạn ở 10 cặp overlap cao. |
 | CH-04a — Chuẩn bị A5 | **Đã hoàn tất fit và đo validation trên T4, với kết quả `NO_GO` đã xác minh.** 40/40 ứng viên có đủ ledger. | 0/20 policy đạt sàn Fixed-Best, nên CH-04b chưa đủ điều kiện mở. |
 | CH-05 — Synthetic multi-resolution | **Đạt `s6_only` trên T4.** 54/54 case từ 720p đến 4K. `end_to_end` đã đo đủ và có kết quả âm đã xác minh. | Chưa thiết lập được đường scaling end-to-end của các lượt đăng ký ảnh hợp lệ. |
+| CH-07 — Hình và bảng tái lập | **Hoàn thành trên bằng chứng T4 đã khóa.** 4 cặp PDF/SVG, 5 bảng Booktabs và 21 artifact tái tạo khớp hash. | Bổ sung số liệu CH-06 khi Tuấn bàn giao một campaign có thể đối chiếu. |
+| CH-08 — Freeze và bàn giao manuscript | **Đã bàn giao phần T4 của Chương.** Có manifest, claim–evidence map và bản OASIcs ẩn danh. | Freeze bản nộp chung còn review kết quả các owner, CH-06 và quyết định nhóm về A5 sau `NO_GO`. |
 
 Lần rà soát báo cáo chạy lại **79 test CPU** cho protocol UDIS-D, A4 và multi-resolution tại revision `33d4b21`. Tất cả đều pass. Các kết quả Colab bên dưới được đối chiếu từ output đã nhận.
 
@@ -324,6 +326,18 @@ Các dòng gồm cả warmup. Trong 540 lượt đo có 30 lượt `SUCCESS`, 15
 
 Cặp duy nhất thực thi qua cả ba blender là `scene000_affine_overlap00_720p`. Canvas ước lượng **1340×1301**, có **4 inlier**, inlier ratio **1,65%**. Sai số L2 trung bình qua bốn góc là **1.295,27 px** và lớn nhất **2.260,88 px**. Median GPU span 6,622 / 17,881 / 19,037 ms chỉ mô tả lượt chạy xong của cặp này, theo thứ tự Feather / Multiband 3 / Multiband 5. Chỉ có một pair median cho mỗi mode, nên giá trị p95 trong bảng bằng median và không mô tả phân phối rộng. Kết quả này là **execution thành công nhưng đăng ký hình học kém**. `end_to_end` là kết quả âm hợp lệ của workload đã khóa, chưa có cơ sở để kết luận latency scaling cho pipeline đăng ký ảnh thành công ở ba độ phân giải.
 
+## CH-07/08 — Tái lập và bàn giao phần T4
+
+Tooling đọc hai export đã pin, giữ đủ mẫu số CH-02 và tính lại frontier từ CSV đã join. Biểu đồ CDF phân biệt tập PASS riêng của từng mode. Bảng paired và biểu đồ timing dùng giao ba mode cùng PASS. Tỷ số latency lấy median của các tỷ số theo cặp. Lỗi reference và execution OK được trình bày riêng vì hai trạng thái có thể cùng xuất hiện.
+
+Bundle `build/ch07-final-bundle/` gồm bốn cặp hình PDF/SVG, năm bảng, macro, nguồn dẫn xuất và hồ sơ kiểm. `--verify-only` tái tạo **21/21 artifact** khớp SHA-256. Manifest có SHA-256 `9e61ee7501953b8991e2a23785e5f5cb1b78cb85336025a9eedd5f03df22005b`. Bốn hình PDF đạt kiểm tra font TrueType embed và metadata. Các file kết quả vẫn ở workspace. [Runbook](../runbooks/ch07_ch08_paper_artifacts.md)
+
+Manuscript dùng Pareto, CDF và crop. Biểu đồ timing chi tiết được bàn giao trong bundle. Crop hậu kiểm chỉ minh họa viền kép quanh xe với cùng bbox ở ba blender. Bản thảo giữ kết quả âm của synthetic end-to-end, tách khỏi kết luận render với H đã biết. [Claim–evidence map](../claim_evidence_map.md)
+
+Build bằng OASIcs trên WSL/TeX Live trả `PASS`, có **12 trang gồm 1 trang tiêu đề, 10 trang nội dung và 1 trang references**. Đã xem cả 12 trang render. Final log không có warning, citation/reference chưa resolve hoặc overfull box. Font được embed, author metadata là `Anonymous Authors` và kiểm tra text không phát hiện định danh nhóm. Receipt và PDF nằm trong `build/paper-ch08-accepted/`. [Yêu cầu nộp bài của workshop](https://parma-ditam-workshop.github.io/#information-for-authors)
+
+Đồng bộ `main` trước khi tích hợp manuscript đã qua **14 CTest host-only**, compile/link bốn target `sm_75` và **596 pytest pass, 11 skip**. Số đo T4 tiếp tục truy về binary và source của campaign gốc. Harness sau đồng bộ cần smoke/sanitizer riêng trên T4 trước campaign mới. [Quyết định tích hợp](../decisions/p3-harness-integration.md)
+
 ## Công việc còn mở
 
 | Task | Việc tiếp theo |
@@ -331,4 +345,4 @@ Cặp duy nhất thực thi qua cả ba blender là `scene000_affine_overlap00_7
 | CH-04b | Bị chặn bởi `NO_GO` của CH-04a. Chỉ mở campaign A5 trên test khi có bộ `a5-lock.json` đã xác minh. |
 | CH-05 end-to-end | Giữ nguyên kết quả âm hiện tại. Nếu cần đường scaling đăng ký ảnh hợp lệ, thiết kế và khóa một cohort synthetic bổ sung có tín hiệu đặc trưng phân biệt được, kèm chẩn đoán S2/S4/S5. |
 | CH-06 | Tuấn phụ trách chạy trên L4/A100 qua tài khoản Colab Pro từ baseline `s6_only` T4 đã verify của Chương. Chạy cùng manifest, seed, mode và timing boundary với build target tương ứng (`sm_89` và `sm_80`). |
-| CH-07 và CH-08 | Có thể dùng artifact CH-02, A4 và `s6_only` T4 để làm bảng và hình. Bàn giao tổng hợp còn phụ thuộc phạm vi A5 sau `NO_GO` và kết quả cross-architecture. |
+| CH-08 — Freeze bản nộp chung | Tổng hợp bằng chứng của các owner, xử lý A5 theo quyết định nhóm, tích hợp CH-06 khi có và audit lại bản nộp cuối. |

@@ -1,18 +1,18 @@
-\section{Limitations and Next Evidence}
+\section{Discussion and Limitations}
 \label{sec:discussion}
 % Role: concrete threats and the evidence needed to resolve them.
-A single global homography cannot represent arbitrary parallax or independent
-object motion. Relative overlap quality can also mislead when the high-budget
-reference is unreliable. The current policy addresses alignment over a fixed
-domain; seam quality and perceptual composition need separate evaluation.
-Multi-band depth changes filtering cost and image content but is not assumed
-to improve quality monotonically.
+A global homography cannot model arbitrary parallax or independent motion.
+Reference-relative QoR depends on the reliability of the high-budget fit.
+The overlap policy measures alignment, while A4's crops describe composition
+qualitatively.
 
-The research question remains open until an adaptive controller is compared
-with fixed budgets under the same frozen policy. A development oracle gap alone
-does not account for feature cost, false acceptance, retry, fallback, or
-invalidated work. If those costs remove the expected benefit, the negative
-result should delimit when adaptation is useful rather than be hidden by
-reporting only fast successful cases. Hardware conclusions require the stated
-T4 environment; local checks retain their own device identity. The final
-conclusion will be written from those measurements.
+The measured heuristic reduces latency on its joint-pass subset while losing
+QoR coverage over the held-out cohort. The T4 results therefore do not establish
+the full-cohort runtime hypothesis. Self-check feedback can accept a model
+that fails the offline alignment predicate. Conditional speedup and unconditional
+pass rate must be reported together. Later learned or pooled policies are
+separate configurations whose results require their own frozen evidence.
+
+Synthetic end-to-end failures limit conclusions drawn from renderer throughput.
+Known-homography rendering bypasses registration. A large corner error can
+coexist with successful execution. Cross-architecture measurements are pending.

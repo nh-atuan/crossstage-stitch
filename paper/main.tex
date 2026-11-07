@@ -1,5 +1,12 @@
 \documentclass[a4paper,UKenglish,cleveref,autoref,anonymous]{oasics-v2021}
 \hideOASIcs
+\usepackage{booktabs}
+\input{tables/ch_numbers}
+\raggedbottom
+\setcounter{topnumber}{3}
+\setcounter{totalnumber}{5}
+\renewcommand{\topfraction}{.9}
+\renewcommand{\textfraction}{.1}
 \bibliographystyle{plainurl}
 \title{CrossStage-Stitch: Quality-Constrained Budget Allocation for GPU Panorama Stitching}
 \titlerunning{Quality-Constrained GPU Panorama Stitching}
@@ -13,11 +20,13 @@
 \begin{document}
 \maketitle
 \input{sections/abstract}
+\clearpage
 \input{sections/introduction}
 \input{sections/related-work}
 \input{sections/pipeline}
 \input{sections/controller}
 \input{sections/experiments}
 \input{sections/discussion}
+\clearpage
 \bibliography{references}
 \end{document}

@@ -330,5 +330,5 @@ Cặp duy nhất thực thi qua cả ba blender là `scene000_affine_overlap00_7
 | --- | --- |
 | CH-04b | Bị chặn bởi `NO_GO` của CH-04a. Chỉ mở campaign A5 trên test khi có bộ `a5-lock.json` đã xác minh. |
 | CH-05 end-to-end | Giữ nguyên kết quả âm hiện tại. Nếu cần đường scaling đăng ký ảnh hợp lệ, thiết kế và khóa một cohort synthetic bổ sung có tín hiệu đặc trưng phân biệt được, kèm chẩn đoán S2/S4/S5. |
-| CH-06 | Dùng `s6_only` T4 đã verify làm baseline. Chạy cùng manifest, seed, mode và timing boundary trên L4/A100 với build target tương ứng. |
+| CH-06 | Tuấn phụ trách chạy trên L4/A100 qua tài khoản Colab Pro từ baseline `s6_only` T4 đã verify của Chương. Chạy cùng manifest, seed, mode và timing boundary với build target tương ứng (`sm_89` và `sm_80`). |
 | CH-07 và CH-08 | Có thể dùng artifact CH-02, A4 và `s6_only` T4 để làm bảng và hình. Bàn giao tổng hợp còn phụ thuộc phạm vi A5 sau `NO_GO` và kết quả cross-architecture. |

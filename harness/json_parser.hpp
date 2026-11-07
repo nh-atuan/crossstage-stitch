@@ -28,7 +28,10 @@ public:
     static JsonValue parse(const std::string& text) {
         std::size_t idx = 0;
         skip_ws(text, idx);
-        return parse_value(text, idx);
+        JsonValue value = parse_value(text, idx);
+        skip_ws(text, idx);
+        if (idx != text.size()) throw std::runtime_error("Trailing content after JSON value");
+        return value;
     }
 
     static JsonValue parse_file(const std::string& path) {
@@ -43,7 +46,7 @@ public:
 
 private:
     static void skip_ws(const std::string& s, std::size_t& i) {
-        while (i < s.size() && (std::isspace(static_cast<unsigned char>(s[i])) || s[i] == '\0')) {
+        while (i < s.size() && std::isspace(static_cast<unsigned char>(s[i]))) {
             ++i;
         }
     }
@@ -82,7 +85,8 @@ private:
             if (i >= s.size() || s[i] != ':') throw std::runtime_error("Expected ':' after key");
             ++i; // consume ':'
             JsonValue child = parse_value(s, i);
-            val.obj_val[key.str_val] = child;
+            if (!val.obj_val.emplace(key.str_val, std::move(child)).second)
+                throw std::runtime_error("Duplicate JSON key: " + key.str_val);
 
             skip_ws(s, i);
             if (i < s.size() && s[i] == ',') {

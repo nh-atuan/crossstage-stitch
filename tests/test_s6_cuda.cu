@@ -343,11 +343,16 @@ void exclusive_write(const std::filesystem::path& path, const std::string& heade
                      const std::vector<std::uint8_t>* payload = nullptr) {
     // C11 exclusive create refuses existing files and symlinks, including a race
     // after CLI preflight. Never truncate a previous validation artifact.
-    std::FILE* file = std::fopen(path.string().c_str(), "wbx");
+    const auto temporary = path.string() + ".partial";
+    std::FILE* file = std::fopen(temporary.c_str(), "wbx");
     CHECK(file != nullptr);
     CHECK(std::fwrite(header.data(), 1, header.size(), file) == header.size());
     if (payload) CHECK(std::fwrite(payload->data(), 1, payload->size(), file) == payload->size());
     CHECK(std::fclose(file) == 0);
+    // Atomic no-clobber publication on the same filesystem. Interrupted output
+    // stays .partial and cannot be accepted as a complete validation artifact.
+    std::filesystem::create_hard_link(temporary, path);
+    CHECK(std::filesystem::remove(temporary));
 }
 void write_artifacts(const std::string& directory, const char* fixture, const Geometry& g,
                      BlendMode mode, std::size_t workspace_bytes, const RenderStatistics& counts,
@@ -367,6 +372,14 @@ void write_artifacts(const std::string& directory, const char* fixture, const Ge
              << ",\n  \"origin_x\": " << g.origin_x << ",\n  \"origin_y\": " << g.origin_y
              << ",\n  \"effective_reductions\": " << effective_reductions(g, mode)
              << ",\n  \"workspace_bytes\": " << workspace_bytes
+             << ",\n  \"workspace_allocated_bytes\": " << (workspace_bytes ? workspace_bytes + 256 : 0)
+             << ",\n  \"memory_scope\": \"workspace_query_and_allocation_not_peak_vram\""
+             << ",\n  \"T\": [[1,0," << -static_cast<long long>(g.origin_x)
+             << "],[0,1," << -static_cast<long long>(g.origin_y) << "],[0,0,1]]"
+             << ",\n  \"inverse_f64\": [[" << std::setprecision(17)
+             << g.inverse[0] << ',' << g.inverse[1] << ',' << g.inverse[2] << "],["
+             << g.inverse[3] << ',' << g.inverse[4] << ',' << g.inverse[5] << "],["
+             << g.inverse[6] << ',' << g.inverse[7] << ',' << g.inverse[8] << "]]"
              << ",\n  \"statistics_bytes\": " << sizeof(RenderStatistics)
              << ",\n  \"union_pixels\": " << counts.union_pixels
              << ",\n  \"overlap_pixels\": " << counts.overlap_pixels
@@ -497,7 +510,10 @@ Options parse_options(int argc, char** argv) {
         CHECK(!options.fixtures.empty());
         const fs::path output = fs::absolute(options.timings);
         CHECK(fs::is_directory(output.parent_path()));
-        CHECK(!fs::exists(output) || fs::is_regular_file(output));
+        CHECK(!fs::exists(output) && !fs::is_symlink(output));
+        CHECK(!fs::exists(output.string() + ".partial"));
+        // Bound the buffered CSV; default 2/10 repeats use only 36 rows/pair.
+        CHECK(options.fixtures.size() <= 100000u / static_cast<unsigned>(options.warmups + options.repeats));
         for (const auto& fixture : options.fixtures) {
             const fs::path input = fs::absolute(fixture);
             CHECK(fs::weakly_canonical(output) != fs::weakly_canonical(input));
@@ -557,17 +573,18 @@ int main(int argc, char** argv) {
     if (!options.artifacts.empty()) std::filesystem::create_directories(options.artifacts);
     const RuntimeInformation runtime{device_properties.name, device_properties.major,
                                      device_properties.minor, runtime_version, driver_version};
-    std::ofstream timings;
+    std::ostringstream timings;
     if (!options.timings.empty()) {
-        timings.open(options.timings, std::ios::out | std::ios::trunc);
-        CHECK(timings.good());
         timings << "fixture,blend_mode,width,height,repeat_idx,is_warmup,gpu_ms,host_ms,workspace_bytes,gpu_name,enqueue_host_ms,sync_wait_host_ms\n";
         CHECK(timings.good());
     }
     test_gap_and_repeat(); test_identity(); test_full_overlap_ownership(); test_negative_origin(); test_validation(); test_statistics();
     for (const auto& fixture : options.fixtures)
         golden(fixture.c_str(), options.timings.empty() ? nullptr : &timings, runtime, options.artifacts, options.warmups, options.repeats);
-    if (timings.is_open()) { timings.flush(); CHECK(timings.good()); }
+    if (!options.timings.empty()) {
+        CHECK(timings.good());
+        exclusive_write(options.timings, timings.str());
+    }
     std::puts("S6 CUDA synthetic/fixture checks passed");
     return 0;
 }

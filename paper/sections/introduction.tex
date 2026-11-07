@@ -33,16 +33,17 @@ The research question is: \emph{Can a scene-aware cross-stage runtime reduce GPU
 panorama-stitching latency by dynamically allocating computational budgets while
 maintaining a predefined quality-of-result constraint?} The implementation
 provides a CUDA pipeline and rendering policies with explicit geometry, sampling,
-and buffer contracts. This draft specifies the evaluation boundary and documents
-the implemented renderer. Evidence for the adaptive-runtime hypothesis requires
-an owner-reviewed controller and held-out comparisons. An unaudited pilot oracle
-gap does not establish that hypothesis.
+and buffer contracts. The held-out T4 comparison records latency, relative
+alignment quality and explicit failure dispositions. The frozen heuristic
+provides a conditional latency benefit on common passing pairs, accompanied
+by reduced quality coverage. These measurements bound the claim supported
+by that controller.
 
 % Role: positioning and organization; avoid unsupported novelty claims.
 The intended systems contribution is an evaluated policy for coordinating
 budgets and valid result reuse, rather than a new stitching or blending algorithm.
 Section~\ref{sec:related} positions the study against stitching, composition,
 and configuration tuning. Section~\ref{sec:pipeline} describes the checked pipeline
-interface and renderer. Section~\ref{sec:controller} reserves the controller method
-for implementation-backed integration; Section~\ref{sec:experiments} defines
-the evidence required to answer the research question.
+interface and renderer. Section~\ref{sec:controller} describes the controller.
+Section~\ref{sec:experiments} evaluates the frozen T4 configurations, and
+Section~\ref{sec:discussion} examines their limitations.

@@ -1,0 +1,25 @@
+{
+  "schema_version": "development-reference-approval-v1",
+  "authority": "Chuong",
+  "approved_on": "2026-11-06",
+  "development_audit_sha256": "6acaa640a2a43d0eb4a28c978d7319e99fcedaf88d211b92526035d5f150d7a6",
+  "reference_config_id": "S1.00_K2000_R1024_Bfeather",
+  "exceptions": {
+    "train-fit": {
+      "006399": ["ERR_CANVAS_OVERFLOW", "s6"],
+      "009444": ["ERR_CANVAS_OVERFLOW", "s6"],
+      "009726": ["DEGENERATE", "s5"],
+      "009729": ["DEGENERATE", "s5"],
+      "009955": ["NOT_ENOUGH_POINTS", "s5"],
+      "009959": ["NOT_ENOUGH_POINTS", "s5"],
+      "010327": ["DEGENERATE", "s5"],
+      "010355": ["DEGENERATE", "s5"]
+    },
+    "train-val": {
+      "007175": ["DEGENERATE", "s5"],
+      "009957": ["NOT_ENOUGH_POINTS", "s5"],
+      "009964": ["DEGENERATE", "s5"],
+      "010118": ["DEGENERATE", "s5"]
+    }
+  }
+}

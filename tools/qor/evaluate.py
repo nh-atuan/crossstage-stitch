@@ -157,17 +157,22 @@ def _empty(reference_status="ok", reason=""):
             "reason": reason, "reference_metrics": None}
 
 
-def evaluate_pair(a, b, h_candidate, h_reference, policy):
-    """Evaluate original-coordinate B->A alignment, retaining explicit failures."""
-    policy = _policy(policy)
-    a, b = _rgb(a, "a"), _rgb(b, "b")
+def prepare_reference(a, b, h_reference, policy):
+    """Prepare the fixed domain once when evaluating several candidates."""
     try:
         reference = _geometry(h_reference, b.shape)
         omega = valid_mask(reference, a.shape, b.shape)
         ref_warp = cv2.warpPerspective(b, reference, (a.shape[1], a.shape[0]), flags=cv2.INTER_LINEAR)
         reference_metrics = _metrics(a, ref_warp, omega, policy)
     except (ValueError, np.linalg.LinAlgError, cv2.error) as exc:
-        return _empty("reference_failure", str(exc))
+        return None, _empty("reference_failure", str(exc))
+    return omega, reference_metrics
+
+
+def evaluate_prepared(a, b, h_candidate, prepared, policy):
+    omega, reference_metrics = prepared
+    if omega is None:
+        return reference_metrics
     result = _empty()
     result["reference_metrics"] = reference_metrics
     try:
@@ -180,6 +185,13 @@ def evaluate_pair(a, b, h_candidate, h_reference, policy):
     except (ValueError, np.linalg.LinAlgError, cv2.error) as exc:
         result["reason"] = str(exc)
     return result
+
+
+def evaluate_pair(a, b, h_candidate, h_reference, policy):
+    """Evaluate original-coordinate B->A alignment, retaining explicit failures."""
+    policy = _policy(policy)
+    a, b = _rgb(a, "a"), _rgb(b, "b")
+    return evaluate_prepared(a, b, h_candidate, prepare_reference(a, b, h_reference, policy), policy)
 
 
 def quality_decision(report, policy, *, execution_status="OK", fail_stage=""):

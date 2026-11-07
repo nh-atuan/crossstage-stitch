@@ -5,21 +5,22 @@
 - Origin Skill: academic-research-suite / deep-research.
 - Origin Mode: backlog triển khai từ nghiên cứu có RQ xác định.
 - Origin Date: 02/11 (Thứ 2), năm 2026; thay phân công đề xuất ngày 24/10 (Thứ 7).
-- Verification Status: PILOT_RUN, cập nhật 05/11 (Thứ 5). Tooling `tools/quantum/` đã có trên nhánh `thanh/p3-quantum`, pilot đã chạy trên sweep calibration thật và đạt PASS_OFFLINE cho G0–G2 với nhãn pilot; G3 không đạt. Trạng thái từng ticket ở mục 11, kết quả ở [quantum-pilot-report.md](quantum-pilot-report.md).
-- Version Label: quantum_catalogue_tasks_v2_thanh.
+- Handoff lập kế hoạch paper: academic-research-suite, cập nhật 07/11 (Thứ 7), năm 2026.
+- Verification Status: `PILOT_REPORTED`, `G-PAPER` còn mở. Tooling đã vào `main`. Báo cáo ghi `PASS_OFFLINE` cho pilot chính trên calibration. Cần xác minh raw artifact độc lập và duyệt phạm vi claim trước khi dùng trong bản nộp. [Báo cáo pilot](quantum-pilot-report.md)
+- Version Label: quantum_catalogue_tasks_v3_thanh.
 - Tài liệu phương pháp: [quantum-integration-proposal.md](quantum-integration-proposal.md).
 
 ## 1. Phạm vi, owner và Definition of Done
 
-Primary path đã chọn: **A — offline QUBO/QAOA catalogue selection**, B_fixed. Tạo bảng đo CUDA trước, xây native cover/QUBO, chạy QAOA simulator p=1,2 có raw samples, rồi so với classical baselines và tích hợp catalogue vào controller cổ điển. Không chuyển sang S5 estimator, S6 seam hoặc quantum classifier để thay thế phần còn thiếu.
+**Bài toán con bắt buộc trong bản nộp** là chọn catalogue cấu hình `(S,K,R,B_fixed)` từ sweep CUDA bằng QUBO/QAOA offline. Câu hỏi phụ là QAOA tìm catalogue khả thi ở mức nào và chi phí ra sao khi so cùng instance với solver cổ điển. Câu hỏi chính về latency và QoR của adaptive runtime vẫn dùng benchmark GPU riêng. Consumer catalogue thuộc nhánh mở rộng để đánh giá tác động lên runtime.
 
 Phân công được người dùng chốt ngày 02/11 (Thứ 2): **Thành là single owner Q00–Q13 và quantum tooling/solver report**. Thành tiếp tục S2–S3/A3; các việc quantum được làm song song với baseline không quantum. Tuấn cung cấp raw sweep và giữ harness/S1/common/merge; Đế duyệt policy/reference và giữ controller/S4–S5; Chương giữ S6/A4/A5, review QoR và tổng hợp paper. Review hoặc cung cấp input không chuyển trách nhiệm implementation của stage sang Thành. Quyết định ở [p3-offline-quantum-catalogue.md](../decisions/p3-offline-quantum-catalogue.md).
 
-Phase hiện tại là **Phase 3**, deadline chung 05/11 (Thứ 5), review cùng ngày. Q00–Q13 là backlog chi tiết của phase này; chưa có task nào được đánh dấu DONE bằng lượt cập nhật kế hoạch. Effort dưới đây là ước lượng person-day tập trung khoảng 6 giờ, không phải deadline hoặc cam kết tất cả đều kịp; không cộng đôi việc harness/stage đã có. Thành báo tiến độ theo gate và các thiếu hụt dữ liệu/tài nguyên; baseline/A1–A5 tiếp tục độc lập. Q14–Q22 và QH chỉ là định hướng sau review, không giao lịch hoặc acceptance chi tiết của phase sau. P0 là ưu tiên offline; P1/P2 trong backlog cũ chỉ biểu thị ưu tiên, không phải tên phase.
+Q00–Q13 là backlog Phase 3, giữ để truy vết pilot và trạng thái ở mục 11. Đầu việc bàn giao Full Draft Phase 4 nằm ở mục 8, dùng deadline chung **09/11 (Thứ 2)** theo kế hoạch nhóm. Q14–Q20 là backlog cho đánh giá hệ thống, QH là tùy chọn. P0/P1/P2 trong backlog chỉ biểu thị ưu tiên.
 
-Definition of Done cho tích hợp quantum ứng dụng: Q00–Q13 có artifact kiểm tra được, QAOA thực sự chạy trên ít nhất một instance từ CUDA sweep còn q_after>0 sau reduction, native/classical baselines đủ, raw và repaired outputs tách biệt. Optimum=1 hoặc classical giải nhanh không miễn prototype khi q_after>0 và đủ tài nguyên. Kết quả QAOA không có feasible raw sample vẫn là negative experiment nếu circuit/counts/logs hợp lệ; không được xuất catalogue thành công giả. Khi đó muốn hoàn tất tích hợp vào controller phải có catalogue hybrid hợp lệ, truy vết nguồn và repair, hoặc ghi rõ phần tích hợp chưa hoàn thành. Claim hệ thống còn cần Q14–Q20; Q21–Q22 để bàn giao paper/tái lập. QPU không bắt buộc.
+`G-PAPER` đạt khi có run QAOA `p=1,2` trên simulator cho ít nhất một instance từ sweep CUDA còn `q_after > 0`, raw counts và controls đã xác minh, phạm vi dữ liệu/policy được duyệt, và PDF có phương pháp, bảng kết quả, giới hạn cùng gói tái lập. Kết quả âm đủ bằng chứng là kết quả hợp lệ. QPU là tùy chọn. Claim hệ thống thuộc G4.
 
-CLI và file code `tools/quantum/*` của Q00–Q13 đã có từ 05/11 (Thứ 5); trạng thái và bằng chứng từng ticket ở mục 11. Các CLI và file nêu cho Q14 trở đi vẫn là dự kiến, chưa tồn tại. Artifacts data/results/build không commit theo conventions; lưu manifest/hash và vị trí chia sẻ. Small test fixtures có thể commit trong tests theo quy ước Nhóm; không commit dataset hoặc raw benchmark outputs.
+Tooling offline nằm trong `tools/quantum/`. Trạng thái và bằng chứng từng ticket ở mục 11. Artifacts data/results/build lưu ở nơi chia sẻ theo conventions. Repo giữ mã nguồn, manifest/hash phù hợp và hướng dẫn tái lập.
 
 
 ### 1.1. Hai nhánh song song và ba nhóm đối chứng
@@ -32,11 +33,11 @@ CLI và file code `tools/quantum/*` của Q00–Q13 đã có từ 05/11 (Thứ 5
 
 W0 chạy được khi không cài quantum SDK và không cần đợi W1/W2. Quantum SDK không nằm trong root CMake, stage API hoặc `tools/requirements.txt`. W1/W2 chỉ được gọi là kết quả runtime sau khi Đế/Tuấn tích hợp consumer và đo thật; trước đó chỉ có so sánh solver offline. W1/W2 dùng cùng candidate set/reduction, split, quality policy, B, consumer, selector family và tuning budget, reuse/self-check/fallback. W0 so với W1 đo tác động thiết kế catalogue/consumer; W1 so với W2 mới kiểm tra đóng góp solver. Kích thước catalogue khác nhau vẫn được giữ trong bảng, kèm matched-size control khi có.
 
-Thành triển khai adapter, classical solvers, encoding, QAOA và validator dưới `tools/quantum/` cùng tests riêng; các đường dẫn đó hiện chưa tồn tại. Các stage S1–S6 không nhận quantum states hoặc circuit. Catalogue là JSON gồm config IDs/S/K/R/B, hashes và provenance, không chứa RGB. Một catalogue không tự xác định thứ tự ladder; Đế chuyển nó sang policy/ladder hợp lệ trên development và giữ fallback đã duyệt.
+Thành đã đưa adapter, classical solvers, encoding, QAOA và validator vào `tools/quantum/` cùng tests riêng. Catalogue JSON lưu config IDs/S/K/R/B, hashes và provenance. Nếu mở nhánh runtime, Đế chuyển catalogue sang policy/ladder trên development và giữ fallback đã duyệt.
 
 ### 1.2. Mức nghiệm thu trong Phase 3
 
-- **PASS_OFFLINE:** Q00–Q13 đủ artifact trên ít nhất một instance từ sweep CUDA còn `q_after > 0`, có QAOA p=1,2 và controls. PASS không có nghĩa QAOA thắng classical hoặc runtime nhanh hơn.
+- **PASS_OFFLINE:** Trạng thái solver offline trên ít nhất một instance từ sweep CUDA còn `q_after > 0`, có QAOA p=1,2 và controls. Runner pilot dùng trạng thái này cho G0–G2 trong phạm vi run. `G-PAPER` kiểm riêng phê duyệt, tái lập và bản thảo.
 - **NEGATIVE_RESULT:** Circuit/counts và đối chứng đầy đủ nhưng raw feasibility bằng 0, classical mạnh hơn hoặc repair quyết định kết quả; bàn giao nguyên dữ liệu và giới hạn, không xuất catalogue thành công giả.
 - **BLOCKED/INCOMPLETE:** Thiếu sweep/policy approval, environment không chạy, encoding chưa đúng, mọi instance bị exact reduction giải hết hoặc vượt tài nguyên; toy-only không đóng ứng dụng quantum.
 
@@ -81,12 +82,15 @@ flowchart TD
     Q18 --> Q19["Q19: protocol lock"]
     Q19 --> Q20["Q20: final evaluation"]
     Q20 -->|"system claims"| Q21["Q21: paper / claims"]
-    Q13 -. "offline claims" .-> Q21
+    Q13 --> QE["Q13-E / Q01-R: xác minh bằng chứng và duyệt phạm vi"]
+    QE --> QV["Q00-V: đánh giá holdout hoặc quyết định phạm vi pilot"]
+    QV --> Q21
     Q21 --> Q22["Q22: reproducibility release"]
+    Q22 --> QP["G-PAPER: quantum trong PDF bản nộp"]
     Q13 -. "optional" .-> QH["QH: hardware replication"]
 ```
 
-Critical path: CUDA đủ stage/harness → Q00 → Q03 → Q04 → encoding/admission → Q11/Q13 → controller replay → final. Q10, tiny-instance tests và validator có thể làm song song với Q00 và nhánh baseline không quantum. Nếu critical path bị chặn, báo missing artifact; không thay bằng timing S6-only hay mock CPU.
+Đường găng của bản nộp là Q13 → Q13-E và Q01-R → Q00-V hoặc quyết định phạm vi pilot → Q21 → Q22 → `G-PAPER`. Đường qua Q14–Q20 chỉ dùng khi đánh giá hệ thống. Bằng chứng ứng dụng dùng sweep CUDA của pipeline và run simulator tương ứng.
 
 ## 3. Nhóm dữ liệu characterization
 
@@ -226,11 +230,21 @@ Critical path: CUDA đủ stage/harness → Q00 → Q03 → Q04 → encoding/adm
 
 ## 7. Handoff sau prototype offline — chỉ định hướng
 
-Q14–Q17 giữ làm tham chiếu backlog cũ: Thành xuất catalogue có schema/hash và validator; Đế chủ trì consumer/ladder và giữ reuse/invalidation đúng contract; Tuấn giữ harness/telemetry và deployment không quantum SDK. Consumer validation không được thay nguồn gốc catalogue hoặc ẩn classical repair. Chưa coi các API/CLI catalogue dự kiến là đã tồn tại. Nếu các owner có đủ thời gian trong Phase 3, chỉ tích hợp sau khi catalogue qua validator và cùng contract; nếu chưa thì báo phần hệ thống pending và lập task chi tiết tại review.
+Q14–Q17 chỉ mở khi nhóm chọn đánh giá catalogue trên runtime. Thành bàn giao catalogue có schema/hash và validator. Đế chủ trì consumer/ladder cùng reuse/invalidation. Tuấn phụ trách harness/telemetry. Giữ provenance và nhãn repair qua consumer để so W1/W2.
 
-## 8. Validation, final và paper — chỉ định hướng
+## 8. Phase 4 — Bàn giao quantum cho paper
 
-Q18–Q22: sau review lập chi tiết matched W0/W1/W2, validation, protocol lock và final evaluation. Thành giữ analysis/solver artifacts và draft nội dung quantum; Chương tổng hợp paper; Đế review controller/QoR; Tuấn review systems/merge. Phải có output runtime thật mới viết e2e claims. QH (QPU/annealer) là tùy chọn, cần quyền/chi phí được duyệt riêng; simulator đủ cho quantum offline MVP. Không đặt deadline riêng hoặc chuyển các phase sau thành kế hoạch chi tiết trong tài liệu này.
+**Trạng thái 07/11 (Thứ 7).** Báo cáo pilot chính ghi 13 logical qubit, 20 lượt QAOA có counts xác nhận và catalogue 17 cấu hình trùng exhaustive. Lượt phụ 21 qubit chạm giới hạn thời gian trước bước xác nhận. Checkout dùng để lập kế hoạch chưa có gói raw của hai lượt. Policy/protocol còn chờ review và 50 cặp holdout v4 chưa có sweep trong gói pilot. [Báo cáo và phạm vi bằng chứng](quantum-pilot-report.md)
+
+| Task của Thành | Phụ thuộc và reviewer | Sản phẩm | Tiêu chí nghiệm thu |
+|---|---|---|---|
+| **Q13-E — Khóa và đối chiếu bằng chứng** | Pilot Q13. Tuấn kiểm nguồn sweep, Chương tái tạo bảng. | Gói nội bộ có `SHA256SUMS.json`, receipt nguồn và môi trường, split/policy/grid, run config, selection/reduction, `instance.json`, `qubo.json`, `ising.json`, `resource-audit.json`, circuit/counts, `solver_runs.jsonl`, `solver-comparison.csv`, `gates.json` và catalogue W1/W2 của lượt chính. | Kiểm hash, đối chiếu seed, shot, timeout và mapping bitstring. Sinh lại bảng từ raw bằng `tools.quantum.report`. Truy mẫu tạo W2 về run, phân biệt best-found trong optimizer với counts ở circuit xác nhận, raw với repair. Làm rõ phạm vi tái lập của từng lượt trong báo cáo. Thiếu hoặc lệch artifact giữ `BLOCKED` tới khi khôi phục hoặc chạy lại theo protocol đã duyệt. |
+| **Q01-R — Duyệt phạm vi pilot và khóa đánh giá tiếp** | Làm song song Q13-E. Đế duyệt QoR/reference/split, Tuấn duyệt provenance và timing, Chương duyệt B và phạm vi claim. | Biên bản ghi hash của policy, split gốc, B, grid, regret bound, instance selection, seeds và budget thực chạy. Nếu cần run mới, lưu protocol riêng trước khi chạy. | Ghi rõ pilot đã chạy trước khi có phê duyệt. Quyết định về dùng pilot trong bài và protocol đánh giá tiếp có ngày, reviewer và phạm vi. Ngưỡng QoR, split và budget đã báo được giữ theo hồ sơ từng lượt. |
+| **Q00-V — Đánh giá catalogue trên holdout đã khóa** | Q13-E và Q01-R. Tuấn cung cấp sweep 50 cặp holdout v4 của split gốc, Đế kiểm reference và cohort. | So W1/W2 offline bằng catalogue đã khóa. Xuất ledger đủ mẫu số, coverage đạt QoR, tỷ lệ đạt bound latency và regret theo pair trên cùng tập đủ reference, kèm thất bại. | Dùng đúng holdout và cùng evaluator. W1/W2 giữ nguyên trong lúc chấm. Ghi riêng cặp thiếu reference hoặc không có cấu hình feasible. Nếu thiếu sweep, ghi `BLOCKED`. Nhóm có thể duyệt riêng phạm vi *exploratory calibration pilot* cho bài và ghi holdout là `not_measured`. Ngoại lệ này giữ nguyên các yêu cầu về run thật, controls và tái lập. |
+| **Q21 — Viết và tích hợp phần quantum** | Có thể viết khung song song. Chốt số sau Q13-E, Q01-R và quyết định về holdout. Chương tích hợp, Đế/Tuấn review. | Draft LaTeX tiếng Anh cho phần Method và một tiểu mục Experimental Evaluation, bảng đối chứng sinh từ raw, phần Limitations và các dòng bổ sung cho [claim–evidence map](../claim_evidence_map.md). | Giải thích mapping sweep → minimum set cover → QUBO/Ising → QAOA → decode/restore. Bảng ghi cohort, số biến trước/sau reduction, simulator, seeds/shots/cap, raw/repaired feasibility, cardinality/gap và thời gian solver theo ranh giới đo. Báo kết quả âm và lượt timeout đúng phạm vi. Mọi số truy được tới artifact, mọi kết luận về deployment cần G4. |
+| **Q22 — Bàn giao gói tái lập và nghiệm thu PDF** | Q21. Tuấn hoặc thành viên khác kiểm gói ngoài máy đã chạy pilot, Chương kiểm bản OASIcs. | Manifest/hash, lệnh tái tạo bảng, receipt kiểm độc lập và PDF ẩn danh có nội dung quantum. | Người review tái tạo bảng từ log đã khóa và đối chiếu claim với nguồn. PDF có formulation, thí nghiệm và giới hạn quantum trong thân bài. Kiểm trích dẫn, ẩn danh và giới hạn trang trước khi đóng `G-PAPER`. |
+
+Q14–Q20 thuộc đánh giá tác động lên pipeline, với matched W0/W1/W2 và phép đo runtime. QH dành cho tái lập trên phần cứng khi có phê duyệt riêng. Các phần này tách khỏi nghiệm thu thí nghiệm solver offline trong bản nộp hiện tại.
 
 ## 9. Gate và quyết định dừng
 
@@ -240,7 +254,8 @@ Q18–Q22: sau review lập chi tiết matched W0/W1/W2, validation, protocol lo
 | G1 | Q04–Q10/Q12: native/QUBO/Ising/reduction đúng, RAM/qubit phù hợp | Sửa lỗi; trivial/resource limitation báo rõ, không tạo circuit giả |
 | G2 | Q11/Q13: p=1,2 real-instance circuit/counts và classical controls | Zero-feasible là negative experiment; crash/no circuit là chưa hoàn thành |
 | G3 | Q13/Q18: trade-off theo criteria Nhóm khóa trước | Dừng mở rộng QPU/depth/B–F; giữ feasibility/negative report |
-| G4 | Q17–Q22: controller thật cho system claims, final locked và reproducible | Giới hạn claim offline, hoặc ghi task chưa hoàn thành nếu thiếu minimum evidence |
+| G4 | Q17–Q20 có controller chạy thật, protocol đã khóa và kết quả tái lập được | Giới hạn claim ở solver và catalogue offline |
+| G-PAPER | Q13-E, Q01-R, quyết định Q00-V, Q21 và Q22. Bằng chứng QAOA đã audit và quantum có mặt trong Method, Experiments và Limitations của PDF | Giữ bản nộp ở trạng thái `BLOCKED`, ghi rõ artifact hoặc phê duyệt đang thiếu |
 
 **Go cho simulator MVP A; No-Go cho mở rộng khi không có giá trị.** Exact/greedy thắng không làm biến mất yêu cầu quantum: vẫn bàn giao circuit/logs, bảng đối chứng và negative/feasibility result. Nếu mọi real instance sau exact reduction là trivial hoặc vượt tài nguyên thì báo chưa thể hoàn thành real-application prototype trong budget, không claim toy thay ứng dụng. Không nới QoR/split/Go–No-Go sau xem kết quả. Quantum là mandatory experiment của backlog này; thắng classical là giả thuyết có thể bị bác bỏ.
 
@@ -276,6 +291,6 @@ Nhãn trạng thái: PASS (có artifact và test, chạy trên dữ liệu thậ
 | Q10 | PASS | Venv Python 3.13, `tools/quantum/requirements-lock.txt`, env receipt | Chưa cài thử trên máy khác |
 | Q11 | PASS | 20 run QAOA p = 1, 2 trên instance chính, đủ call và shot, counts xác nhận; chạy lại trên split gốc cho cùng góc và counts | Lượt phụ q = 21: cả 20 run chạm cap 60 s trước lượt xác nhận |
 | Q12 | PASS | `tools/quantum/validate.py`, `catalogue.schema.json`; W1 và W2 qua `check_catalogue` | |
-| Q13 | PASS_OFFLINE, G3 không đạt | [quantum-pilot-report.md](quantum-pilot-report.md): mọi solver, kể cả repair-only, đạt optimum 17; QAOA không tốt hơn classical | Validation, consumer (Q14+) |
+| Q13 | Runner ghi `PASS_OFFLINE` cho pilot, G3 không đạt theo luật dừng Q13 | [quantum-pilot-report.md](quantum-pilot-report.md): mọi solver, kể cả repair-only, đạt optimum 17 | Xác minh raw, duyệt phạm vi paper và xử lý holdout theo mục 8 |
 
 Kiểm chứng local ngày 05/11 (Thứ 5): venv quantum `python -m pytest tests/python/test_quantum_*.py -q` cho 48 pass, 1 skip (test characterize cần `cv2`); Python 3.11 của pipeline `python -m pytest tests/python -q` cho 385 pass, 3 skip (các test cần OR-Tools).

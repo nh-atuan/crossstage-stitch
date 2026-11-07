@@ -28,6 +28,7 @@ Hướng tiếp cận ở mức ý chính:
 - Một số stage có núm chỉnh lượng tính toán: S (tỉ lệ thu nhỏ ảnh), K (số keypoint), R (số vòng RANSAC), B (kiểu blend).
 - Một runtime (controller) chọn mức tính toán cho từng cặp ảnh dựa trên độ khó của cảnh và các tín hiệu chất lượng trung gian, sao cho latency thấp nhất mà chất lượng vẫn đạt ngưỡng `Qmin`.
 - Kết quả được so với các cấu hình cố định và với Oracle (biết trước cấu hình rẻ nhất đạt `Qmin` cho từng cặp ảnh).
+- **Bài toán con bắt buộc của paper** là chọn catalogue cấu hình `(S,K,R,B_fixed)` từ sweep CUDA trên development bằng QUBO/QAOA offline. So sánh với solver cổ điển trên cùng instance để đánh giá tính khả thi và chi phí chọn catalogue dưới ràng buộc QoR và latency regret. Câu hỏi chính về adaptive runtime vẫn được đánh giá bằng benchmark GPU riêng.
 
 Chi tiết thiết kế do người phụ trách từng phần quyết định trong quá trình làm (mục 4).
 
@@ -186,9 +187,9 @@ Thiết kế A4/A5 được chốt ngày 02/11 (Thứ 2): A4 dùng alignment inv
 
 **CH-07 đã hoàn thành và CH-08 đã bàn giao phần T4 của Chương.** Hình và bảng tái lập từ export CH-02/A4/CH-05, kèm freeze manifest, claim–evidence map và bản thảo OASIcs ẩn danh. Freeze bản nộp chung chờ review nhóm và kết quả CH-06 do Tuấn phụ trách. [Nghiệm thu CH-07/08](reports/phase-3-acceptance-report.md#ch-0708--tái-lập-và-bàn-giao-phần-t4)
 
-#### Workstream quantum offline chạy song song
+#### Quantum catalogue offline bắt buộc trong paper
 
-**Chủ trì duy nhất: Thành.** Phạm vi được chốt ngày 02/11 (Thứ 2): chọn catalogue cấu hình `(S,K,R,B_fixed)` bằng QUBO/QAOA offline; không thay kernel, estimator hoặc ABI S1–S6, không gọi quantum backend khi xử lý từng cặp ảnh. QPU không bắt buộc; simulator phải được ghi đúng nhãn. A3 và các task A1–A5 vẫn giữ owner hiện tại.
+**Thành chủ trì phần quantum.** Quyết định ngày 07/11 (Thứ 7) chốt quantum là phần bắt buộc trong bài toán, phương pháp và thực nghiệm của bản nộp. Thành bàn giao QAOA trên simulator cho ít nhất một instance thực từ sweep CUDA còn biến sau reduction, cùng đối chứng cổ điển. Controller và các stage GPU tiếp tục chạy theo hợp đồng hiện tại, với baseline không quantum chạy độc lập. [Quyết định và phạm vi](decisions/p3-offline-quantum-catalogue.md)
 
 | Nhánh | Task và owner | Tiêu chí nghiệm thu Phase 3 |
 |---|---|---|
@@ -196,11 +197,11 @@ Thiết kế A4/A5 được chốt ngày 02/11 (Thứ 2): A4 dùng alignment inv
 | **Quantum offline** | Thành chủ trì Q00–Q13: tiếp nhận sweep development, kiểm dữ liệu, native cover, exact/greedy/CP-SAT/SA/random, QUBO/Ising/reduction, resource admission, QAOA `p=1,2`, validator/repair và báo cáo | Có code/tests, môi trường riêng và tối thiểu một instance từ sweep CUDA còn biến sau reduction, circuit/counts/logs thật, đối chứng cổ điển và phân tích feasibility/cardinality/regret/solver time; raw và repaired tách riêng. Chưa có dữ liệu hoặc môi trường thì ghi BLOCKED/chưa hoàn thành; toy hoặc công thức đơn thuần không đóng task |
 | **Consumer catalogue cổ điển** | Thành bàn giao catalogue có hash/schema; Đế giữ quyền sửa controller, Tuấn giữ harness; Chương review QoR | Nếu kịp có consumer đã kiểm thử, so `W0` runtime gốc, `W1` classical catalogue và `W2` QAOA catalogue bằng cùng consumer/selector family/budget, self-check/reuse/fallback giữa W1/W2. Chưa có consumer thì chỉ nghiệm thu kết quả solver offline, chưa kết luận speedup hệ thống |
 
-Thứ tự của Thành: Q01/Q02/Q10 và tiny tests có thể làm ngay; Q00/Q03 cần raw sweep; Q04–Q12 hoàn thiện theo dependency; Q13 chỉ chạy ứng dụng khi dữ liệu/encoding/resource gates đạt. Không tái triển khai stage CUDA, không đưa Qiskit/Aer/OR-Tools vào requirements hoặc build của pipeline. Handoff chi tiết, artifact và acceptance ở [quantum-integration-tasks.md](research/quantum-integration-tasks.md).
+Pilot chính được báo cáo `PASS_OFFLINE` trên calibration, với kết quả catalogue QAOA bằng nghiệm cổ điển trên instance đã chọn. Phạm vi nghiệm thu để viết bài còn chờ xác minh artifact độc lập, duyệt policy/protocol và xử lý holdout. [Báo cáo pilot](research/quantum-pilot-report.md) · [Task còn mở](research/quantum-integration-tasks.md#8-phase-4--bàn-giao-quantum-cho-paper)
 
 Catalogue được fit từ development; validation chọn tham số, sau đó khóa trước test. Không dùng 1.105 cặp test UDIS-D để chọn catalogue, seed hoặc quantum hyperparameters. Nhánh đầu dùng một quality policy và B cố định được Đế/Chương xác nhận; không nhân toàn bộ campaign quantum theo lưới A5. Catalogue cổ điển cũng là nhánh không quantum và phải tiếp tục được khi QAOA fail.
 
-Quantum phải có thí nghiệm thật hoặc báo trạng thái chưa hoàn thành. QAOA không tìm được nghiệm raw feasible vẫn là negative result hợp lệ nếu circuit/samples/budget và controls đầy đủ; không tự xuất catalogue cổ điển mang nhãn quantum. Không yêu cầu QAOA phải thắng và không viết sẵn claim quantum advantage. Thiếu dữ liệu/tài nguyên hoặc scope quá lớn được báo trong review 05/11 (Thứ 5), không dời lịch các nhánh khác và không đánh quantum hoàn tất bằng kết quả baseline.
+Kết quả âm đủ circuit, counts, ngân sách và controls được đưa vào phần kết quả chính. Việc khóa bản nộp chờ nghiệm thu `G-PAPER` của quantum. Benchmark GPU và các ablation vẫn có thể bàn giao độc lập.
 
 Quy định riêng của Phase 3:
 
@@ -217,13 +218,15 @@ Deadline dự kiến: 09/11 (Thứ 2).
 
 Mục tiêu chính: Tích hợp toàn bộ số liệu, bảng biểu, đồ thị từ Phase 3 vào `paper/`; viết hoàn chỉnh Section 5 (Experimental Evaluation), Section 6 (Discussion & Limitations), Section 7 (Conclusion); chốt các con số định lượng trong Abstract và hoàn thiện Introduction.
 
-Với quantum, Thành bàn giao phân tích solver có bằng chứng để Chương tổng hợp; chỉ viết kết quả offline nếu chưa có catalogue consumer/e2e. Việc mở rộng consumer và thí nghiệm hệ thống được lập chi tiết sau review Phase 3; không gắn lợi ích catalogue cổ điển thành lợi ích quantum.
+**Quantum là đầu việc bắt buộc của Full Draft.** Thành đóng gói và xác minh bằng chứng, trình duyệt phạm vi pilot, kiểm catalogue trên holdout đã khóa và viết bản LaTeX tiếng Anh cho phương pháp, đối chứng solver và giới hạn. Chương tích hợp tiểu mục và bảng kết quả vào PDF, Đế review QoR/split, Tuấn đối chiếu nguồn đo và quy trình tái lập. [Thứ tự, sản phẩm và tiêu chí nghiệm thu](research/quantum-integration-tasks.md#8-phase-4--bàn-giao-quantum-cho-paper)
 
 ### Phase 5: Rà soát chéo, Chuẩn hóa OASIcs và Nộp bài (ý chính)
 
 Deadline chung: **13/11 (Thứ 6)** (nộp bài EasyChair, giữ 3 ngày đệm an toàn trước hạn chót 16/11 của ban tổ chức).
 
 Mục tiêu chính: Cả Nhóm đọc chéo (peer-review) toàn bộ 10 trang bài báo; rà soát văn phong chống AI writing; kiểm tra audit ẩn danh kép (double-blind); căn chỉnh layout không tràn 10 trang OASIcs; nộp file PDF chính thức lên EasyChair.
+
+Chỉ khóa bản nộp khi `G-PAPER` đạt và PDF có mô tả bài toán chọn catalogue, QUBO/QAOA, bảng kết quả thực nghiệm và giới hạn của simulator. Claim về tác động lên pipeline cần bằng chứng hệ thống riêng ở G4. [Gate quantum](research/quantum-integration-tasks.md#9-gate-và-quyết-định-dừng)
 
 ## 9. Dataset và benchmark
 

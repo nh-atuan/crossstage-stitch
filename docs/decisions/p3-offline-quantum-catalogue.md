@@ -44,3 +44,13 @@ Lượt này kiểm tra đồng bộ tài liệu, dependency/owner, liên kết 
 - [Farhi, Goldstone và Gutmann, 2014](https://arxiv.org/abs/1411.4028): metadata/abstract về QAOA cho tối ưu tổ hợp. Truy cập 02/11 (Thứ 2); không lấy bảo đảm MaxCut làm bảo đảm catalogue.
 - [IBM QAOA tutorial](https://quantum.cloud.ibm.com/docs/en/tutorials/quantum-approximate-optimization-algorithm): Background và mapping binary/QUBO/Ising sang circuit, vòng lặp hybrid. Truy cập 02/11 (Thứ 2); không dùng thời gian demo làm estimate cho dự án.
 - [Proposal và phạm vi đọc nguồn lịch sử](../research/quantum-integration-proposal.md): formulation, baseline, resource budget và giới hạn claim chi tiết.
+
+## 7. Chốt phạm vi bản nộp ngày 07/11 (Thứ 7)
+
+Người dùng chốt quantum là phần bắt buộc của bài toán nghiên cứu và của bản nộp. Thành chủ trì bằng chứng và draft quantum, Chương tích hợp paper, Đế review QoR/split và Tuấn review provenance/hạ tầng đo.
+
+Pilot trên sweep CUDA cho thấy QAOA simulator và đối chứng cổ điển tìm được catalogue cùng kích thước trên instance chính. Bài báo giữ câu hỏi chính về adaptive runtime và đánh giá thêm bài toán con chọn catalogue offline. Phần quantum có formulation, thí nghiệm so solver và giới hạn trong thân bài. `G-PAPER` là điều kiện khóa bản nộp, gồm gói bằng chứng đã audit, phạm vi claim được duyệt và PDF có nội dung này. [Task và tiêu chí nghiệm thu](../research/quantum-integration-tasks.md#8-phase-4--bàn-giao-quantum-cho-paper)
+
+Pilot offline dùng dữ liệu từ pipeline và cho phép so solver trên cùng instance. Đo W0/W1/W2 end-to-end có thể trả lời câu hỏi về tác động lên runtime, nhưng cần consumer, protocol và campaign riêng. Theo luật dừng Q13, nhóm ưu tiên kiểm chứng và bàn giao thí nghiệm hiện tại. QPU và mở rộng depth được xem xét theo một quyết định sau.
+
+Nếu holdout chưa có, nhóm có thể duyệt riêng việc báo pilot calibration ở phạm vi thăm dò và ghi holdout `not_measured`. `G-PAPER` vẫn cần run QAOA thật, controls và khả năng tái lập. Nếu bằng chứng chưa đối chiếu được hoặc phạm vi còn chờ duyệt, ghi `BLOCKED` cho bản nộp và khôi phục bằng chứng hoặc lập run mới theo protocol đã duyệt.

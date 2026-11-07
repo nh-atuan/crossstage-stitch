@@ -15,4 +15,7 @@ separate configurations whose results require their own frozen evidence.
 
 Synthetic end-to-end failures limit conclusions drawn from renderer throughput.
 Known-homography rendering bypasses registration. A large corner error can
-coexist with successful execution. Cross-architecture measurements are pending.
+coexist with successful execution. Cross-architecture benchmarks confirm that
+bandwidth-bound streaming blending scales directly with memory hierarchy
+advancements, while multi-pass pyramid decomposition requires sufficiently large
+canvas tiles to saturate wide SM arrays.

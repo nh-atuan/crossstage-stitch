@@ -166,19 +166,31 @@ def main() -> int:
     parser.add_argument(
         "--modes",
         nargs="+",
-        choices=["fixed_best", "oracle", "adaptive"],
+        choices=["fixed_best", "oracle", "adaptive", "blind_s025", "blind_s050", "conservative_high"],
         default=["fixed_best", "oracle", "adaptive"],
-        help="Modes to execute (default: all 3 modes)",
+        help="Modes to execute (default: fixed_best oracle adaptive)",
+    )
+    parser.add_argument(
+        "--controller-policy",
+        default="legacy-v1",
+        help="Versioned adaptive policy JSON or legacy-v1 / legacy-v1-blind-s05 (default: legacy-v1)",
+    )
+    parser.add_argument(
+        "--ablation-a1",
+        action="store_true",
+        help="Execute the 4 Ablation A1 variants (adaptive, blind_s025, blind_s050, conservative_high)",
     )
     parser.add_argument("--warmup", type=int, default=2, help="Warmup iterations per pair (default: 2)")
     parser.add_argument("--repeats", type=int, default=10, help="Measurement repeats per pair (default: 10)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
-    parser.add_argument("--controller-policy", default="legacy-v1",
-                        help="Versioned adaptive policy JSON or legacy-v1")
     parser.add_argument("--prepare-only", action="store_true", help="Only download and prepare dataset without running GPU harness")
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing")
     args = parser.parse_args()
-    policy_path = Path(args.controller_policy) if args.controller_policy != "legacy-v1" else None
+    policy_path = (
+        Path(args.controller_policy)
+        if args.controller_policy not in ("legacy-v1", "legacy-v1-blind-s05")
+        else None
+    )
     if policy_path is not None and ("adaptive" not in args.modes or not policy_path.is_file()):
         parser.error("--controller-policy requires an existing JSON file and adaptive mode")
     policy_hash = sha256(policy_path) if policy_path is not None else None
@@ -231,12 +243,16 @@ def main() -> int:
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     produced_csvs: List[Path] = []
+    produced_traces: List[Path] = []
+    modes_to_run = ["adaptive", "blind_s025", "blind_s050", "conservative_high"] if args.ablation_a1 else args.modes
 
     # Step 1.5: Build stitch_harness if not compiled
     if not args.harness.exists() and not args.dry_run:
         print(f"=== Step 1.5: Harness binary '{args.harness}' not found. Compiling with CMake... ===")
         build_dir = Path("build")
-        rc_cfg = subprocess.run(["cmake", "-B", str(build_dir), "-DCMAKE_BUILD_TYPE=Release"]).returncode
+        rc_cfg = subprocess.run(
+            ["cmake", "-S", ".", "-B", str(build_dir), "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_CUDA_ARCHITECTURES=75"]
+        ).returncode
         if rc_cfg != 0:
             print("Error: CMake configuration failed.", file=sys.stderr)
             return rc_cfg
@@ -249,7 +265,7 @@ def main() -> int:
             return 1
 
     # Step 2: Execute Fixed-Best
-    if "fixed_best" in args.modes:
+    if "fixed_best" in modes_to_run:
         s_str, k_str, r_str, b_str = [x.strip() for x in args.fixed_best_config.split(",")]
         fb_cfg_path = args.out_dir / "fixed_best_config.json"
         fb_cfg = [
@@ -292,7 +308,7 @@ def main() -> int:
         produced_csvs.append(fb_csv)
 
     # Step 3: Execute Oracle Grid Sweep
-    if "oracle" in args.modes:
+    if "oracle" in modes_to_run:
         grid_cfg_path = args.out_dir / "oracle_grid_configs.json"
         grid_cfgs = generate_grid_configs()
         grid_cfg_path.write_text(json.dumps(grid_cfgs, indent=2), encoding="utf-8")
@@ -325,9 +341,10 @@ def main() -> int:
             return rc
         produced_csvs.append(oracle_csv)
 
-    # Step 4: Execute Adaptive Controller
-    if adaptive_trace is not None:
+    # Step 4: Execute Adaptive Controller (with Probe)
+    if "adaptive" in modes_to_run:
         adaptive_csv = args.out_dir / "adaptive_runs.csv"
+        adaptive_trace = args.out_dir / "adaptive_attempts.csv"
         cmd = [
             str(args.harness),
             "--mode",
@@ -361,6 +378,121 @@ def main() -> int:
             print("Error: missing adaptive trace or controller policy changed.", file=sys.stderr)
             return 2
         produced_csvs.append(adaptive_csv)
+        produced_traces.append(adaptive_trace)
+
+    # Step 4b: Execute Blind Escalation from Rung 0 (S=0.25, K=500, R=128, --no-probe)
+    if "blind_s025" in modes_to_run:
+        blind0_csv = args.out_dir / "blind_s025_runs.csv"
+        blind0_trace = args.out_dir / "blind_s025_attempts.csv"
+        cmd = [
+            str(args.harness),
+            "--mode",
+            "adaptive",
+            "--controller-policy",
+            "legacy-v1",
+            "--no-probe",
+            "--trace-out",
+            str(blind0_trace),
+            "--run-id",
+            "blind_escalation_s025",
+            "--dataset",
+            "udis_d",
+            "--split",
+            split_label,
+            "--manifest",
+            str(manifest_path),
+            "--warmup",
+            str(args.warmup),
+            "--repeats",
+            str(args.repeats),
+            "--seed",
+            str(args.seed),
+            "--out",
+            str(blind0_csv),
+        ]
+        rc = run_harness_cmd(cmd, dry_run=args.dry_run)
+        if rc != 0:
+            return rc
+        produced_csvs.append(blind0_csv)
+        produced_traces.append(blind0_trace)
+
+    # Step 4c: Execute Blind Escalation from Rung 1 (S=0.50, K=1000, R=128, --no-probe)
+    if "blind_s050" in modes_to_run:
+        blind1_csv = args.out_dir / "blind_s050_runs.csv"
+        blind1_trace = args.out_dir / "blind_s050_attempts.csv"
+        cmd = [
+            str(args.harness),
+            "--mode",
+            "adaptive",
+            "--controller-policy",
+            "legacy-v1-blind-s05",
+            "--no-probe",
+            "--trace-out",
+            str(blind1_trace),
+            "--run-id",
+            "blind_escalation_s050",
+            "--dataset",
+            "udis_d",
+            "--split",
+            split_label,
+            "--manifest",
+            str(manifest_path),
+            "--warmup",
+            str(args.warmup),
+            "--repeats",
+            str(args.repeats),
+            "--seed",
+            str(args.seed),
+            "--out",
+            str(blind1_csv),
+        ]
+        rc = run_harness_cmd(cmd, dry_run=args.dry_run)
+        if rc != 0:
+            return rc
+        produced_csvs.append(blind1_csv)
+        produced_traces.append(blind1_trace)
+
+    # Step 4d: Execute Conservative High (S=1.0, K=2000, R=1024, feather)
+    if "conservative_high" in modes_to_run:
+        ch_cfg_path = args.out_dir / "conservative_high_config.json"
+        ch_cfg = [
+            {
+                "config_id": "S1.00_K2000_R1024_Bfeather",
+                "S": 1.0,
+                "K": 2000,
+                "R": 1024,
+                "blend_mode": "feather",
+            }
+        ]
+        ch_cfg_path.write_text(json.dumps(ch_cfg, indent=2), encoding="utf-8")
+        ch_csv = args.out_dir / "conservative_high_runs.csv"
+        cmd = [
+            str(args.harness),
+            "--mode",
+            "fixed",
+            "--run-id",
+            "conservative_high",
+            "--dataset",
+            "udis_d",
+            "--split",
+            split_label,
+            "--manifest",
+            str(manifest_path),
+            "--configs",
+            str(ch_cfg_path),
+            "--warmup",
+            str(args.warmup),
+            "--repeats",
+            str(args.repeats),
+            "--seed",
+            str(args.seed),
+            "--out",
+            str(ch_csv),
+        ]
+        rc = run_harness_cmd(cmd, dry_run=args.dry_run)
+        if rc != 0:
+            return rc
+        produced_csvs.append(ch_csv)
 
     # Step 5: Merge into telemetry_results.csv and write meta.json
     telemetry_csv = args.out_dir / "telemetry_results.csv"
@@ -371,7 +503,8 @@ def main() -> int:
             {
                 "subset": args.subset,
                 "split": split_label,
-                "modes": args.modes,
+                "modes": modes_to_run,
+                "controller_policy": args.controller_policy,
                 "warmup": args.warmup,
                 "repeats": args.repeats,
                 "seed": args.seed,
@@ -389,8 +522,7 @@ def main() -> int:
         if args.gdrive_cache_dir is not None:
             dest_results = args.gdrive_cache_dir / "results" / args.subset
             dest_results.mkdir(parents=True, exist_ok=True)
-            sidecars = [adaptive_trace] if adaptive_trace is not None else []
-            for f in [*produced_csvs, *sidecars, telemetry_csv, meta_path]:
+            for f in [*produced_csvs, *produced_traces, telemetry_csv, meta_path]:
                 if f.exists():
                     shutil.copy2(f, dest_results / f.name)
             print(f"Copied CSV outputs and meta.json to Google Drive: {dest_results}")

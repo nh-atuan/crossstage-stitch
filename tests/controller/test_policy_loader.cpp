@@ -44,6 +44,17 @@ int main() {
     }
     auto legacy = legacy_controller_policy();
     CHECK(legacy.configure(controller) == stitch::Status::OK && legacy.id == "legacy-v1");
+    auto blind_s05 = legacy_blind_s05_policy();
+    CHECK(blind_s05.configure(controller) == stitch::Status::OK && blind_s05.id == "legacy-v1-blind-s05");
+    {
+        stitch::ScaleInfo scale{};
+        CHECK(stitch::make_scale_info(100, 100, .25, &scale) == stitch::Status::OK);
+        stitch::controller::SceneSignals low_grad{{scale, 0.0}, {scale, 0.0}, {}, false};
+        stitch::controller::Knobs first{};
+        CHECK(controller.begin_pair(low_grad, &first) == stitch::Status::OK);
+        CHECK(first.S == 0.5 && first.K == 1000 && first.R == 128);
+        controller.reset_pair();
+    }
     value=fixture();value.obj_val["schema_version"].str_val="controller-policy-v3";
     value.obj_val["feature_schema"]=JsonValue::parse("\"controller-features-v1\"");
     value.obj_val["selector"]=JsonValue::parse(R"([{"feature":0,"threshold":0.1,"left":1,"right":2},{"value":0},{"value":1}])");

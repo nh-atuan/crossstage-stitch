@@ -23,12 +23,15 @@ examined separately through same-coordinate image crops.
 
 \subsection{Runtime Baselines and Failure Accounting}
 % Role: experimental design; distinguish planned platform from completed runs.
-The measured platform is a Tesla T4 with CUDA targeting \texttt{sm\_75}.
-Each campaign records the binary and source hashes, device, toolchain, seeds,
-input manifest and policy. Development selection is isolated from held-out test
-evaluation using connected components of shared source or decoded-image hashes.
-This isolates exact image sharing. Scene-level independence has not been
-certified. Synthetic stress inputs form a separate workload.
+All GPU benchmarks in this study execute on a Google Colab NVIDIA Tesla T4
+(\texttt{sm\_75}, $15{,}360$\,MiB GDDR6, driver \texttt{580.82.07}, CUDA
+\texttt{13.0} / \texttt{nvcc 13.0.88}, host compiler GNU \texttt{13.3.0} with
+\texttt{-O3 -DNDEBUG -arch=sm\_75}). Each campaign records GPU clocks
+($1590$\,MHz graphics, $5000$\,MHz memory), power draw, code revision, policy
+hash, input manifest, and the fixed RANSAC seed (\texttt{20261101}). UDIS-D
+($512\times 512$ RGB pairs) is the primary real-image benchmark. Development selection
+is isolated from held-out test evaluation using connected components of shared
+source or decoded-image hashes. Synthetic stress inputs form a separate workload.
 
 Fixed-Best is selected on development data. For each pair, the offline oracle
 uses the measured finite grid to select
@@ -49,4 +52,6 @@ the frozen \texttt{legacy-v1} heuristic. Later controller implementations requir
 their own measurements.
 
 \input{sections/quality-evaluation}
+\input{sections/s1-probe-ablation}
+\input{sections/feature-budget}
 \input{sections/rendering-evaluation}

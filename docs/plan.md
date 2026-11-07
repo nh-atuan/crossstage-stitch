@@ -74,7 +74,7 @@ flowchart LR
 | 0 | Khởi động | 19/10 (Thứ 2) | ĐÃ XONG |
 | 1 | Pipeline và Pareto (Go/No-Go) | 25/10 (Chủ nhật) | ĐÃ XONG (GO) |
 | 2 | Controller, thí nghiệm, viết phương pháp | 31/10 (Thứ 7) | ĐÃ XONG (PASS) |
-| 3 | Đại thực nghiệm, Ablation và Phân tích độc lập | 05/11 (Thứ 5) | Đang thực hiện |
+| 3 | Đại thực nghiệm, Ablation và Phân tích độc lập | 07/11 (Thứ 7) | Đang thực hiện |
 | 4 | Soạn thảo toàn diện bản thảo (Full Draft) | 09/11 (Thứ 2) | Dự kiến |
 | 5 | Rà soát chéo, Chuẩn hóa OASIcs và Nộp bài EasyChair | 13/11 (Thứ 6) | Dự kiến (dự phòng 3 ngày trước hạn 16/11) |
 
@@ -210,7 +210,7 @@ Quy định riêng của Phase 3:
 - **Tôn trọng quyền tự quyết phân tích:** Mỗi thành viên tự đào sâu dữ liệu, rút ra insights và nhận xét kỹ thuật khách quan cho phần mình phụ trách; không để AI hoặc một cá nhân áp đặt góc nhìn chủ quan (bias) lên bài báo.
 - **Làm việc gối đầu:** Khuyến khích các thành viên làm trước các khung bảng biểu, draft mục thảo luận và rà soát của Phase 4–5 ngay trong Phase 3 để đẩy nhanh tiến độ.
 
-Ngày review Phase 3: 05/11 (Thứ 5). Nghiệm thu toàn bộ số liệu đo đạc (freeze data), các bảng biểu/đồ thị và các draft phân tích độc lập; kích hoạt Phase 4.
+Ngày review Phase 3: 07/11 (Thứ 7). Nghiệm thu toàn bộ số liệu đo đạc (freeze data), các bảng biểu/đồ thị và các draft phân tích độc lập; kích hoạt Phase 4.
 
 ### Phase 4: Soạn thảo toàn diện bản thảo (Full Draft) (ý chính)
 

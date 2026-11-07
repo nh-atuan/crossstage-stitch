@@ -42,6 +42,20 @@ int main() {
         const auto& trace = runner.attempt_trace();
         CHECK(trace.count > 0);
         CHECK(trace.records[0].knobs.R == (high ? 4 : 8));
+        CHECK(record.t_probe >= 0.0 && record.t_probe_s1 >= 0.0 && record.t_probe_grad >= 0.0);
+    }
+    {
+        runner.set_probe_enabled(false);
+        runner.upload_pair(flat, flat);
+        RunRecord blind_rec;
+        runner.execute_adaptive_run(controller, "upload-fixture", "fixture", "synthetic",
+                                    "test", "blind-pair", 0, 0, seed, &blind_rec);
+        const auto& trace = runner.attempt_trace();
+        CHECK(trace.count > 0);
+        CHECK(trace.records[0].knobs.R == 4);
+        CHECK(blind_rec.t_probe == 0.0 && blind_rec.t_probe_s1 == 0.0 && blind_rec.t_probe_grad == 0.0);
+        CHECK(blind_rec.probe_gradient_a == 0.0 && blind_rec.probe_gradient_b == 0.0);
+        runner.set_probe_enabled(true);
     }
     std::printf("First-probe upload consistency passed for 96 alternating pairs; seed=%llu\n",
                 static_cast<unsigned long long>(seed));

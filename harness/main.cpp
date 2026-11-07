@@ -37,7 +37,8 @@ void write_csv_header(std::ostream& out) {
         << "num_kp_a,num_kp_b,num_matches,num_inliers,inlier_ratio,inlier_coverage,reproj_residual,"
         << "h0,h1,h2,h3,h4,h5,h6,h7,h8,"
         << "canvas_pixels,overlap_pixels,blend_mode_effective,num_levels,peak_workspace_bytes,cache_hit,"
-        << "status,fail_stage,policy_id,attempt_count,t_probe_gpu,t_stream_wait,probe_gradient_a,probe_gradient_b\n";
+        << "status,fail_stage,policy_id,attempt_count,t_probe_gpu,t_stream_wait,probe_gradient_a,probe_gradient_b,"
+        << "t_probe_s1,t_probe_grad,t_probe\n";
 }
 
 void write_csv_row(std::ostream& out, const RunRecord& r) {
@@ -70,7 +71,9 @@ void write_csv_row(std::ostream& out, const RunRecord& r) {
     else out << r.policy_id << ',' << r.attempt_count << ',' << std::fixed << std::setprecision(6)
              << r.t_probe_gpu << ',' << r.t_stream_wait;
     out << ',' << std::defaultfloat << std::setprecision(17)
-        << r.probe_gradient_a << ',' << r.probe_gradient_b << '\n';
+        << r.probe_gradient_a << ',' << r.probe_gradient_b << ','
+        << std::setprecision(4)
+        << r.t_probe_s1 << ',' << r.t_probe_grad << ',' << r.t_probe << '\n';
 }
 
 void set_adaptive_config(RunRecord& run, const AttemptTrace& trace) {
@@ -83,6 +86,7 @@ void set_adaptive_config(RunRecord& run, const AttemptTrace& trace) {
     else id << std::setprecision(std::numeric_limits<double>::max_digits10);
     id << knobs.S << "_K" << knobs.K << "_R" << knobs.R << "_B" << run.blend_mode;
     run.config_id = id.str();
+}
 }
 
 std::string generate_run_id() {
@@ -127,6 +131,7 @@ int main(int argc, char** argv) {
     std::string features_path;
     std::string controller_policy_path;
     bool reuse_enabled = true;
+    bool probe_enabled = true;
 
     // Single run options
     std::string img_a_path, img_b_path;
@@ -148,6 +153,7 @@ int main(int argc, char** argv) {
         else if (arg == "--trace-out" && i + 1 < argc) trace_path = argv[++i];
         else if (arg == "--features-out" && i + 1 < argc) features_path = argv[++i];
         else if (arg == "--no-reuse") reuse_enabled = false;
+        else if (arg == "--no-probe") probe_enabled = false;
         else if (arg == "--configs" && i + 1 < argc) configs_path = argv[++i];
         else if (arg == "--out" && i + 1 < argc) out_path = argv[++i];
         else if (arg == "--dataset" && i + 1 < argc) dataset = argv[++i];
@@ -184,10 +190,11 @@ int main(int argc, char** argv) {
                       << "Modes:\n"
                       << "  --mode <fixed|oracle|adaptive>  Execution mode (default: fixed)\n"
                       << "  --adaptive                      Shortcut for --mode adaptive\n"
-                      << "  --controller-policy <path>      Required adaptive policy JSON, or legacy-v1\n"
+                      << "  --controller-policy <path>      Required adaptive policy JSON, legacy-v1, or legacy-v1-blind-s05\n"
                       << "  --trace-out <path>              Per-attempt Controller trace CSV\n"
                       << "  --features-out <path>           Collect Controller observations (fixed timings diagnostic)\n"
                       << "  --no-reuse                      A2 control: rerun S4/S5 for R-only retries\n"
+                      << "  --no-probe                      A1 control: skip S1 GPU probe and start at first rule rung\n"
                       << "  --oracle                        Shortcut for --mode oracle\n"
                       << "Batch options:\n"
                       << "  --manifest <path>               Pairs JSON manifest\n"
@@ -288,8 +295,13 @@ int main(int argc, char** argv) {
         try {
             if (controller_policy_path.empty())
                 throw std::runtime_error("Adaptive mode requires --controller-policy <path> or explicit legacy-v1");
-            controller_policy = controller_policy_path == "legacy-v1"
-                ? legacy_controller_policy() : parse_controller_policy(JsonValue::parse_file(controller_policy_path));
+            if (controller_policy_path == "legacy-v1") {
+                controller_policy = legacy_controller_policy();
+            } else if (controller_policy_path == "legacy-v1-blind-s05") {
+                controller_policy = legacy_blind_s05_policy();
+            } else {
+                controller_policy = parse_controller_policy(JsonValue::parse_file(controller_policy_path));
+            }
             if (controller_policy.seed) {
                 if (seed_given && seed != *controller_policy.seed)
                     throw std::runtime_error("CLI seed differs from policy provenance.seed");
@@ -306,6 +318,7 @@ int main(int argc, char** argv) {
     // Initialize pipeline runner with maximum bounds
     PipelineRunner runner;
     runner.set_reuse_enabled(reuse_enabled);
+    runner.set_probe_enabled(probe_enabled);
     runner.set_collect_features(!features_path.empty() && mode!="adaptive");
     try {
         int max_width = 2048, max_height = 2048;

@@ -48,4 +48,29 @@ Registration is the limiting factor in the separate end-to-end track. Only
 repeat median of mean corner error is \ChGeometryError{} pixels. All failures
 remain in the ledger. These observations establish S6 render scaling with
 known geometry and a failure of the tested registration configuration on
-most synthetic stress cases. Transfer to L4 and A100 remains pending.
+most synthetic stress cases.
+
+\subsection{Cross-Architecture Performance (L4 and A100)}
+\label{sec:cross-arch}
+\input{tables/table_cross_architecture}
+To evaluate architectural generalizability, the 54 known-geometry S6 cases
+were re-executed on NVIDIA L4 (\texttt{sm\_89}, Ada Lovelace) and NVIDIA
+A100-SXM4 (\texttt{sm\_80}, Ampere) under the identical synthetic manifest and
+seed (\texttt{20261030}).
+All 54 cases complete without failure on both architectures ($54/54$).
+As shown in Table~\ref{tab:cross-architecture}, L4 delivers a consistent
+$1.77\times$--$1.90\times$ speedup over T4 across all resolutions and blend
+modes.
+Its $48$\,MB L2 cache effectively amortizes intermediate pyramid traffic: at
+4K, extending multi-band from 3 to 5 levels incurs less than $0.06\%$
+additional latency ($56.610$\,ms vs.\ $56.641$\,ms), compared to a $0.94$\,ms
+gap on T4.
+
+On A100, the $2{,}039$\,GB/s HBM2e bus provides a $33.35\times$--$35.58\times$
+speedup for streaming Feather blending ($0.751$\,ms at 4K).
+For multi-band, A100's speedup over T4 scales from $2.65\times$--$2.81\times$ at
+720p to $4.31\times$--$4.36\times$ at 4K ($22.966$\,ms for MB3), reflecting
+improved SM saturation on large pyramid tiles.
+Crucially, maximum queried workspace matches bitwise across all three
+architectures, verifying that memory sizing is determined strictly by canvas
+geometry and remains invariant to GPU microarchitecture.

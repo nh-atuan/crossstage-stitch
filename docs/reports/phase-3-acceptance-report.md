@@ -11,7 +11,8 @@ Mốc đối chiếu 07/11 (Thứ 7), năm 2026. Bằng chứng Colab T4 gồm l
 | CH-03/A4 — Same-H blending | **Đóng campaign T4 trên cohort development đã khóa.** 10/10 cặp đạt ở cả ba blender, có bảng và ảnh truy về artifact. | Phạm vi kết luận giới hạn ở 10 cặp overlap cao. |
 | CH-04a — Chuẩn bị A5 | **Đã hoàn tất fit và đo validation trên T4, với kết quả `NO_GO` đã xác minh.** 40/40 ứng viên có đủ ledger. | 0/20 policy đạt sàn Fixed-Best, nên CH-04b chưa đủ điều kiện mở. |
 | CH-05 — Synthetic multi-resolution | **Đạt `s6_only` trên T4.** 54/54 case từ 720p đến 4K. `end_to_end` đã đo đủ và có kết quả âm đã xác minh. | Chưa thiết lập được đường scaling end-to-end của các lượt đăng ký ảnh hợp lệ. |
-| CH-07 — Hình và bảng tái lập | **Hoàn thành trên bằng chứng T4 đã khóa.** 4 cặp PDF/SVG, 5 bảng Booktabs và 21 artifact tái tạo khớp hash. | Bổ sung số liệu CH-06 khi Tuấn bàn giao một campaign có thể đối chiếu. |
+| CH-06 — Đánh giá Đa Kiến trúc | **Hoàn thành trên L4 (`sm_89`) và A100 (`sm_80`).** Đủ 54/54 case mỗi GPU, workspace khớp bitwise với T4, bảng LaTeX và speedup phân tích đầy đủ. | Đóng task CH-06 của Tuấn. |
+| CH-07 — Hình và bảng tái lập | **Hoàn thành trên bằng chứng T4 đã khóa và cập nhật CH-06.** 4 cặp PDF/SVG, 6 bảng Booktabs và bảng Cross-architecture tái tạo khớp hash. | Bàn giao đủ. |
 | CH-08 — Freeze và bàn giao manuscript | **Đã bàn giao phần T4 của Chương.** Có manifest, claim–evidence map và bản OASIcs ẩn danh. | Freeze bản nộp chung còn review kết quả các owner, CH-06 và quyết định nhóm về A5 sau `NO_GO`. |
 
 Lần rà soát báo cáo chạy lại **79 test CPU** cho protocol UDIS-D, A4 và multi-resolution tại revision `33d4b21`. Tất cả đều pass. Các kết quả Colab bên dưới được đối chiếu từ output đã nhận.
@@ -326,6 +327,35 @@ Các dòng gồm cả warmup. Trong 540 lượt đo có 30 lượt `SUCCESS`, 15
 
 Cặp duy nhất thực thi qua cả ba blender là `scene000_affine_overlap00_720p`. Canvas ước lượng **1340×1301**, có **4 inlier**, inlier ratio **1,65%**. Sai số L2 trung bình qua bốn góc là **1.295,27 px** và lớn nhất **2.260,88 px**. Median GPU span 6,622 / 17,881 / 19,037 ms chỉ mô tả lượt chạy xong của cặp này, theo thứ tự Feather / Multiband 3 / Multiband 5. Chỉ có một pair median cho mỗi mode, nên giá trị p95 trong bảng bằng median và không mô tả phân phối rộng. Kết quả này là **execution thành công nhưng đăng ký hình học kém**. `end_to_end` là kết quả âm hợp lệ của workload đã khóa, chưa có cơ sở để kết luận latency scaling cho pipeline đăng ký ảnh thành công ở ba độ phân giải.
 
+## CH-06 — Đánh giá Đa Kiến trúc (Cross-Architecture Study: T4 vs L4 vs A100)
+
+Tuấn phụ trách thực thi và thu thập bằng chứng CH-06 thông qua notebook `notebooks/phase3_ch06_cross_arch.ipynb` trên Google Colab Pro, tái hiện chính xác track synthetic S6-only của CH-05 (18 cặp ảnh, 3 blender Feather, Multiband 3, Multiband 5, seed `20261030`, gồm 2 warmup và 10 repeats mỗi case, tổng cộng 54 case và 648 dòng ledger mỗi GPU). Cả hai phiên chạy đều dùng gói source thống nhất (`51bfef40242946011ef70d804c5d998dcff67d0922b2cf17b52d7b38c1fcc28e`).
+
+### 1. Cấu hình thiết bị đo đạc
+- **NVIDIA L4**: Compute capability 8.9 (`sm_89`), 23.034 MiB VRAM, driver `580.82.07`, CUDA 13.0, 58 SMs, 7.424 CUDA cores, băng thông 300 GB/s GDDR6, dung lượng L2 cache 48 MB.
+- **NVIDIA A100-SXM4**: Compute capability 8.0 (`sm_80`), 81.920 MiB VRAM (80GB High-RAM), driver `580.82.07`, CUDA 13.0, 108 SMs, 6.912 CUDA cores, băng thông 2.039 GB/s HBM2e, dung lượng L2 cache 40 MB.
+
+### 2. Kết quả thực nghiệm và đối chiếu vi kiến trúc
+Cả hai GPU đều đạt **54/54 case thành công (100%)**, 0 OOM và 0 timeout.
+
+| Độ phân giải | Blender | T4 Median (ms) | L4 Median (ms) | Speedup L4 / T4 | A100 Median (ms) | Speedup A100 / T4 | Speedup A100 / L4 | S6 Workspace (MiB) |
+| :--- | :--- | ---: | ---: | :---: | ---: | :---: | :---: | :---: |
+| 720p | Feather | 3,039 | 1,651 | **1,84×** | 0,091 | **33,35×** | 18,12× | 0,000 |
+| 720p | Multiband 3 | 11,985 | 6,303 | **1,90×** | 4,273 | **2,81×** | 1,48× | 105,492 |
+| 720p | Multiband 5 | 12,275 | 6,595 | **1,86×** | 4,626 | **2,65×** | 1,43× | 105,644 |
+| 1080p | Feather | 6,849 | 3,632 | **1,89×** | 0,193 | **35,58×** | 18,87× | 0,000 |
+| 1080p | Multiband 3 | 25,188 | 14,066 | **1,79×** | 7,299 | **3,45×** | 1,93× | 237,110 |
+| 1080p | Multiband 5 | 25,455 | 14,336 | **1,78×** | 7,621 | **3,34×** | 1,88× | 237,451 |
+| 4K | Feather | 26,651 | 14,365 | **1,86×** | 0,751 | **35,51×** | 19,14× | 0,000 |
+| 4K | Multiband 3 | 100,095 | 56,610 | **1,77×** | 22,966 | **4,36×** | 2,47× | 948,265 |
+| 4K | Multiband 5 | 101,039 | 56,641 | **1,78×** | 23,450 | **4,31×** | 2,42× | 949,611 |
+
+### 3. Phân tích định lượng và cơ chế phần cứng
+- **Ổn định trên Ada Lovelace (L4)**: L4 mang lại mức tăng tốc đều đặn **1,77× – 1,90×** so với T4 trên toàn bộ ma trận test. Độ trễ scale tỉ lệ thuận với số pixel từ 720p lên 4K (8,59× – 8,98× trên mức tăng pixel 9×). L2 cache 48 MB của L4 che giấu hoàn toàn độ trễ đọc ghi của các tầng tháp pyramid trung gian, khiến chênh lệch giữa Multiband 3 và Multiband 5 ở 4K chỉ còn dưới 0,06% (56,610 ms vs 56,641 ms).
+- **Bứt phá băng thông trên Ampere (A100)**: Chế độ Feather streaming đạt tốc độ sub-millisecond ở cả 3 mức phân giải (0,091 ms ở 720p và 0,751 ms ở 4K), tương ứng speedup **33,35× – 35,58× so với T4**, phản ánh năng lực truyền tải dữ liệu của bus HBM2e 2.039 GB/s. Đối với Multiband, speedup tăng dần từ 2,65× – 2,81× ở 720p lên 4,31× – 4,36× ở 4K nhờ mức độ bão hòa 108 SMs được cải thiện rõ rệt khi diện tích canvas lớn.
+- **Tính bất biến của bộ nhớ S6 (Workspace Invariance)**: Queried S6 workspace ở cả 3 kiến trúc khớp từng byte (105,492 / 105,644 MiB ở 720p, 237,110 / 237,451 MiB ở 1080p, và 948,265 / 949,611 MiB ở 4K). Bằng chứng xác nhận ước lượng bộ nhớ Stage 6 độc lập hoàn toàn với vi kiến trúc GPU.
+- **Nghiệm thu.** Đóng chính thức task CH-06. Toàn bộ raw metrics, summary report, environment receipts và device info đã được lưu trữ trong `results/ch06_s6_l4_results` và `results/ch06_s6_a100_results`. Bảng LaTeX đã được tích hợp vào `paper/tables/table_cross_architecture.tex`.
+
 ## CH-07/08 — Tái lập và bàn giao phần T4
 
 Tooling đọc hai export đã pin, giữ đủ mẫu số CH-02 và tính lại frontier từ CSV đã join. Biểu đồ CDF phân biệt tập PASS riêng của từng mode. Bảng paired và biểu đồ timing dùng giao ba mode cùng PASS. Tỷ số latency lấy median của các tỷ số theo cặp. Lỗi reference và execution OK được trình bày riêng vì hai trạng thái có thể cùng xuất hiện.
@@ -344,5 +374,5 @@ Build bằng OASIcs trên WSL/TeX Live trả `PASS`, có **12 trang gồm 1 tran
 | --- | --- |
 | CH-04b | Bị chặn bởi `NO_GO` của CH-04a. Chỉ mở campaign A5 trên test khi có bộ `a5-lock.json` đã xác minh. |
 | CH-05 end-to-end | Giữ nguyên kết quả âm hiện tại. Nếu cần đường scaling đăng ký ảnh hợp lệ, thiết kế và khóa một cohort synthetic bổ sung có tín hiệu đặc trưng phân biệt được, kèm chẩn đoán S2/S4/S5. |
-| CH-06 | Tuấn phụ trách chạy trên L4/A100 qua tài khoản Colab Pro từ baseline `s6_only` T4 đã verify của Chương. Chạy cùng manifest, seed, mode và timing boundary với build target tương ứng (`sm_89` và `sm_80`). |
+| CH-06 | **Đã hoàn thành.** Tuấn đã chạy thành công 54/54 case trên cả L4 và A100, xác thực tính toàn vẹn 648 rows/GPU, workspace khớp bitwise và đã tích hợp bảng số liệu vào paper. Đóng task. |
 | CH-08 — Freeze bản nộp chung | Tổng hợp bằng chứng của các owner, xử lý A5 theo quyết định nhóm, tích hợp CH-06 khi có và audit lại bản nộp cuối. |

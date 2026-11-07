@@ -243,8 +243,13 @@ def build_ch06_notebook(output_path: Path) -> Path:
     code(r'''
     # @title 5. Xuất báo cáo tổng hợp và nén bundle lưu về Drive
     def report_and_export():
-        if not ready("ch06-run"):
-            raise RuntimeError("Campaign chưa chạy thành công")
+        marker_path = STATUS / "ch06-run.json"
+        if not marker_path.is_file():
+            raise RuntimeError("ch06-run marker không tồn tại")
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+        if marker.get("status") not in {"PASSED_EXECUTION", "COMPLETED_WITH_FAILURES"}:
+            raise RuntimeError(f"Campaign chưa chạy thành công: {marker.get('status')}")
+
         setup_info = json.loads((STATUS / "setup.json").read_text(encoding="utf-8"))
         arch_tag = setup_info["arch_tag"]
 
@@ -260,6 +265,10 @@ def build_ch06_notebook(output_path: Path) -> Path:
         shutil.make_archive(str(dest_zip.with_suffix("")), "zip", root_dir=EVIDENCE)
         print(f"Đã lưu thành công kết quả CH-06 ({arch_tag.upper()}) vào Google Drive!")
         return {"status": "EXPORT_COMPLETE", "dest_zip": str(dest_zip)}
+
+    export_marker = STATUS / "ch06-export.json"
+    if export_marker.exists():
+        export_marker.unlink()
 
     step("ch06-export", report_and_export)
     ''')

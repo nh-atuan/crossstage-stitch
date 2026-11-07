@@ -15,7 +15,7 @@ Mọi macro định lượng dưới đây được sinh bởi `tools/analysis/p
 | Hình qualitative | Bbox và RGB chung giữa ba blender | `a4-visuals/visual_manifest.json`, PNG có hash, `sources/visual_plan.json`. Crop limitation là hậu kiểm. | PASS cho truy vết và quan sát định tính |
 | Scaling | Completion, failure, OOM, timeout, GPU interval và queried workspace | Hai `ch05-*-report/summary.csv`, CSV timing tương ứng. Giữ hai track riêng. | PASS trong phạm vi từng track |
 | Scaling và Discussion | Giới hạn registration và corner error | `ch05-end_to_end-report/summary.csv`, giữ case lỗi trong mẫu số. | PASS cho kết quả âm của cấu hình đã đo |
-| Cross-architecture | Chuyển workload T4 sang L4/A100 | Bằng chứng CH-06 do Tuấn chạy, cùng manifest và timing boundary. | BLOCKED chờ artifact |
+| Cross-architecture | Chuyển workload T4 sang L4/A100 | Bằng chứng CH-06 do Tuấn chạy trên L4 và A100 qua notebook `phase3_ch06_cross_arch.ipynb`, cùng manifest và timing boundary. Đủ 54/54 case mỗi kiến trúc, workspace khớp bitwise. | PASS |
 | A5 test | Độ nhạy policy trên test | Cần A5 lock đạt gate development/validation. Hiện đã ghi `NO_GO`. | BLOCKED |
 | Runtime sau merge | Suy rộng kết quả T4 cũ sang binary hiện tại | Cần smoke/sanitizer trên T4 cho revision tích hợp. | BLOCKED |
 

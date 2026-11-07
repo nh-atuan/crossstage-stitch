@@ -1,12 +1,13 @@
 # Báo cáo nghiệm thu từng phần Phase 3
 
-Mốc đối chiếu 06/11 (Thứ 6), năm 2026. Bằng chứng Colab T4 gồm lượt development `run_20261106_022310Z`, A4/CH-05 `run_20261106_043655Z_ch03_ch05_gbfq3y9z`, CH-01E `run_20261106_081406Z_ch01e_9x1qcuvw` và CH-04a `run_20261106_134702Z_ch04a_gbqf76f6`. Deadline chung và phạm vi toàn phase được ghi trong [kế hoạch Phase 3](../plan.md#phase-3-đại-thực-nghiệm-ablation-và-phân-tích-độc-lập).
+Mốc đối chiếu 07/11 (Thứ 7), năm 2026. Bằng chứng Colab T4 gồm lượt development `run_20261106_022310Z`, A4/CH-05 `run_20261106_043655Z_ch03_ch05_gbfq3y9z`, CH-01E `run_20261106_081406Z_ch01e_9x1qcuvw`, CH-04a `run_20261106_134702Z_ch04a_gbqf76f6` và CH-02 `run_20261106_164958Z_ch02_inu6unq8`. Deadline chung và phạm vi toàn phase được ghi trong [kế hoạch Phase 3](../plan.md#phase-3-đại-thực-nghiệm-ablation-và-phân-tích-độc-lập).
 
 | Hạng mục | Phần đã nghiệm thu | Phần còn mở |
 | --- | --- | --- |
 | CH-00 — Baseline | **Đóng.** Receipt đã được xác minh, build `sm_75` và 16/16 CTest pass trên Colab T4. | Kết quả này áp dụng cho snapshot đã kiểm. Kiểm tra Compute Sanitizer cho các campaign GPU được theo dõi riêng. |
 | CH-01 — Dữ liệu, protocol và reference | **Đóng trên development theo ngoại lệ đã duyệt.** Reference dùng được trên 238/250 cặp. Receipt riêng khóa Fixed-Best từ train-fit và giữ đủ mẫu số. | Campaign test vẫn phải ghi trạng thái reference thực tế của từng cặp. |
 | CH-01E — Hạ tầng adaptive | **Đóng nghiệm thu trên T4 cho revision đã đo.** Build `sm_75`, 4/4 CTest, memcheck fixture 0 lỗi và hai lượt adaptive smoke trên ảnh thật cùng seed. | Smoke bao phủ đường `ACCEPT` ngay attempt đầu với `legacy-v1`. Đánh giá policy đã hiệu chỉnh và QoR toàn test set thuộc các campaign riêng. |
+| CH-02 — Benchmark chính và QoR | **Hoàn thành.** Đủ 1.106 disposition mỗi mode, 48 cấu hình Oracle và báo cáo tái tạo từ CSV. | Adaptive `legacy-v1` đạt 394/1.106 QoR PASS. Speedup 2,161× chỉ áp dụng trên giao 394 cặp cùng PASS. |
 | CH-03/A4 — Same-H blending | **Đóng campaign T4 trên cohort development đã khóa.** 10/10 cặp đạt ở cả ba blender, có bảng và ảnh truy về artifact. | Phạm vi kết luận giới hạn ở 10 cặp overlap cao. |
 | CH-04a — Chuẩn bị A5 | **Đã hoàn tất fit và đo validation trên T4, với kết quả `NO_GO` đã xác minh.** 40/40 ứng viên có đủ ledger. | 0/20 policy đạt sàn Fixed-Best, nên CH-04b chưa đủ điều kiện mở. |
 | CH-05 — Synthetic multi-resolution | **Đạt `s6_only` trên T4.** 54/54 case từ 720p đến 4K. `end_to_end` đã đo đủ và có kết quả âm đã xác minh. | Chưa thiết lập được đường scaling end-to-end của các lượt đăng ký ảnh hợp lệ. |
@@ -166,6 +167,50 @@ S5 có median lớn nhất trong cả hai lượt. Ở lượt đầu, `000015` 
 
 **Nghiệm thu.** Đóng CH-01E cho hạ tầng adaptive của revision đã đo trên T4. Khi tích hợp revision có thay đổi harness hoặc controller, kết quả smoke cần được xác nhận lại trước campaign chính.
 
+## CH-02 — Benchmark UDIS-D và nghiệm thu QoR
+
+### Thiết lập và đối soát
+
+Campaign `ch02-b010623ef7d5b02f5e2b` chạy trên một phiên Colab Tesla T4 `sm_75`, VRAM 15.360 MiB, driver `580.82.07`, `nvcc 13.0.88` và Python 3.13.16. Snapshot Colab `5fe8ce799a23f2d6817a9cdd5b6376a4285de37c` khớp 268/268 file trong receipt với ZIP nguồn. ZIP có SHA-256 `8acac3d441f58dd6d484f4bd70826c8420b9598f8d969391a5a30d459d33d17d`. Mã các cell khớp notebook tại `c363631`. Binary Release có SHA-256 `a88d82b77108f8a958bf8826756869b1b6251964e0c70e4d846d9860caf15829`. [Notebook nguồn](../../notebooks/phase3_ch02_benchmark.ipynb)
+
+Plan ghi `legacy-v1` với authority Chương, seed `20261106`, Feather và hai warmup cùng mười lượt đo mỗi nhóm. Fixed-Best từ CH-01 trùng Fixed-High ở cấu hình `S1.00_K2000_R1024_Bfeather`. Để chấm QoR, dùng H của Fixed-High trong grid, với ngưỡng giảm SSIM 0,02, giảm PSNR 0,5 dB và coverage tối thiểu 0,95. Đây là alignment tương đối theo reference, nên giá trị PASS khi H trùng reference không xác nhận độ chính xác hình học độc lập. [Runbook CH-02](../runbooks/ch02_udis_benchmark_colab.md)
+
+Gói `specs/run_20261106_164958Z_ch02_inu6unq8/` khớp **10.009/10.009 hash** và sáu marker bước. SHA-256 của `export_verified.json` là `857bb3ecf2c93d69100772d4e1ab1e3d0503e8ea5d422259d145f7983132b865`. Đủ **3.318 disposition** cho 1.106 cặp × 3 mode. Mỗi mode ghi `ERR_LOADER_IO` cho `000001` thiếu ảnh A và có checkpoint `MEASURED` cho 1.105 cặp còn lại. Grid gồm 48 cấu hình.
+
+Đối chiếu CPU xác nhận **663.000 terminal rows**, gồm 110.500 warmup và **552.500 dòng đã đo và chấm QoR**. Phần đã đo gồm 11.050 Fixed-Best, 11.050 Adaptive và 530.400 grid. Mỗi nhóm có đủ mười repeat. Attempt count khớp cả 13.260 terminal Adaptive, tính cả warmup. Có 503.850 H của lượt đo thành công round-trip chính xác qua CSV/JSON và **0 nhóm cảnh báo H lệch quá `1e-12`**. Cache có 482.530 hit trên 501.790 lookup (96,16%), phản ánh việc tái dùng kết quả theo nội dung ảnh/H. `joined.csv`, receipt kiểm join, báo cáo, ledger, CDF, Pareto và bảng LaTeX tái tạo khớp từng file. Điểm ảnh SSIM/PSNR/coverage được tính trong lượt evaluator trên Colab. Rà soát local kiểm join, precision và tổng hợp từ CSV.
+
+### Kết quả toàn mẫu số
+
+Latency trong bảng là median và p95 của pair medians trên các cặp PASS **riêng của từng mode**.
+
+| Mode | Execution OK / 1.106 | QoR PASS / 1.106 | Median (ms) | p95 (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Fixed-Best | 1.071 (96,84%) | 1.071 (96,84%) | 9,187 | 17,663 |
+| Adaptive `legacy-v1` | 942 (85,17%) | 394 (35,62%) | 4,789 | 8,354 |
+| Oracle | 1.083 (97,92%) | 1.071 (96,84%) | 3,502 | 5,9215 |
+
+Fixed-Best có 34 `REFERENCE_FAILED` gồm 16 suy biến, 11 canvas overflow và 7 thiếu điểm. Oracle có ít nhất một cấu hình chạy thành công trên 12 trong số 34 cặp này. H tham chiếu vẫn thiếu, nên cả 34 cặp giữ `REFERENCE_FAILED` và Oracle để trống config. `Execution OK` của Oracle đếm cặp có ít nhất một cấu hình grid hoàn thành đủ repeat. Latency Oracle chỉ có ở cặp chọn được cấu hình PASS.
+
+Adaptive có 548 cặp chạy `OK` nhưng fail QoR, 129 `EXECUTION_FAILED`, 34 `REFERENCE_FAILED` và một `ERR_LOADER_IO`. Mã native `BUDGET_EXHAUSTED` xuất hiện ở **163 cặp**, gồm 129 cặp `EXECUTION_FAILED` và 34 cặp thiếu reference. Attempt CSV có 18.204 dòng gồm cả warmup. Có 203/1.105 cặp từng retry trong các lượt đo, trong đó 27 cặp đạt PASS.
+
+Trong 548 cặp fail QoR, 410 vượt dung sai SSIM, 384 vượt dung sai PSNR và 47 dưới coverage 0,95. Các điều kiện có thể cùng xảy ra. Hai nấc `S=0,5, K=1000` với `R=128` hoặc `256` là nấc cuối của 536/548 cặp này, đồng thời cũng là nấc cuối của 367/394 cặp PASS. Nhãn theo cặp cho thấy self-check ở các nấc này có cả ca đạt và ca hụt QoR. Campaign này không cô lập tác động riêng của scale hoặc R.
+
+### Latency ghép cặp và Pareto
+
+| Mode | Median trên cùng 394 cặp PASS (ms) | p95 trên cùng 394 cặp PASS (ms) |
+| --- | ---: | ---: |
+| Fixed-Best | 10,267 | 18,177 |
+| Adaptive | 4,789 | 8,354 |
+| Oracle | 3,516 | 4,978 |
+
+Median của tỷ số theo cặp là **2,161×** cho Adaptive so với Fixed-Best và **1,363×** cho Oracle so với Adaptive. Cả hai chỉ áp dụng trên giao 394 cặp PASS. Chỉ tiêu speedup QoR toàn cohort giữ `null`. Oracle là đối chiếu offline trên grid đã đo, với config nhanh nhất theo median trong các config PASS của từng cặp.
+
+Trên cùng 394 cặp, median S4 của Fixed-Best, Adaptive và Oracle lần lượt là **2,517 / 0,420 / 0,187 ms**, còn S5 là **6,253 / 2,926 / 1,834 ms**. S6 nằm trong khoảng 0,913–0,949 ms. Đây là phân rã chi phí quan sát trên cùng cohort. Median probe GPU và thời gian CPU controller của Adaptive lần lượt là 0,051512 ms và 0,000511 ms. Probe nằm trong thời gian pipeline, và các khoảng GPU/stream wait có thể chồng lấp. [Ranh giới timing](../runbooks/ch02_udis_benchmark_colab.md#3-chấm-qor-kiểm-join-và-xuất-báo-cáo)
+
+Pareto cohort có **19 cấu hình** theo ba trục latency, execution OK và QoR PASS trên 1.105 cặp có timing grid. Pareto theo cặp có 10.640 điểm. Ví dụ, `S0.25_K1000_R128_Bfeather` có median grid 1,842 ms và 17 PASS, `S0.75_K500_R128_Bfeather` có 3,308 ms và 535 PASS, còn Fixed-High có 8,989 ms và 1.071 PASS. Các median grid dùng tập có timing chung. Oracle chọn 36 config khác nhau, với ba lựa chọn thường gặp nhất là `S1.00_K500_R128_Bfeather` (238 cặp), `S0.75_K500_R128_Bfeather` (235) và `S0.50_K500_R128_Bfeather` (179).
+
+**Nghiệm thu.** Đóng CH-02 cho campaign T4 của `legacy-v1`. Đã bàn giao ledger, QoR, Oracle, CDF, Pareto và bảng LaTeX. Kết quả thực nghiệm cho thấy lợi ích latency trên giao PASS và mức giảm QoR trên toàn mẫu số. CH-04b vẫn phụ thuộc lock A5 riêng. [Kế hoạch Phase 3](../plan.md#phase-3-đại-thực-nghiệm-ablation-và-phân-tích-độc-lập)
+
 ## CH-04a — Adaptive validation A5 trên development
 
 ### Nguồn và tính đầy đủ của campaign
@@ -283,8 +328,7 @@ Cặp duy nhất thực thi qua cả ba blender là `scene000_affine_overlap00_7
 
 | Task | Việc tiếp theo |
 | --- | --- |
-| CH-02 | Chạy benchmark chính trên 1.105 cặp test khi controller chính đã khóa. Đọc Fixed-Best từ receipt CH-01 và giữ reference failures trong ledger. |
 | CH-04b | Bị chặn bởi `NO_GO` của CH-04a. Chỉ mở campaign A5 trên test khi có bộ `a5-lock.json` đã xác minh. |
 | CH-05 end-to-end | Giữ nguyên kết quả âm hiện tại. Nếu cần đường scaling đăng ký ảnh hợp lệ, thiết kế và khóa một cohort synthetic bổ sung có tín hiệu đặc trưng phân biệt được, kèm chẩn đoán S2/S4/S5. |
 | CH-06 | Dùng `s6_only` T4 đã verify làm baseline. Chạy cùng manifest, seed, mode và timing boundary trên L4/A100 với build target tương ứng. |
-| CH-07 và CH-08 | Có thể làm ngay bảng và hình cho A4 và `s6_only` T4. Các bảng tổng hợp và bàn giao paper còn phụ thuộc kết quả A5, benchmark chính và cross-architecture. |
+| CH-07 và CH-08 | Có thể dùng artifact CH-02, A4 và `s6_only` T4 để làm bảng và hình. Bàn giao tổng hợp còn phụ thuộc phạm vi A5 sau `NO_GO` và kết quả cross-architecture. |
